@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 build/
 skybit_save.json
+skybit_scores.json

@@ -176,30 +176,59 @@ class HUD:
         _text(surf, "BEST", (hi_rect.centerx, hi_rect.y + 12), size=14, color=UI_CREAM, shadow=False)
         _text(surf, str(best), (hi_rect.centerx, hi_rect.y + 28), size=18, color=UI_GOLD, shadow=False)
 
-    def draw_gameover(self, surf, dt, score: int, best: int, new_best: bool):
+    def draw_gameover(self, surf, dt, score: int, scores: list, new_best: bool, highlight_rank=-1):
         self.title_t += dt
         dim = pygame.Surface((W, H), pygame.SRCALPHA)
-        dim.fill((0, 0, 20, 160))
+        dim.fill((0, 0, 20, 170))
         surf.blit(dim, (0, 0))
-        # Card
-        card = pygame.Rect(W // 2 - 130, 150, 260, 280)
-        rounded_rect(surf, card, 18, (20, 30, 60), 220)
-        # header
-        _text(surf, "GAME OVER", (card.centerx, card.y + 38), size=28, color=UI_RED)
 
-        _text(surf, "SCORE", (card.centerx, card.y + 90), size=14, color=UI_CREAM, shadow=False)
-        _text(surf, str(score), (card.centerx, card.y + 120), size=40, color=UI_GOLD)
-
-        _text(surf, "BEST", (card.centerx, card.y + 172), size=14, color=UI_CREAM, shadow=False)
-        _text(surf, str(best), (card.centerx, card.y + 198), size=28, color=WHITE)
+        # Top band — score + game over label
+        _text(surf, "GAME OVER", (W // 2, 80), size=30, color=UI_RED)
+        _text(surf, "SCORE", (W // 2, 118), size=13, color=UI_CREAM, shadow=False)
+        _text(surf, str(score), (W // 2, 148), size=38, color=UI_GOLD)
 
         if new_best:
             pulse = 1 + math.sin(self.title_t * 6) * 0.1
-            _text(surf, "NEW BEST!", (card.centerx, card.y + 236), size=int(18 * pulse), color=UI_ORANGE)
+            _text(surf, "NEW BEST!", (W // 2, 182), size=int(17 * pulse), color=UI_ORANGE)
+
+        # Leaderboard card
+        self._draw_leaderboard(surf, y_top=200, highlight_rank=highlight_rank, scores=scores)
 
         alpha = int(150 + math.sin(self.title_t * 4) * 90)
         f = _font(20, True)
         t = f.render("TAP TO RETRY", True, WHITE)
         t.set_alpha(alpha)
-        r = t.get_rect(center=(W // 2, H - 70))
+        r = t.get_rect(center=(W // 2, H - 48))
         surf.blit(t, r.topleft)
+
+    def _draw_leaderboard(self, surf, y_top: int, highlight_rank: int, scores: list):
+        card_h = 330
+        card = pygame.Rect(20, y_top, W - 40, card_h)
+        rounded_rect(surf, card, 14, (15, 25, 60), 220)
+        _text(surf, "TOP 10", (card.centerx, card.y + 18), size=16, color=UI_GOLD, shadow=False)
+
+        f_row = _font(15, True)
+        f_small = _font(14, False)
+        row_y = card.y + 46
+        for i in range(10):
+            if i < len(scores):
+                entry = scores[i]
+                name = entry["name"]
+                score = entry["score"]
+            else:
+                name = "---"
+                score = 0
+            bg_col = (40, 60, 120) if i == highlight_rank else None
+            if bg_col is not None:
+                rr = pygame.Rect(card.x + 8, row_y - 10, card.width - 16, 24)
+                rounded_rect(surf, rr, 6, bg_col, 200)
+            rank_color = UI_GOLD if i == 0 else (UI_ORANGE if i == 1 else (UI_CREAM if i == 2 else WHITE))
+            rank_img = f_row.render(f"{i + 1:>2}.", True, rank_color)
+            surf.blit(rank_img, (card.x + 16, row_y - 8))
+            name_img = f_row.render(name, True, WHITE)
+            surf.blit(name_img, (card.x + 62, row_y - 8))
+            score_img = f_row.render(str(score), True, UI_GOLD)
+            sr = score_img.get_rect()
+            sr.topright = (card.right - 20, row_y - 8)
+            surf.blit(score_img, sr.topleft)
+            row_y += 26

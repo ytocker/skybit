@@ -28,3 +28,4 @@ TRIPLE_DURATION    = 8.0
 COMBO_WINDOW       = 1.6
 
 SAVE_FILE = "skybit_save.json"
+SCORES_FILE = "skybit_scores.json"

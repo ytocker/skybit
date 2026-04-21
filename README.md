@@ -9,20 +9,35 @@ A colorful Flappy-style casual arcade game. Fly a **vivid scarlet-macaw parrot**
 
 ---
 
-## Play instantly — no install
+## Play online — share the link
 
-Open **`play.html`** in any modern browser. It loads the Pygame runtime on top of WebAssembly (via [pygbag](https://pygame-web.github.io/)) and runs the full Python game in your browser. Works on desktop and mobile.
+Once GitHub Pages is enabled on this repo, the game lives at:
+
+**<https://ytocker.github.io/Claude_test/>**
+
+Send that URL to anyone — phone, tablet, desktop. No install, no account, it just loads and plays.
+
+The included workflow at `.github/workflows/pages.yml` rebuilds the WebAssembly bundle on every push to `claude/retro-pixel-game-gPPYY` (and `main`). Enable it once:
+
+1. Push this branch to GitHub (already done if you cloned).
+2. Open the repo on github.com → **Settings → Pages**.
+3. Under *Build and deployment → Source*, choose **GitHub Actions**.
+4. Trigger the workflow: push a commit, or **Actions → Deploy Skybit to GitHub Pages → Run workflow**.
+5. After the run finishes (~1 minute) the Pages URL above is live.
+
+> **Heads up**: GitHub Pages is free for public repos. For private repos you need GitHub Pro / Team. If you don't want to make the repo public, other host options that work with the `play.html` + `skybit.apk` pair: **Netlify Drop** (drag-and-drop), **Cloudflare Pages**, **Vercel static**, or any S3/nginx that serves static files.
+
+### Run locally in a browser
 
 ```
 git clone https://github.com/ytocker/Claude_test.git
 cd Claude_test
 git checkout claude/retro-pixel-game-gPPYY
-# open play.html through a local web server:
 python3 -m http.server 8000
-# then open http://localhost:8000/play.html
+# open http://localhost:8000/play.html
 ```
 
-The first load pulls a one-time CPython WebAssembly runtime (~10 MB). Subsequent loads are cached.
+The first load pulls a one-time CPython WebAssembly runtime (~10 MB) from the Pygame-web CDN. Subsequent loads are cached.
 
 ---
 
@@ -64,6 +79,17 @@ A red-capped mushroom occasionally spawns in the gap between pipes (roughly 1-in
 - Trigger a radial sparkle burst and a brief time-slow
 - See an orange/gold aura glow around the parrot for the duration
 - Watch a timer bar below the score drain in real time
+
+### Leaderboard
+
+Cracking the **top 10** pops up an arcade-style name-entry screen after Game Over. Tap the on-screen keyboard (or type on a keyboard — A–Z, Backspace, Enter) to pick three initials. Your entry is sorted into the list and persisted to `skybit_scores.json` next to the game.
+
+> When playing in a browser, scores are saved to pygbag's in-browser virtual filesystem (IndexedDB) — they survive refreshes on the same device and domain, but aren't shared across players or devices. For a shared leaderboard, deploy with a backend of your choice.
+
+<p align="center">
+  <img src="docs/screenshots/nameentry.png" width="280" alt="Name entry">
+  <img src="docs/screenshots/gameover.png"  width="280" alt="Leaderboard on Game Over">
+</p>
 
 ### Difficulty
 
@@ -114,9 +140,11 @@ game/
 ├── world.py               Simulation: scroll, spawn, collision, pickups,
 │                          difficulty ramp, shake, pickup FX
 ├── hud.py                 Score, best, coin count, 3X timer, combo badge,
-│                          pause button, menu/game-over overlays
-├── scenes.py              Scene state machine (Menu / Play / GameOver) + App
-└── storage.py             High-score persistence (JSON file)
+│                          pause button, leaderboard, game-over overlay
+├── nameentry.py           Arcade-style 3-letter initials keyboard (top-10)
+├── scenes.py              Scene state machine (Menu / Play / NameEntry /
+│                          GameOver) + App
+└── storage.py             Top-10 leaderboard persistence (JSON file)
 tools/
 └── snapshot.py            Headless screenshot generator
 docs/screenshots/          PNG screenshots (regenerate with: python tools/snapshot.py)

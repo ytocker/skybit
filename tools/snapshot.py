@@ -119,27 +119,75 @@ def snap_mushroom():
 
 def snap_gameover():
     random.seed(99)
+    # use a disposable scores file so the seeded leaderboard is deterministic
+    import game.config as cfg
+    cfg.SCORES_FILE = "/tmp/snapshot_scores.json"
+    try:
+        os.remove(cfg.SCORES_FILE)
+    except FileNotFoundError:
+        pass
+
     app = App()
+    # seed a plausible leaderboard
+    from game.storage import insert_score
+    seed = [("ACE", 84), ("DAN", 71), ("KIM", 65), ("SAM", 54), ("TIA", 47),
+            ("JON", 39), ("RAE", 32), ("LEO", 28), ("AMY", 21), ("IAN", 18)]
+    for name, sc in seed:
+        app.scores, _ = insert_score(app.scores, name, sc)
     app.state = STATE_PLAY
-    for i in range(120):
+    for i in range(60):
         if i % 15 == 0:
             app.world.flap()
         app._update(1 / 60)
-    # force game over
-    app.world.score = 27
-    app.best = 42
-    app.prev_best_at_death = 42
+    # Force a score that lands at rank 3
+    app.world.score = 57
+    app.prev_best_at_death = 84
     app.world._die()
-    app.state = STATE_GAMEOVER
-    app._cooldown_t = 0.5
-    for _ in range(40):
+    app._on_death()  # may go to nameentry
+    if app.state == 2:  # STATE_NAMEENTRY
+        for ch in "YAN":
+            app.name_entry.press_char(ch)
+        app.name_entry.submit()
+        app._update(1 / 60)
+    app._cooldown_t = 0.3
+    for _ in range(30):
         app._update(1 / 60)
     _render_to_png(app, "gameover.png")
+
+
+def snap_nameentry():
+    random.seed(13)
+    import game.config as cfg
+    cfg.SCORES_FILE = "/tmp/snapshot_scores2.json"
+    try:
+        os.remove(cfg.SCORES_FILE)
+    except FileNotFoundError:
+        pass
+    app = App()
+    from game.storage import insert_score
+    seed = [("ACE", 84), ("DAN", 71), ("KIM", 65), ("SAM", 54), ("TIA", 47),
+            ("JON", 39), ("RAE", 32), ("LEO", 28), ("AMY", 21), ("IAN", 18)]
+    for name, sc in seed:
+        app.scores, _ = insert_score(app.scores, name, sc)
+    app.state = STATE_PLAY
+    for i in range(60):
+        if i % 15 == 0:
+            app.world.flap()
+        app._update(1 / 60)
+    app.world.score = 128
+    app.world._die()
+    app._on_death()
+    # press Y and A
+    app.name_entry.press_char("Y")
+    app.name_entry.press_char("A")
+    app._update(1 / 60)
+    _render_to_png(app, "nameentry.png")
 
 
 if __name__ == "__main__":
     snap_title()
     snap_gameplay()
     snap_mushroom()
+    snap_nameentry()
     snap_gameover()
     print("done")
