@@ -1,108 +1,75 @@
-# Skybit — A Retro Pixel Flyer
+# Skybit — Retro Pixel Flyer
 
-A Flappy-Bird-style casual arcade game with coin collection and a rare **mushroom power-up** that grants **3× coin value** for 8 seconds. Handmade pixel art, dithered sunset skies, parallax mountains, scanline CRT vibe, synthesized chiptune SFX — no external assets, no build step, no dependencies.
+A Flappy-Bird-style casual arcade game written in **Python** with [Pyxel](https://github.com/kitao/pyxel). Navigate a vivid scarlet parrot through pipes, collect glowing coins, and grab the rare mushroom for a **3× coin multiplier** for 8 seconds. Pure procedural pixel art, synthesized chiptune SFX, no external assets.
 
 <p align="center">
-  <img src="docs/screenshots/gameplay.png" alt="Skybit gameplay" width="360">
+  <img src="docs/screenshots/gameplay.png" width="340" alt="Gameplay">
+  <img src="docs/screenshots/mushroom.png"  width="340" alt="3X Power">
 </p>
 
 ---
 
-## Features
+## Play instantly — no install
 
-- **Classic one-tap flying**: tap, click, or press Space / ↑ / W to flap.
-- **Coin collection** with arc, line, and cluster patterns spawned between pipes.
-- **Power mushroom** (rare, every few gaps) → **3× coin value** for 8 seconds, with a visible timer bar, glowing aura, brief time-slow on pickup, and a 20-particle radial burst.
-- **Combo counter** for consecutive coins inside a short time window.
-- **Juicy game feel**: screen shake, screen flashes, bird tilt, motion trail, floating `+1` / `+3` pickup text.
-- **Lush retro backdrop**: dithered 4-band sky, parallax mountains (2 layers), drifting clouds, animated sun, scrolling ground with grass tufts and dirt specks.
-- **Scanlines + vignette** CRT post-FX (toggle with `C`).
-- **Pure procedural pixel art**: every sprite (bird, coin, pipe, mushroom, cloud, HUD font) is built in code — no image files.
-- **Synthesized SFX**: flap, coin, combo, mushroom, hit — all generated with the Web Audio API at runtime.
-- **Mobile-friendly**: full-screen canvas, safe-area insets, `touch-action: none`, integer scaling, pause button hit rect.
-- **Local high score** persisted via `localStorage`.
-- **Scaling difficulty**: pipe gaps tighten and scroll speed ramps up as your score climbs.
+Open **`play.html`** in any modern browser. It loads Pyxel's WebAssembly runtime from a CDN (~5 MB one-time download) and runs the full Python game in your browser. Works on desktop and mobile.
+
+```
+git clone https://github.com/ytocker/Claude_test.git
+cd Claude_test
+git checkout claude/retro-pixel-game-gPPYY
+open play.html          # macOS — or double-click the file
+```
+
+An active internet connection is required for the first load (the Pyxel WASM runtime). After that the browser caches it.
 
 ---
 
-## How to Run
-
-### Option 0 — No server needed: `play.html`
-
-A single-file bundle is included at the repo root. Just open `play.html` in any modern browser (double-click it, or drag it onto a browser window). Everything — JS, CSS, sprites, SFX — is inlined. Works from `file://`.
-
-Rebuild it after editing source with:
+## Run natively (Python)
 
 ```bash
-node tools/bundle.mjs
+pip install pyxel
+python main.py
 ```
 
-### Other options (run the modular version)
-
-The modular source in `src/*.js` uses native **ES modules**, so it needs a tiny static http server.
-
-### Option 1 — Python (installed almost everywhere)
-
-```bash
-cd Claude_test
-python3 -m http.server 8000
-```
-
-Open <http://localhost:8000> in any modern browser.
-
-### Option 2 — Node
-
-```bash
-cd Claude_test
-npx --yes serve -l 8000 .
-```
-
-### Option 3 — Play on your phone
-
-Run either server above on your laptop, find your machine's LAN IP (`ipconfig` / `ifconfig`), then visit `http://<your-ip>:8000` on your phone on the same Wi-Fi.
-
-### Option 4 — GitHub Pages
-
-Push this branch and enable GitHub Pages for it — `index.html` is at the root and will work out of the box.
-
-> No `npm install`. No build step. No bundler. Just open the page.
+Requires Python 3.9+ and Pyxel 2.x.
 
 ---
 
 ## How to Play
 
-Get the bird as far as possible without hitting the pipes or the ground, collecting as many coins as you can along the way.
+Tap, click, or press **Space / Up / W** to flap. Survive as long as possible, score points by passing pipes and collecting coins.
 
-### Controls
-
-| Action                | Desktop                          | Mobile        |
-|-----------------------|----------------------------------|---------------|
-| Flap                  | Tap / Click, `Space`, `↑`, `W`   | Tap the screen |
-| Pause / Resume        | `P` or `Esc`, or tap the ⏸ button | Tap the ⏸ button |
-| Toggle CRT scanlines  | `C`                              | —             |
-| Toggle sound          | `M`                              | —             |
+| Action       | Desktop                        | Mobile       |
+|--------------|--------------------------------|--------------|
+| Flap         | Tap / Click · Space · Up · W   | Tap screen   |
+| Pause        | P · Esc · ⏸ button             | Tap ⏸ button |
 
 ### Scoring
 
-- **+1** for each pipe you pass.
-- **+1** for each coin collected (**+3** while the mushroom buff is active).
-- Chain coins quickly to build a **combo multiplier** badge — `x2`, `x3`, … — with escalating pickup sound.
+| Event                              | Points |
+|------------------------------------|--------|
+| Pass a pipe                        | +1     |
+| Collect a coin                     | +1     |
+| Collect a coin while 3× is active  | +3     |
 
-### The Mushroom
+Chain coins quickly to build a **combo multiplier** — the badge reads `X4 COMBO!` and so on, with escalating SFX.
 
-Rarely — roughly one in every several pipe gaps — a red-spotted mushroom spawns in the middle of the gap. Grab it to activate **3× POWER** for 8 seconds:
+### The Mushroom Power-Up
 
-- A timer bar appears under the score.
-- Your bird gains a glowing orange halo.
-- Time briefly slows on pickup so you can line up your first buffed coin.
-- Every coin you touch during the buff is worth **+3** instead of +1.
+A red-spotted mushroom occasionally spawns in the gap between pipes (roughly 1-in-10 chance). Grab it to:
 
-### Tips
+- Activate **3× POWER** for 8 seconds — coins worth +3 each
+- Trigger a radial sparkle burst and brief time-slow
+- See an orange/gold aura glow around the parrot for the duration
+- Watch a timer bar under the score drain in real time
 
-- Early pipes are wide and slow — use them to warm up your rhythm.
-- Gaps tighten and the world scrolls faster after score **~20** and again after **~40**.
-- Stay in the middle of the screen to keep options open.
-- The mushroom is worth chasing into tight spots — 8 seconds of 3× adds up fast.
+### Difficulty
+
+The game gets harder as your score climbs:
+
+- **Score 0–20**: wide gaps, relaxed scroll speed
+- **Score 20–35**: gaps tighten, speed ramps up
+- **Score 35+**: near-minimum gap, maximum scroll speed
 
 ---
 
@@ -111,72 +78,68 @@ Rarely — roughly one in every several pipe gaps — a red-spotted mushroom spa
 <table>
 <tr>
   <td align="center">
-    <img src="docs/screenshots/title.png" alt="Title screen" width="260"><br>
-    <sub><b>Title screen</b> — dithered sunset sky, parallax hills, tap to flap</sub>
+    <img src="docs/screenshots/title.png" width="280"><br>
+    <sub>Title screen</sub>
   </td>
   <td align="center">
-    <img src="docs/screenshots/gameplay.png" alt="Gameplay" width="260"><br>
-    <sub><b>Gameplay</b> — arc coin pattern between pipes, x3 combo, motion trail</sub>
+    <img src="docs/screenshots/gameplay.png" width="280"><br>
+    <sub>Gameplay — arc coin pattern, X4 combo</sub>
   </td>
 </tr>
 <tr>
   <td align="center">
-    <img src="docs/screenshots/mushroom.png" alt="3X Power mushroom active" width="260"><br>
-    <sub><b>3× POWER!</b> — mushroom collected, aura glowing, timer bar counting down</sub>
+    <img src="docs/screenshots/mushroom.png" width="280"><br>
+    <sub>3X POWER active — aura + sparkle burst</sub>
   </td>
   <td align="center">
-    <img src="docs/screenshots/gameover.png" alt="Game over" width="260"><br>
-    <sub><b>Game over</b> — new-best announcement, tap to retry</sub>
+    <img src="docs/screenshots/gameover.png" width="280"><br>
+    <sub>Game Over — new best score</sub>
   </td>
 </tr>
 </table>
-
-> The screenshots above are generated by `tools/snapshot.mjs`, which reuses the exact same sprite/palette/rendering code as the live game. If you modify sprites, run `node tools/snapshot.mjs` to refresh them.
 
 ---
 
 ## Project Structure
 
 ```
-index.html             Canvas host + module entry point
-style.css              Full-screen, pixel-perfect, safe-area-aware styling
-src/
-├── main.js            Bootstrap, rAF fixed-timestep loop, input wiring
-├── config.js          All gameplay constants (physics, spawn rates, timings)
-├── palette.js         16-color retro palette, 32-bit ABGR encoded
-├── gfx.js             Offscreen pixel buffer: rects, sprites, dither, scanlines, vignette
-├── sprites.js         Procedural bird / coin / mushroom / pipe / cloud sprites + 3x5 bitmap font
-├── input.js           Unified pointer / touch / keyboard input
-├── audio.js           Web Audio SFX synth (flap, coin, combo, mushroom, hit, score)
-├── storage.js         localStorage wrapper for high score + settings
-├── fx.js              Screen shake, screen flash, time-slow effects
-├── entities.js        Bird, Pipe, Coin, Mushroom, Particle, FloatText
-├── world.js           World simulation: scrolling, spawning, collisions, difficulty ramp
-├── hud.js             Score, high score, coin count, combo badge, mushroom timer, pause button
-└── scenes.js          Menu / Play / GameOver state machine + render composition
+main.py                   Entry point — starts the Pyxel app
+play.html                 Browser-playable build (Pyxel WASM + embedded game)
+skybit/
+├── app.py                Pyxel App class: init, run, scene management
+├── config.py             All gameplay constants (physics, spawn rates, timings)
+├── palette.py            Custom 16-colour palette (0xRRGGBB values + aliases)
+├── sprites.py            Procedural drawing: parrot (4-frame flap), pipes,
+│                         coins, mushroom, clouds, parallax bg, bitmap font
+├── entities.py           Bird, Pipe, Coin, Mushroom, Particle, FloatText
+├── world.py              World simulation: scrolling, spawning, collision,
+│                         difficulty ramp, particle FX, screen shake/flash
+├── hud.py                Score, hi-score, coin count, mushroom timer bar,
+│                         combo badge, floating pickup text, pause button
+└── storage.py            High score + settings persistence (JSON file)
 tools/
-└── snapshot.mjs       Headless PNG renderer for README screenshots (zero deps)
-docs/screenshots/      Generated game screenshots
+└── snapshot.py           Headless screenshot generator (Pillow-backed pyxel shim)
+docs/screenshots/         PNG screenshots (regenerate with: python tools/snapshot.py)
 ```
 
-Total ≈1200 lines of hand-written, dependency-free JavaScript.
-
 ---
 
-## Tech Notes
+## Technical Notes
 
-- **Internal resolution**: 180×320 virtual pixels, integer-scaled to fit the viewport. `image-rendering: pixelated` keeps every pixel crisp at any size.
-- **Rendering**: a single `ImageData` buffer is filled as a `Uint32Array` (fast palette writes), then blitted once per frame with `putImageData`.
-- **Fixed timestep**: 60 Hz update (`DT = 1/60`) with an accumulator and a 5-step cap, so gameplay stays stable even when the tab lags.
-- **Palette**: a tuned variant of Adigun Polack's **AAP-16** — a beautiful 16-color pixel-art palette in the public domain.
-- **No assets**: sprites live as short ASCII grids in `src/sprites.js`. Readable, diff-friendly, and tiny.
-- **No audio files**: every sound effect is generated on the fly from oscillators + a short burst of noise.
+- **Screen**: 160 × 240 virtual pixels, displayed at 3× scale (480 × 720) — crisp on any monitor or phone
+- **Language**: Python 3, [Pyxel 2.x](https://github.com/kitao/pyxel) game engine
+- **Palette**: custom 16-colour set tuned for the scarlet-macaw parrot and lush sky tones
+- **Sprites**: every sprite (parrot, pipe, coin, mushroom, clouds, font glyphs) is drawn procedurally via `pyxel.rect/circ/pset` — no image files
+- **SFX**: Pyxel's built-in chiptune synth — flap, coin, combo, mushroom, hit
+- **Physics**: fixed-timestep update at 60 FPS, `GRAVITY = 900 px/s²`, `FLAP_V = −255 px/s`
+- **Persistence**: high score saved to `~/.skybit_save.json`
+- **Web export**: `pyxel package . main.py && pyxel app2html *.pyxapp` → `play.html`
 
----
-
-## Credits
-
-- Game design, code, pixel art, and SFX synthesis: handmade for this repo.
-- Palette inspired by Adigun Polack's AAP-16 (public domain).
-
-Enjoy, and good luck chasing that high score.
+Rebuild `play.html` after editing source:
+```bash
+pip install pyxel
+pyxel package . main.py
+pyxel app2html *.pyxapp
+mv Claude_test.html play.html
+rm *.pyxapp
+```
