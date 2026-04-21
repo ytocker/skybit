@@ -27,7 +27,19 @@ A Flappy-Bird-style casual arcade game with coin collection and a rare **mushroo
 
 ## How to Run
 
-The game uses native **ES modules**, so you need to serve `index.html` over `http://` (not `file://`). Any tiny static server works.
+### Option 0 — No server needed: `play.html`
+
+A single-file bundle is included at the repo root. Just open `play.html` in any modern browser (double-click it, or drag it onto a browser window). Everything — JS, CSS, sprites, SFX — is inlined. Works from `file://`.
+
+Rebuild it after editing source with:
+
+```bash
+node tools/bundle.mjs
+```
+
+### Other options (run the modular version)
+
+The modular source in `src/*.js` uses native **ES modules**, so it needs a tiny static http server.
 
 ### Option 1 — Python (installed almost everywhere)
 

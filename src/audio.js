@@ -1,23 +1,23 @@
 // Synthesized SFX using Web Audio API. No files.
 // Call unlock() on the first user gesture to satisfy autoplay policies.
 
-let ctx = null;
+let audioCtx = null;
 let master = null;
 let muted = false;
 
 function ensure() {
-    if (ctx) return ctx;
+    if (audioCtx) return audioCtx;
     const AC = window.AudioContext || window.webkitAudioContext;
-    ctx = new AC();
-    master = ctx.createGain();
+    audioCtx = new AC();
+    master = audioCtx.createGain();
     master.gain.value = 0.28;
-    master.connect(ctx.destination);
-    return ctx;
+    master.connect(audioCtx.destination);
+    return audioCtx;
 }
 
 export function unlock() {
     ensure();
-    if (ctx.state === 'suspended') ctx.resume();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
 }
 
 export function setMuted(m) { muted = !!m; if (master) master.gain.value = muted ? 0 : 0.28; }
@@ -25,9 +25,9 @@ export function isMuted() { return muted; }
 
 function tone({ freq = 440, freq2 = null, dur = 0.08, type = 'square', vol = 0.3, attack = 0.002, decay = 0.06, when = 0 }) {
     ensure();
-    const t0 = ctx.currentTime + when;
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
+    const t0 = audioCtx.currentTime + when;
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
     osc.type = type;
     osc.frequency.setValueAtTime(freq, t0);
     if (freq2 != null) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq2), t0 + dur);
@@ -41,17 +41,17 @@ function tone({ freq = 440, freq2 = null, dur = 0.08, type = 'square', vol = 0.3
 
 function noise({ dur = 0.1, vol = 0.2, hp = 800 }) {
     ensure();
-    const t0 = ctx.currentTime;
-    const len = Math.floor(ctx.sampleRate * dur);
-    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const t0 = audioCtx.currentTime;
+    const len = Math.floor(audioCtx.sampleRate * dur);
+    const buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
     const ch = buf.getChannelData(0);
     for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / len);
-    const src = ctx.createBufferSource();
+    const src = audioCtx.createBufferSource();
     src.buffer = buf;
-    const g = ctx.createGain();
+    const g = audioCtx.createGain();
     g.gain.setValueAtTime(vol, t0);
     g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
-    const f = ctx.createBiquadFilter();
+    const f = audioCtx.createBiquadFilter();
     f.type = 'highpass';
     f.frequency.value = hp;
     src.connect(f).connect(g).connect(master);

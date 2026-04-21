@@ -1,0 +1,1774 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0e1a2b">
+<title>Skybit — Retro Pixel Flyer (single-file build)</title>
+<style>
+:root {
+    color-scheme: dark;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    background: #0b1220;
+    overflow: hidden;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+    font-family: system-ui, -apple-system, sans-serif;
+}
+
+body {
+    height: 100svh;
+    padding:
+        env(safe-area-inset-top)
+        env(safe-area-inset-right)
+        env(safe-area-inset-bottom)
+        env(safe-area-inset-left);
+}
+
+#stage {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background:
+        radial-gradient(ellipse at 50% 35%, #1b2a47 0%, #0b1220 70%, #070a12 100%);
+}
+
+canvas#game {
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    image-rendering: -webkit-optimize-contrast;
+    background: #0b1220;
+    box-shadow:
+        0 0 0 2px #000,
+        0 0 24px 0 rgba(0, 0, 0, 0.8),
+        0 0 80px 0 rgba(80, 120, 200, 0.18);
+    cursor: pointer;
+    touch-action: none;
+}
+
+</style>
+</head>
+<body>
+<div id="stage">
+    <canvas id="game" width="180" height="320"></canvas>
+</div>
+<script>
+(function(){
+'use strict';
+// ----- config.js -----
+const VIEW_W = 180;
+const VIEW_H = 320;
+const GROUND_Y = 296;
+const CEILING_Y = 0;
+const GRAVITY = 1400;
+const FLAP_V = -330;
+const MAX_FALL = 520;
+const SCROLL_BASE = 90;
+const SCROLL_MAX = 160;
+const PIPE_W = 28;
+const PIPE_SPACING = 150;
+const PIPE_GAP_START = 86;
+const PIPE_GAP_MIN = 58;
+const COIN_R = 5;
+const COIN_VALUE = 1;
+const MUSHROOM_CHANCE = 0.11;
+const MUSHROOM_COOLDOWN = 5;
+const TRIPLE_DURATION = 8.0;
+const TRIPLE_MULT = 3;
+const COMBO_WINDOW = 1.6;
+const BIRD_X = 56;
+const BIRD_R = 5;
+const DT = 1 / 60;
+const HIGHSCORE_KEY = 'skybit.highscore';
+const SETTINGS_KEY = 'skybit.settings';
+
+
+// ----- palette.js -----
+// AAP-16 style palette by Adigun Polack (public domain) — slightly tuned for this game.
+// Colors are provided as #RRGGBB; at init we convert to 0xAABBGGRR for ImageData writes.
+const HEX = [
+    '#0b1220', // 0  deep night
+    '#1c2943', // 1  night blue
+    '#3a4e7a', // 2  muted indigo
+    '#6686b9', // 3  dusk blue
+    '#a8d5ff', // 4  sky cyan
+    '#ffe7a8', // 5  cream highlight
+    '#ffc24b', // 6  gold
+    '#ff7a3d', // 7  orange
+    '#c53a3a', // 8  crimson
+    '#7a2a6b', // 9  plum
+    '#2c7d4f', // 10 leaf green
+    '#6bc15a', // 11 grass green
+    '#b8e06a', // 12 light green
+    '#5a3a21', // 13 dark wood
+    '#a56b3c', // 14 amber wood
+    '#f3f4f0', // 15 off-white
+];
+const PAL = HEX.map(hexToABGR);
+
+// Named indices for clarity.
+const C = {
+    NIGHT: 0, NAVY: 1, INDIGO: 2, DUSK: 3, SKY: 4,
+    CREAM: 5, GOLD: 6, ORANGE: 7, CRIMSON: 8, PLUM: 9,
+    LEAF: 10, GRASS: 11, LIME: 12, WOOD: 13, AMBER: 14, WHITE: 15
+};
+function hexToABGR(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    const r = (n >> 16) & 0xff;
+    const g = (n >> 8) & 0xff;
+    const b = n & 0xff;
+    return (0xff << 24) | (b << 16) | (g << 8) | r;
+}
+function rgba(r, g, b, a = 255) {
+    return ((a & 0xff) << 24) | ((b & 0xff) << 16) | ((g & 0xff) << 8) | (r & 0xff);
+}
+function lerpColor(iA, iB, t) {
+    const a = PAL[iA], b = PAL[iB];
+    const ar = a & 0xff, ag = (a >> 8) & 0xff, ab = (a >> 16) & 0xff;
+    const br = b & 0xff, bg = (b >> 8) & 0xff, bb = (b >> 16) & 0xff;
+    const r = Math.round(ar + (br - ar) * t);
+    const g = Math.round(ag + (bg - ag) * t);
+    const bl = Math.round(ab + (bb - ab) * t);
+    return rgba(r, g, bl);
+}
+
+
+// ----- gfx.js -----
+
+
+// Offscreen ImageData buffer the whole frame is drawn into as raw pixels.
+// Then blitted to the visible canvas once per frame.
+class PixelBuffer {
+    constructor(w = VIEW_W, h = VIEW_H) {
+        this.w = w;
+        this.h = h;
+        this.image = new ImageData(w, h);
+        this.u32 = new Uint32Array(this.image.data.buffer);
+    }
+
+    clear(colorIdx = 0) {
+        this.u32.fill(PAL[colorIdx]);
+    }
+
+    put(x, y, colorIdx) {
+        if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
+        this.u32[(y | 0) * this.w + (x | 0)] = PAL[colorIdx];
+    }
+
+    putRaw(x, y, abgr) {
+        if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
+        this.u32[(y | 0) * this.w + (x | 0)] = abgr;
+    }
+
+    rect(x, y, w, h, colorIdx) {
+        const x0 = Math.max(0, x | 0);
+        const y0 = Math.max(0, y | 0);
+        const x1 = Math.min(this.w, (x + w) | 0);
+        const y1 = Math.min(this.h, (y + h) | 0);
+        const c = PAL[colorIdx];
+        const W = this.w;
+        for (let yy = y0; yy < y1; yy++) {
+            const row = yy * W;
+            for (let xx = x0; xx < x1; xx++) {
+                this.u32[row + xx] = c;
+            }
+        }
+    }
+
+    hline(x, y, w, colorIdx) {
+        this.rect(x, y, w, 1, colorIdx);
+    }
+
+    vline(x, y, h, colorIdx) {
+        this.rect(x, y, 1, h, colorIdx);
+    }
+
+    // Dithered vertical gradient using 2 colors and Bayer 4x4.
+    gradientBand(x, y, w, h, topIdx, botIdx) {
+        const x0 = Math.max(0, x | 0);
+        const y0 = Math.max(0, y | 0);
+        const x1 = Math.min(this.w, (x + w) | 0);
+        const y1 = Math.min(this.h, (y + h) | 0);
+        const bayer = [
+            [ 0,  8,  2, 10],
+            [12,  4, 14,  6],
+            [ 3, 11,  1,  9],
+            [15,  7, 13,  5],
+        ];
+        const range = y1 - y0;
+        for (let yy = y0; yy < y1; yy++) {
+            const t = (yy - y0) / Math.max(1, range - 1);
+            for (let xx = x0; xx < x1; xx++) {
+                const bx = xx & 3, by = yy & 3;
+                const thresh = (bayer[by][bx] + 0.5) / 16;
+                const use = t > thresh ? botIdx : topIdx;
+                this.u32[yy * this.w + xx] = PAL[use];
+            }
+        }
+    }
+
+    // Blit a sprite described by { w, h, data: Int8Array of palette indices, -1 = transparent }.
+    blit(sprite, dx, dy, flipX = false, tint = -1) {
+        const { w, h, data } = sprite;
+        const sx0 = 0, sy0 = 0;
+        for (let j = 0; j < h; j++) {
+            const yy = dy + j;
+            if (yy < 0 || yy >= this.h) continue;
+            for (let i = 0; i < w; i++) {
+                const xx = dx + (flipX ? (w - 1 - i) : i);
+                if (xx < 0 || xx >= this.w) continue;
+                const idx = data[(sy0 + j) * w + (sx0 + i)];
+                if (idx < 0) continue;
+                this.u32[yy * this.w + xx] = PAL[tint >= 0 ? tint : idx];
+            }
+        }
+    }
+
+    // Draw a filled circle (pixel art, no AA).
+    disc(cx, cy, r, colorIdx) {
+        const r2 = r * r;
+        const x0 = Math.max(0, (cx - r) | 0);
+        const y0 = Math.max(0, (cy - r) | 0);
+        const x1 = Math.min(this.w, (cx + r + 1) | 0);
+        const y1 = Math.min(this.h, (cy + r + 1) | 0);
+        const c = PAL[colorIdx];
+        for (let yy = y0; yy < y1; yy++) {
+            const dy = yy - cy;
+            for (let xx = x0; xx < x1; xx++) {
+                const dx = xx - cx;
+                if (dx * dx + dy * dy <= r2) {
+                    this.u32[yy * this.w + xx] = c;
+                }
+            }
+        }
+    }
+
+    // 1-pixel circle outline.
+    ring(cx, cy, r, colorIdx) {
+        let x = r, y = 0, err = 0;
+        while (x >= y) {
+            this.put(cx + x, cy + y, colorIdx);
+            this.put(cx + y, cy + x, colorIdx);
+            this.put(cx - y, cy + x, colorIdx);
+            this.put(cx - x, cy + y, colorIdx);
+            this.put(cx - x, cy - y, colorIdx);
+            this.put(cx - y, cy - x, colorIdx);
+            this.put(cx + y, cy - x, colorIdx);
+            this.put(cx + x, cy - y, colorIdx);
+            y++;
+            err += 1 + 2 * y;
+            if (2 * (err - x) + 1 > 0) { x--; err += 1 - 2 * x; }
+        }
+    }
+
+    // Scanline overlay: darken every other row.
+    scanlines(intensityIdx = 0, stride = 2) {
+        for (let y = 0; y < this.h; y += stride) {
+            for (let x = 0; x < this.w; x++) {
+                const p = this.u32[y * this.w + x];
+                // Multiply RGB by ~0.78 (shift-based approximation).
+                const r = (p & 0xff) * 0.78 | 0;
+                const g = ((p >> 8) & 0xff) * 0.78 | 0;
+                const b = ((p >> 16) & 0xff) * 0.78 | 0;
+                this.u32[y * this.w + x] = (0xff << 24) | (b << 16) | (g << 8) | r;
+            }
+        }
+    }
+
+    // Soft circular vignette (darkens corners).
+    vignette(strength = 0.35) {
+        const cx = this.w / 2, cy = this.h / 2;
+        const maxD = Math.hypot(cx, cy);
+        for (let y = 0; y < this.h; y++) {
+            for (let x = 0; x < this.w; x++) {
+                const d = Math.hypot(x - cx, y - cy) / maxD;
+                if (d < 0.55) continue;
+                const f = 1 - Math.min(1, (d - 0.55) / 0.45) * strength;
+                const i = y * this.w + x;
+                const p = this.u32[i];
+                const r = (p & 0xff) * f | 0;
+                const g = ((p >> 8) & 0xff) * f | 0;
+                const b = ((p >> 16) & 0xff) * f | 0;
+                this.u32[i] = (0xff << 24) | (b << 16) | (g << 8) | r;
+            }
+        }
+    }
+}
+
+// Fit the visible canvas to the viewport at an integer scale.
+function fitCanvasToViewport(canvas) {
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const scale = Math.max(1, Math.floor(Math.min(vw / VIEW_W, vh / VIEW_H)));
+    canvas.style.width = (VIEW_W * scale) + 'px';
+    canvas.style.height = (VIEW_H * scale) + 'px';
+    return scale;
+}
+
+
+// ----- sprites.js -----
+
+// Compact sprite maker: takes a string grid and a key string, returns { w, h, data }.
+// '.' = transparent; any other char looks up in `key` to a palette index.
+function makeSprite(rows, key) {
+    const h = rows.length;
+    const w = rows[0].length;
+    const data = new Int8Array(w * h);
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+            const ch = rows[y][x];
+            if (ch === '.') { data[y * w + x] = -1; continue; }
+            const k = key.indexOf(ch);
+            data[y * w + x] = k === -1 ? -1 : keyToPal(key[k]);
+        }
+    }
+    return { w, h, data };
+}
+
+// Key char → palette index. We use a tiny scheme so sprite strings stay readable.
+function keyToPal(ch) {
+    switch (ch) {
+        case 'K': return C.NIGHT;      // black-ish outline
+        case 'N': return C.NAVY;
+        case 'I': return C.INDIGO;
+        case 'D': return C.DUSK;
+        case 'S': return C.SKY;
+        case 'C': return C.CREAM;
+        case 'G': return C.GOLD;
+        case 'O': return C.ORANGE;
+        case 'R': return C.CRIMSON;
+        case 'P': return C.PLUM;
+        case 'L': return C.LEAF;
+        case 'E': return C.GRASS;
+        case 'M': return C.LIME;
+        case 'W': return C.WOOD;
+        case 'A': return C.AMBER;
+        case 'F': return C.WHITE;
+        default: return -1;
+    }
+}
+
+// ---------- Bird (13x10 px, 3 frames) -----------
+// Frames differ by wing position: up, mid, down.
+// K = outline, O = orange body, G = gold accent, F = white, C = cream, R = crimson beak.
+const BIRD_FRAMES = [
+    // wing UP
+    makeSprite([
+        '....KKKKK....',
+        '..KKOOOOOKK..',
+        '.KOOOOOOOGGK.',
+        'KOOOFFOOOGGGK',
+        'KOOFKFOOOGGGK',
+        'KOOFFFOOOGGOK',
+        'KKKKOOOOOOKRK',
+        '.KOOOOOOOKRRK',
+        '..KKOOOOKK...',
+        '....KKKK.....',
+    ], 'KOGFCR'),
+    // wing MID
+    makeSprite([
+        '....KKKKK....',
+        '..KKOOOOOKK..',
+        '.KOOOOOOOGGK.',
+        'KOOOFFOOOGGGK',
+        'KOOFKFOOOGGGK',
+        'KKKKFOOOOGOOK',
+        'KGGGKOOOOOKRK',
+        'KKKKOOOOOKRRK',
+        '..KKOOOOKK...',
+        '....KKKK.....',
+    ], 'KOGFCR'),
+    // wing DOWN
+    makeSprite([
+        '....KKKKK....',
+        '..KKOOOOOKK..',
+        '.KOOOOOOOGGK.',
+        'KOOOFFOOOGGGK',
+        'KOOFKFOOOGGGK',
+        'KOOFFFOOOGOOK',
+        'KOOOOOOOOOKRK',
+        'KKGGKOOOOKRRK',
+        'KGGGGKKOKK...',
+        '.KKKKKK.KK...',
+    ], 'KOGFCR'),
+];
+
+// ---------- Coin (9x9, 4 frames for spin) ----------
+const COIN_FRAMES = [
+    makeSprite([
+        '...KKKKK.',
+        '.KKCCCGGK',
+        '.KCCGGGGK',
+        'KCCGGGGGK',
+        'KCGGGGGGK',
+        'KCGGGGGGK',
+        'KKGGGGGGK',
+        '.KKGGGGK.',
+        '..KKKKKK.',
+    ], 'KCG'),
+    makeSprite([
+        '...KKK...',
+        '..KCGGK..',
+        '..KGGGK..',
+        '.KCGGGGK.',
+        '.KGGGGGK.',
+        '.KCGGGGK.',
+        '..KGGGK..',
+        '..KCGGK..',
+        '...KKK...',
+    ], 'KCG'),
+    makeSprite([
+        '...KKKKK.',
+        '.KGGGGGCK',
+        '.KGGGGGCK',
+        'KGGGGGGCK',
+        'KGGGGGGCK',
+        'KGGGGGGCK',
+        'KKGGGGGCK',
+        '.KKGGGCK.',
+        '..KKKKKK.',
+    ], 'KCG'),
+    makeSprite([
+        '....K....',
+        '...KGK...',
+        '...KGK...',
+        '..KGGGK..',
+        '..KGGGK..',
+        '..KGGGK..',
+        '...KGK...',
+        '...KGK...',
+        '....K....',
+    ], 'KCG'),
+];
+
+// ---------- Mushroom (11x11) ----------
+const MUSHROOM = makeSprite([
+    '...KKKKK...',
+    '.KKRRRRRKK.',
+    'KRRRRFFRRRK',
+    'KRFFRRRRFFK',
+    'KRRRRRRRRRK',
+    'KKRRRRRRRKK',
+    '..KKCCCCKK.',
+    '...KCCCCK..',
+    '...KCCCCK..',
+    '....KCCK...',
+    '.....KK....',
+], 'KRFC');
+
+// ---------- Pipe cap + body pieces (drawn separately so pipes can be any height) ----------
+const PIPE_CAP = makeSprite([
+    'KEEEEEEEEEEEEEEEEEEEEEEEEEEK',
+    'KEEMMMMMMMMMMMMMMMMMMMMMMEEK',
+    'KEMEEEEEEEEEEEEEEEEEEEEEMEEK',
+    'KEMEEEEEEEEEEEEEEEEEEEEEMEEK',
+    'KEMEEEEEEEEEEEEEEEEEEEEEMEEK',
+    'KEMEEEEEEEEEEEEEEEEEEEEEMEEK',
+    'KEMEEEEEEEEEEEEEEEEEEEEEMEEK',
+    'KEEMMMMMMMMMMMMMMMMMMMMMMEEK',
+    'KEEEEEEEEEEEEEEEEEEEEEEEEEEK',
+    'KKKKKKKKKKKKKKKKKKKKKKKKKKKK',
+], 'KEM');
+const PIPE_BODY = (() => {
+    // 28 wide x 1 tall row using colors: K outline, E grass, M lime stripe.
+    const w = 28, h = 1;
+    const data = new Int8Array(w * h);
+    for (let i = 0; i < w; i++) {
+        if (i === 0 || i === w - 1) data[i] = C.NIGHT;
+        else if (i === 2 || i === w - 3) data[i] = C.LIME;
+        else data[i] = C.GRASS;
+    }
+    return { w, h, data };
+})();
+
+// Pipe cap sized to 28 wide (matches PIPE_W) regardless of above.
+const PIPE_CAP_28 = (() => {
+    const w = 28, h = 10;
+    const data = new Int8Array(w * h).fill(C.GRASS);
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+            let c = C.GRASS;
+            if (y === 0 || y === h - 1 || x === 0 || x === w - 1) c = C.NIGHT;
+            else if (y === 1 && x >= 2 && x <= w - 3) c = C.LIME;
+            else if (y === h - 2 && x >= 2 && x <= w - 3) c = C.LIME;
+            else if (x === 2 || x === w - 3) c = C.LIME;
+            data[y * w + x] = c;
+        }
+    }
+    return { w, h, data };
+})();
+
+// ---------- Cloud (14x6) ----------
+const CLOUD = makeSprite([
+    '...SSSS.......',
+    '..SFFFFS......',
+    '.SFFFFFFSS....',
+    'SFFFFFFFFSS...',
+    '.SSFFFFFSS....',
+    '...SSSSSS.....',
+], 'SF');
+
+// ---------- 3x5 pixel font ----------
+const GLYPHS = {
+    '0': ['111','101','101','101','111'],
+    '1': ['010','110','010','010','111'],
+    '2': ['111','001','111','100','111'],
+    '3': ['111','001','111','001','111'],
+    '4': ['101','101','111','001','001'],
+    '5': ['111','100','111','001','111'],
+    '6': ['111','100','111','101','111'],
+    '7': ['111','001','010','100','100'],
+    '8': ['111','101','111','101','111'],
+    '9': ['111','101','111','001','111'],
+    'A': ['111','101','111','101','101'],
+    'B': ['110','101','110','101','110'],
+    'C': ['111','100','100','100','111'],
+    'D': ['110','101','101','101','110'],
+    'E': ['111','100','110','100','111'],
+    'F': ['111','100','110','100','100'],
+    'G': ['111','100','101','101','111'],
+    'H': ['101','101','111','101','101'],
+    'I': ['111','010','010','010','111'],
+    'J': ['111','001','001','101','111'],
+    'K': ['101','110','100','110','101'],
+    'L': ['100','100','100','100','111'],
+    'M': ['101','111','111','101','101'],
+    'N': ['101','111','111','111','101'],
+    'O': ['111','101','101','101','111'],
+    'P': ['111','101','111','100','100'],
+    'Q': ['111','101','101','111','011'],
+    'R': ['110','101','110','101','101'],
+    'S': ['111','100','111','001','111'],
+    'T': ['111','010','010','010','010'],
+    'U': ['101','101','101','101','111'],
+    'V': ['101','101','101','101','010'],
+    'W': ['101','101','111','111','101'],
+    'X': ['101','101','010','101','101'],
+    'Y': ['101','101','010','010','010'],
+    'Z': ['111','001','010','100','111'],
+    '!': ['010','010','010','000','010'],
+    '?': ['111','001','010','000','010'],
+    '.': ['000','000','000','000','010'],
+    ',': ['000','000','000','010','100'],
+    ':': ['000','010','000','010','000'],
+    '-': ['000','000','111','000','000'],
+    '+': ['000','010','111','010','000'],
+    '/': ['001','001','010','100','100'],
+    "'": ['010','010','000','000','000'],
+    '"': ['101','101','000','000','000'],
+    'x': ['000','101','010','101','000'],
+    ' ': ['000','000','000','000','000'],
+};
+function measureText(str, scale = 1) {
+    return (str.length * 4 - 1) * scale;
+}
+function drawText(buf, str, x, y, colorIdx, scale = 1) {
+    let cx = x;
+    for (let i = 0; i < str.length; i++) {
+        const ch = str[i].toUpperCase();
+        const glyph = GLYPHS[ch] || GLYPHS[str[i]] || GLYPHS[' '];
+        for (let gy = 0; gy < 5; gy++) {
+            for (let gx = 0; gx < 3; gx++) {
+                if (glyph[gy][gx] === '1') {
+                    if (scale === 1) buf.put(cx + gx, y + gy, colorIdx);
+                    else buf.rect(cx + gx * scale, y + gy * scale, scale, scale, colorIdx);
+                }
+            }
+        }
+        cx += 4 * scale;
+    }
+}
+function drawTextCentered(buf, str, y, colorIdx, scale = 1) {
+    const w = measureText(str, scale);
+    drawText(buf, str, ((buf.w - w) / 2) | 0, y, colorIdx, scale);
+}
+
+
+// ----- storage.js -----
+function loadHighScore() {
+    try {
+        const v = parseInt(localStorage.getItem(HIGHSCORE_KEY) || '0', 10);
+        return Number.isFinite(v) ? v : 0;
+    } catch { return 0; }
+}
+function saveHighScore(v) {
+    try { localStorage.setItem(HIGHSCORE_KEY, String(v | 0)); } catch {}
+}
+function loadSettings() {
+    try {
+        const raw = localStorage.getItem(SETTINGS_KEY);
+        if (!raw) return { crt: true, muted: false };
+        return Object.assign({ crt: true, muted: false }, JSON.parse(raw));
+    } catch { return { crt: true, muted: false }; }
+}
+function saveSettings(s) {
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch {}
+}
+
+
+// ----- audio.js -----
+// Synthesized SFX using Web Audio API. No files.
+// Call unlock() on the first user gesture to satisfy autoplay policies.
+
+let audioCtx = null;
+let master = null;
+let muted = false;
+
+function ensure() {
+    if (audioCtx) return audioCtx;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    audioCtx = new AC();
+    master = audioCtx.createGain();
+    master.gain.value = 0.28;
+    master.connect(audioCtx.destination);
+    return audioCtx;
+}
+function unlock() {
+    ensure();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+function setMuted(m) { muted = !!m; if (master) master.gain.value = muted ? 0 : 0.28; }
+function isMuted() { return muted; }
+
+function tone({ freq = 440, freq2 = null, dur = 0.08, type = 'square', vol = 0.3, attack = 0.002, decay = 0.06, when = 0 }) {
+    ensure();
+    const t0 = audioCtx.currentTime + when;
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t0);
+    if (freq2 != null) osc.frequency.exponentialRampToValueAtTime(Math.max(20, freq2), t0 + dur);
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(vol, t0 + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + attack + decay);
+    osc.connect(g).connect(master);
+    osc.start(t0);
+    osc.stop(t0 + attack + decay + 0.02);
+}
+
+function noise({ dur = 0.1, vol = 0.2, hp = 800 }) {
+    ensure();
+    const t0 = audioCtx.currentTime;
+    const len = Math.floor(audioCtx.sampleRate * dur);
+    const buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+    const ch = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(vol, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    const f = audioCtx.createBiquadFilter();
+    f.type = 'highpass';
+    f.frequency.value = hp;
+    src.connect(f).connect(g).connect(master);
+    src.start(t0);
+    src.stop(t0 + dur + 0.02);
+}
+const sfx = {
+    flap() { tone({ freq: 520, freq2: 760, dur: 0.07, type: 'triangle', vol: 0.18, decay: 0.07 }); },
+    coin() {
+        tone({ freq: 988, dur: 0.05, type: 'square', vol: 0.18, decay: 0.05 });
+        tone({ freq: 1319, dur: 0.09, type: 'square', vol: 0.18, decay: 0.09, when: 0.05 });
+    },
+    combo(n) {
+        const base = 880 + Math.min(6, n) * 60;
+        tone({ freq: base, dur: 0.05, type: 'square', vol: 0.16 });
+        tone({ freq: base * 1.5, dur: 0.08, type: 'square', vol: 0.14, when: 0.04 });
+    },
+    mushroom() {
+        tone({ freq: 440, freq2: 880, dur: 0.12, type: 'square', vol: 0.18 });
+        tone({ freq: 660, freq2: 1320, dur: 0.16, type: 'triangle', vol: 0.2, when: 0.08 });
+        tone({ freq: 880, freq2: 1760, dur: 0.22, type: 'square', vol: 0.16, when: 0.18 });
+    },
+    hit() {
+        tone({ freq: 220, freq2: 60, dur: 0.25, type: 'sawtooth', vol: 0.22, decay: 0.25 });
+        noise({ dur: 0.18, vol: 0.16, hp: 400 });
+    },
+    score() { tone({ freq: 660, dur: 0.06, type: 'square', vol: 0.14 }); },
+    click() { tone({ freq: 880, dur: 0.04, type: 'square', vol: 0.12, decay: 0.04 }); },
+};
+
+
+// ----- input.js -----
+// Unified input: tap / click / Space / Up / W all call onFlap().
+// Pause button clicks go to onPause() when tap falls inside a registered rect.
+class Input {
+    constructor(canvas) {
+        this.canvas = canvas;
+        this.onFlap = () => {};
+        this.onPause = () => {};
+        this.onPointerAt = () => {}; // (vx, vy) in virtual pixels
+        this.pauseRect = null; // {x,y,w,h} in virtual pixels
+        this._bind();
+    }
+
+    setPauseRect(rect) { this.pauseRect = rect; }
+
+    _toVirtual(evt) {
+        const r = this.canvas.getBoundingClientRect();
+        const px = (evt.clientX - r.left) * (this.canvas.width / r.width);
+        const py = (evt.clientY - r.top) * (this.canvas.height / r.height);
+        return { x: px, y: py };
+    }
+
+    _bind() {
+        const tap = (evt) => {
+            evt.preventDefault();
+            const v = this._toVirtual(evt);
+            this.onPointerAt(v.x, v.y);
+            const pr = this.pauseRect;
+            if (pr && v.x >= pr.x && v.x <= pr.x + pr.w && v.y >= pr.y && v.y <= pr.y + pr.h) {
+                this.onPause();
+                return;
+            }
+            this.onFlap();
+        };
+        this.canvas.addEventListener('pointerdown', tap, { passive: false });
+        this.canvas.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+
+        window.addEventListener('keydown', (e) => {
+            if (e.repeat) return;
+            if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+                e.preventDefault();
+                this.onFlap();
+            } else if (e.code === 'KeyP' || e.code === 'Escape') {
+                e.preventDefault();
+                this.onPause();
+            }
+        });
+    }
+}
+
+
+// ----- fx.js -----
+class FX {
+    constructor() {
+        this.shakeMag = 0;
+        this.shakeT = 0;
+        this.flashT = 0;
+        this.flashMax = 0;
+        this.flashColor = C.WHITE;
+        this.timeScale = 1;
+        this.timeScaleT = 0;
+    }
+
+    shake(mag, dur) {
+        if (mag > this.shakeMag) {
+            this.shakeMag = mag;
+            this.shakeT = dur;
+        }
+    }
+
+    flash(color = C.WHITE, dur = 0.08) {
+        this.flashColor = color;
+        this.flashT = dur;
+        this.flashMax = dur;
+    }
+
+    slowTime(scale = 0.35, dur = 0.25) {
+        this.timeScale = scale;
+        this.timeScaleT = dur;
+    }
+
+    update(dt) {
+        if (this.shakeT > 0) {
+            this.shakeT -= dt;
+            if (this.shakeT <= 0) { this.shakeT = 0; this.shakeMag = 0; }
+        }
+        if (this.flashT > 0) this.flashT = Math.max(0, this.flashT - dt);
+        if (this.timeScaleT > 0) {
+            this.timeScaleT -= dt;
+            if (this.timeScaleT <= 0) { this.timeScaleT = 0; this.timeScale = 1; }
+        }
+    }
+
+    shakeOffset() {
+        if (this.shakeMag <= 0) return { x: 0, y: 0 };
+        const m = this.shakeMag;
+        return {
+            x: ((Math.random() * 2 - 1) * m) | 0,
+            y: ((Math.random() * 2 - 1) * m) | 0,
+        };
+    }
+
+    applyFlash(buf) {
+        if (this.flashT <= 0 || this.flashMax <= 0) return;
+        const k = this.flashT / this.flashMax; // 1 → 0
+        const c = PAL[this.flashColor];
+        const cr = c & 0xff, cg = (c >> 8) & 0xff, cb = (c >> 16) & 0xff;
+        const a = Math.max(0, Math.min(1, k)); // blend factor
+        for (let i = 0; i < buf.u32.length; i++) {
+            const p = buf.u32[i];
+            const r = (p & 0xff) * (1 - a) + cr * a | 0;
+            const g = ((p >> 8) & 0xff) * (1 - a) + cg * a | 0;
+            const b = ((p >> 16) & 0xff) * (1 - a) + cb * a | 0;
+            buf.u32[i] = (0xff << 24) | (b << 16) | (g << 8) | r;
+        }
+    }
+}
+
+
+// ----- entities.js -----
+class Bird {
+    constructor() {
+        this.x = BIRD_X;
+        this.y = 140;
+        this.vy = 0;
+        this.r = BIRD_R;
+        this.alive = true;
+        this.animT = 0;
+        this.trail = [];
+        this.flapPulse = 0; // non-zero briefly after a flap (for bigger wing)
+    }
+
+    reset() {
+        this.x = BIRD_X; this.y = 140; this.vy = 0;
+        this.alive = true; this.animT = 0; this.trail = []; this.flapPulse = 0;
+    }
+
+    flap() {
+        if (!this.alive) return;
+        this.vy = FLAP_V;
+        this.flapPulse = 0.12;
+    }
+
+    update(dt) {
+        this.vy += GRAVITY * dt;
+        if (this.vy > MAX_FALL) this.vy = MAX_FALL;
+        this.y += this.vy * dt;
+        this.animT += dt;
+        if (this.flapPulse > 0) this.flapPulse -= dt;
+
+        // Trail
+        this.trail.push({ x: this.x, y: this.y });
+        if (this.trail.length > 8) this.trail.shift();
+    }
+
+    frame() {
+        // Fast flutter; force wing-down when falling fast.
+        if (this.vy > 180) return 2;
+        const t = this.animT;
+        const f = Math.floor(t * 14) % 3;
+        return f;
+    }
+
+    angle() {
+        // Nose tilt based on vy: up when flapping, down when diving.
+        const a = this.vy / 380;
+        return Math.max(-0.5, Math.min(1.0, a));
+    }
+
+    draw(buf) {
+        // Draw trail first (4-point low-alpha ghost circles).
+        for (let i = 0; i < this.trail.length; i++) {
+            const p = this.trail[i];
+            const k = i / this.trail.length;
+            if (k < 0.4) continue;
+            const r = 2 + k * 2;
+            buf.disc(p.x, p.y, r, k > 0.8 ? C.CREAM : C.DUSK);
+        }
+        const spr = BIRD_FRAMES[this.frame()];
+        buf.blit(spr, Math.round(this.x - spr.w / 2), Math.round(this.y - spr.h / 2));
+    }
+
+    // Bounding circle hit test used against pipes / ground.
+    hitsRect(rx, ry, rw, rh) {
+        const cx = Math.max(rx, Math.min(this.x, rx + rw));
+        const cy = Math.max(ry, Math.min(this.y, ry + rh));
+        const dx = this.x - cx, dy = this.y - cy;
+        return (dx * dx + dy * dy) <= this.r * this.r;
+    }
+}
+class Pipe {
+    constructor(x, gapY, gapH) {
+        this.x = x;                // left edge
+        this.gapY = gapY;          // top of the gap
+        this.gapH = gapH;
+        this.passed = false;
+        this.spawnIndex = 0;       // used to avoid double-spawning collectibles
+        this.w = PIPE_W;
+    }
+
+    get topRect() { return { x: this.x, y: 0, w: this.w, h: this.gapY }; }
+    get botRect() { return { x: this.x, y: this.gapY + this.gapH, w: this.w, h: GROUND_Y - (this.gapY + this.gapH) }; }
+
+    update(dt, scrollSpeed) {
+        this.x -= scrollSpeed * dt;
+    }
+
+    draw(buf) {
+        const topH = this.gapY;
+        const botY = this.gapY + this.gapH;
+        const botH = GROUND_Y - botY;
+
+        // Top pipe body (descending) then cap at the bottom of this segment.
+        const bodyTopH = Math.max(0, topH - PIPE_CAP_28.h);
+        for (let y = 0; y < bodyTopH; y++) {
+            // repeat the 1-row body
+            for (let i = 0; i < PIPE_BODY.w; i++) {
+                const ci = PIPE_BODY.data[i];
+                if (ci < 0) continue;
+                buf.put(this.x + i, y, ci);
+            }
+        }
+        if (topH >= PIPE_CAP_28.h) {
+            buf.blit(PIPE_CAP_28, this.x, bodyTopH);
+        }
+
+        // Bottom pipe: cap first, body below.
+        if (botH >= PIPE_CAP_28.h) {
+            buf.blit(PIPE_CAP_28, this.x, botY);
+            for (let y = botY + PIPE_CAP_28.h; y < GROUND_Y; y++) {
+                for (let i = 0; i < PIPE_BODY.w; i++) {
+                    const ci = PIPE_BODY.data[i];
+                    if (ci < 0) continue;
+                    buf.put(this.x + i, y, ci);
+                }
+            }
+        }
+    }
+}
+class Coin {
+    constructor(x, y) {
+        this.x = x; this.y = y;
+        this.r = COIN_R;
+        this.alive = true;
+        this.t = Math.random() * 10;
+        this.bobY = 0;
+    }
+
+    update(dt, scrollSpeed) {
+        this.x -= scrollSpeed * dt;
+        this.t += dt;
+        this.bobY = Math.sin(this.t * 4) * 1.2;
+    }
+
+    draw(buf) {
+        const frame = Math.floor(this.t * 8) % COIN_FRAMES.length;
+        const spr = COIN_FRAMES[frame];
+        buf.blit(spr, Math.round(this.x - spr.w / 2), Math.round(this.y + this.bobY - spr.h / 2));
+    }
+
+    hits(bird) {
+        const dx = this.x - bird.x;
+        const dy = this.y + this.bobY - bird.y;
+        const rr = this.r + bird.r;
+        return dx * dx + dy * dy <= rr * rr;
+    }
+}
+class Mushroom {
+    constructor(x, y) {
+        this.x = x; this.y = y;
+        this.r = 6;
+        this.alive = true;
+        this.t = 0;
+    }
+
+    update(dt, scrollSpeed) {
+        this.x -= scrollSpeed * dt;
+        this.t += dt;
+    }
+
+    draw(buf) {
+        // Gentle bob + a faint halo ring that pulses.
+        const bob = Math.sin(this.t * 3) * 1.5;
+        const r = 9 + Math.sin(this.t * 4) * 1.2;
+        buf.ring(this.x, this.y + bob, r, C.CREAM);
+        buf.ring(this.x, this.y + bob, r + 2, C.ORANGE);
+        buf.blit(MUSHROOM, Math.round(this.x - MUSHROOM.w / 2), Math.round(this.y + bob - MUSHROOM.h / 2));
+    }
+
+    hits(bird) {
+        const dx = this.x - bird.x;
+        const dy = this.y - bird.y;
+        const rr = this.r + bird.r;
+        return dx * dx + dy * dy <= rr * rr;
+    }
+}
+class Particle {
+    constructor(x, y, vx, vy, life, color, size = 1, gravity = 0) {
+        this.x = x; this.y = y;
+        this.vx = vx; this.vy = vy;
+        this.life = life; this.maxLife = life;
+        this.color = color;
+        this.size = size;
+        this.gravity = gravity;
+        this.alive = true;
+    }
+
+    update(dt) {
+        this.life -= dt;
+        if (this.life <= 0) { this.alive = false; return; }
+        this.vy += this.gravity * dt;
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+    }
+
+    draw(buf) {
+        if (this.size <= 1) buf.put(this.x, this.y, this.color);
+        else buf.rect(this.x - (this.size / 2 | 0), this.y - (this.size / 2 | 0), this.size, this.size, this.color);
+    }
+}
+
+// Floating "+1" / "+3" labels.
+class FloatText {
+    constructor(x, y, text, color) {
+        this.x = x; this.y = y;
+        this.text = text;
+        this.color = color;
+        this.life = 0.7;
+        this.maxLife = 0.7;
+        this.alive = true;
+    }
+
+    update(dt) {
+        this.life -= dt;
+        this.y -= 22 * dt;
+        if (this.life <= 0) this.alive = false;
+    }
+}
+
+
+// ----- world.js -----
+
+
+
+
+
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+class World {
+    constructor() {
+        this.fx = new FX();
+        this.reset();
+        // Parallax layers (seeded random for mountains + clouds)
+        this.clouds = [];
+        for (let i = 0; i < 6; i++) {
+            this.clouds.push({
+                x: Math.random() * VIEW_W,
+                y: 20 + Math.random() * 120,
+                speed: 0.12 + Math.random() * 0.22,
+            });
+        }
+        this.mountains = this._buildMountains(VIEW_W * 2);
+        this.mountainScroll = 0;
+        this.groundScroll = 0;
+    }
+
+    _buildMountains(width) {
+        // Simple seeded noise silhouette.
+        const heights = new Array(width);
+        let a = 0.6, b = 1.7, c = 3.3;
+        for (let x = 0; x < width; x++) {
+            const n =
+                Math.sin(x * 0.03 + a) * 0.55 +
+                Math.sin(x * 0.07 + b) * 0.3 +
+                Math.sin(x * 0.17 + c) * 0.15;
+            heights[x] = 120 + n * 22;
+        }
+        return heights;
+    }
+
+    reset() {
+        this.bird = new Bird();
+        this.pipes = [];
+        this.coins = [];
+        this.mushrooms = [];
+        this.particles = [];
+        this.floatTexts = [];
+        this.score = 0;
+        this.coinCount = 0;
+        this.combo = 0;
+        this.comboTimer = 0;
+        this.tripleTimer = 0;
+        this.mushroomCooldown = 0;
+        this.spawnX = VIEW_W + 40;
+        this.elapsed = 0;
+        this.gameOver = false;
+        this.started = false;
+    }
+
+    scrollSpeed() {
+        const t = clamp(this.score / 40, 0, 1);
+        return lerp(SCROLL_BASE, SCROLL_MAX, t);
+    }
+
+    pipeGap() {
+        const t = clamp(this.score / 35, 0, 1);
+        return Math.round(lerp(PIPE_GAP_START, PIPE_GAP_MIN, t));
+    }
+
+    flap() {
+        if (this.gameOver) return;
+        if (!this.started) this.started = true;
+        this.bird.flap();
+        // Flap puff particles
+        for (let i = 0; i < 3; i++) {
+            this.particles.push(new Particle(
+                this.bird.x - 4, this.bird.y + 4,
+                -20 - Math.random() * 20, 10 + Math.random() * 20,
+                0.35, C.CREAM, 1, 0
+            ));
+        }
+        sfx.flap();
+    }
+
+    spawnPipeRun() {
+        const gap = this.pipeGap();
+        const minTop = 22;
+        const maxTop = GROUND_Y - gap - 22;
+        const gapY = Math.floor(minTop + Math.random() * (maxTop - minTop));
+        const pipe = new Pipe(this.spawnX, gapY, gap);
+        this.pipes.push(pipe);
+
+        // Spawn collectibles inside/near this gap.
+        this._spawnCoinPattern(pipe);
+
+        if (this.mushroomCooldown <= 0 && Math.random() < MUSHROOM_CHANCE) {
+            const my = gapY + gap / 2 + (Math.random() * 10 - 5);
+            this.mushrooms.push(new Mushroom(this.spawnX + PIPE_W / 2, my));
+            this.mushroomCooldown = MUSHROOM_COOLDOWN;
+        }
+
+        this.spawnX += PIPE_SPACING;
+    }
+
+    _spawnCoinPattern(pipe) {
+        const patterns = ['arc', 'line', 'cluster'];
+        const kind = patterns[(Math.random() * patterns.length) | 0];
+        const cx = pipe.x + PIPE_W / 2;
+        const cy = pipe.gapY + pipe.gapH / 2;
+
+        if (kind === 'line') {
+            const n = 4 + ((Math.random() * 3) | 0);
+            for (let i = 0; i < n; i++) {
+                this.coins.push(new Coin(cx - (n - 1) * 5 + i * 10, cy));
+            }
+        } else if (kind === 'arc') {
+            const n = 5;
+            for (let i = 0; i < n; i++) {
+                const t = i / (n - 1);
+                const ax = cx - 18 + t * 36;
+                const ay = cy - Math.sin(t * Math.PI) * 18;
+                this.coins.push(new Coin(ax, ay));
+            }
+        } else {
+            // cluster: small bunch in the middle
+            this.coins.push(new Coin(cx, cy));
+            this.coins.push(new Coin(cx - 7, cy - 4));
+            this.coins.push(new Coin(cx + 7, cy - 4));
+            this.coins.push(new Coin(cx - 7, cy + 4));
+            this.coins.push(new Coin(cx + 7, cy + 4));
+        }
+    }
+
+    update(dt) {
+        this.elapsed += dt;
+        if (this.started && !this.gameOver) {
+            const scroll = this.scrollSpeed();
+            // Spawn
+            if (this.pipes.length === 0 || this.pipes[this.pipes.length - 1].x < this.spawnX - PIPE_SPACING) {
+                this.spawnPipeRun();
+            }
+
+            // Move world
+            for (const p of this.pipes) p.update(dt, scroll);
+            for (const c of this.coins) c.update(dt, scroll);
+            for (const m of this.mushrooms) m.update(dt, scroll);
+            this.groundScroll = (this.groundScroll + scroll * dt) % 8;
+            this.mountainScroll = (this.mountainScroll + scroll * 0.15 * dt);
+            for (const cl of this.clouds) {
+                cl.x -= scroll * cl.speed * dt;
+                if (cl.x < -20) { cl.x = VIEW_W + Math.random() * 40; cl.y = 20 + Math.random() * 120; }
+            }
+            this.spawnX -= scroll * dt;
+
+            this.mushroomCooldown = Math.max(0, this.mushroomCooldown - dt);
+            if (this.tripleTimer > 0) this.tripleTimer = Math.max(0, this.tripleTimer - dt);
+            if (this.comboTimer > 0) {
+                this.comboTimer -= dt;
+                if (this.comboTimer <= 0) this.combo = 0;
+            }
+        }
+
+        // Bird always updates (even at game-over so it falls).
+        this.bird.update(dt);
+
+        // Particles + float texts
+        for (const p of this.particles) p.update(dt);
+        this.particles = this.particles.filter(p => p.alive);
+        for (const t of this.floatTexts) t.update(dt);
+        this.floatTexts = this.floatTexts.filter(t => t.alive);
+
+        // Ground / ceiling clamp
+        if (this.bird.y + this.bird.r >= GROUND_Y) {
+            this.bird.y = GROUND_Y - this.bird.r;
+            if (this.started && !this.gameOver) this._kill('ground');
+            this.bird.vy = 0;
+        }
+        if (this.bird.y - this.bird.r < CEILING_Y) {
+            this.bird.y = CEILING_Y + this.bird.r;
+            if (this.bird.vy < 0) this.bird.vy = 0;
+        }
+
+        if (this.started && !this.gameOver) this._collisions();
+
+        // Cleanup
+        this.pipes = this.pipes.filter(p => p.x + PIPE_W > -4);
+        this.coins = this.coins.filter(c => c.alive && c.x > -10);
+        this.mushrooms = this.mushrooms.filter(m => m.alive && m.x > -10);
+
+        this.fx.update(dt);
+    }
+
+    _collisions() {
+        const b = this.bird;
+
+        // Pipes: check top + bottom of each pipe.
+        for (const p of this.pipes) {
+            // Score-on-pass
+            if (!p.passed && p.x + PIPE_W < b.x) {
+                p.passed = true;
+                this.score += 1;
+                sfx.score();
+            }
+            const t = p.topRect, bo = p.botRect;
+            if (b.hitsRect(t.x, t.y, t.w, t.h) || b.hitsRect(bo.x, bo.y, bo.w, bo.h)) {
+                this._kill('pipe');
+                return;
+            }
+        }
+
+        // Coins
+        for (const c of this.coins) {
+            if (!c.alive) continue;
+            if (c.hits(b)) {
+                c.alive = false;
+                this._collectCoin(c);
+            }
+        }
+
+        // Mushrooms
+        for (const m of this.mushrooms) {
+            if (!m.alive) continue;
+            if (m.hits(b)) {
+                m.alive = false;
+                this._collectMushroom(m);
+            }
+        }
+    }
+
+    _collectCoin(c) {
+        const mult = this.tripleTimer > 0 ? TRIPLE_MULT : 1;
+        const gain = 1 * mult;
+        this.score += gain;
+        this.coinCount += 1;
+        this.combo += 1;
+        this.comboTimer = COMBO_WINDOW;
+
+        // Particles
+        for (let i = 0; i < 7; i++) {
+            const ang = Math.random() * Math.PI * 2;
+            const sp = 30 + Math.random() * 50;
+            this.particles.push(new Particle(
+                c.x, c.y,
+                Math.cos(ang) * sp, Math.sin(ang) * sp,
+                0.45, i % 2 ? C.GOLD : C.CREAM, 1, 60
+            ));
+        }
+        this.floatTexts.push(new FloatText(c.x, c.y - 6, '+' + gain, mult > 1 ? C.ORANGE : C.GOLD));
+        this.fx.flash(C.CREAM, 0.05);
+        sfx.coin();
+        if (this.combo >= 3) sfx.combo(this.combo);
+    }
+
+    _collectMushroom(m) {
+        this.tripleTimer = TRIPLE_DURATION;
+        this.fx.shake(2, 0.12);
+        this.fx.slowTime(0.35, 0.22);
+        this.fx.flash(C.ORANGE, 0.12);
+        // Radial burst
+        for (let i = 0; i < 22; i++) {
+            const ang = (i / 22) * Math.PI * 2;
+            const sp = 40 + Math.random() * 40;
+            this.particles.push(new Particle(
+                m.x, m.y,
+                Math.cos(ang) * sp, Math.sin(ang) * sp,
+                0.7, i % 3 === 0 ? C.WHITE : (i % 2 ? C.ORANGE : C.CREAM), 1, 20
+            ));
+        }
+        this.floatTexts.push(new FloatText(m.x, m.y - 8, '3X POWER!', C.ORANGE));
+        sfx.mushroom();
+    }
+
+    _kill(reason) {
+        if (this.gameOver) return;
+        this.gameOver = true;
+        this.bird.alive = false;
+        this.fx.shake(6, 0.35);
+        this.fx.flash(C.CRIMSON, 0.18);
+        for (let i = 0; i < 16; i++) {
+            const ang = Math.random() * Math.PI * 2;
+            const sp = 40 + Math.random() * 60;
+            this.particles.push(new Particle(
+                this.bird.x, this.bird.y,
+                Math.cos(ang) * sp, Math.sin(ang) * sp,
+                0.9, i % 2 ? C.CRIMSON : C.ORANGE, 1, 200
+            ));
+        }
+        sfx.hit();
+    }
+}
+
+
+// ----- hud.js -----
+function drawHUD(buf, world, highScore) {
+    // Score (big, top-center)
+    const s = String(world.score);
+    const w = measureText(s, 2);
+    const sx = ((VIEW_W - w) / 2) | 0;
+    drawText(buf, s, sx + 1, 11, C.NIGHT, 2);
+    drawText(buf, s, sx, 10, C.WHITE, 2);
+
+    // High score (top-left)
+    const hs = 'HI ' + String(highScore);
+    drawText(buf, hs, 6, 6, C.NIGHT);
+    drawText(buf, hs, 5, 5, C.CREAM);
+
+    // Coins (top-right)
+    const cs = 'x' + String(world.coinCount);
+    const cw = measureText(cs);
+    drawText(buf, cs, VIEW_W - cw - 7, 6, C.NIGHT);
+    drawText(buf, cs, VIEW_W - cw - 8, 5, C.GOLD);
+    // tiny coin icon next to count
+    buf.disc(VIEW_W - cw - 12, 7, 2, C.GOLD);
+    buf.put(VIEW_W - cw - 12, 6, C.CREAM);
+
+    // Pause button (top-right corner, below coin)
+    const pr = { x: VIEW_W - 16, y: 16, w: 12, h: 12 };
+    buf.rect(pr.x, pr.y, pr.w, pr.h, C.NIGHT);
+    buf.rect(pr.x + 1, pr.y + 1, pr.w - 2, pr.h - 2, C.DUSK);
+    buf.rect(pr.x + 3, pr.y + 3, 2, 6, C.CREAM);
+    buf.rect(pr.x + 7, pr.y + 3, 2, 6, C.CREAM);
+
+    // Triple power timer bar.
+    if (world.tripleTimer > 0) {
+        const bw = 80, bh = 5;
+        const bx = ((VIEW_W - bw) / 2) | 0;
+        const by = 26;
+        buf.rect(bx - 1, by - 1, bw + 2, bh + 2, C.NIGHT);
+        buf.rect(bx, by, bw, bh, C.NAVY);
+        const fill = Math.max(0, Math.min(1, world.tripleTimer / TRIPLE_DURATION));
+        buf.rect(bx, by, (bw * fill) | 0, bh, C.ORANGE);
+        const label = '3X POWER';
+        drawText(buf, label, ((VIEW_W - measureText(label)) / 2) | 0, by - 7, C.CREAM);
+    }
+
+    // Combo badge (bottom-center when combo >= 2)
+    if (world.combo >= 2) {
+        const label = 'X' + world.combo + ' COMBO';
+        const lw = measureText(label);
+        const ly = 270;
+        const lx = ((VIEW_W - lw) / 2) | 0;
+        drawText(buf, label, lx + 1, ly + 1, C.NIGHT);
+        drawText(buf, label, lx, ly, C.ORANGE);
+    }
+
+    // Float texts (coin pickup "+1")
+    for (const t of world.floatTexts) {
+        const lw = measureText(t.text);
+        const fx = (t.x - lw / 2) | 0;
+        const fy = t.y | 0;
+        drawText(buf, t.text, fx + 1, fy + 1, C.NIGHT);
+        drawText(buf, t.text, fx, fy, t.color);
+    }
+
+    return pr; // report pause-button hit rect for input.
+}
+function drawStartHint(buf) {
+    const y1 = 180, y2 = 196;
+    drawTextCentered(buf, 'TAP TO FLAP', y1, C.NIGHT);
+    drawTextCentered(buf, 'TAP TO FLAP', y1 - 1, C.WHITE);
+    drawTextCentered(buf, 'COLLECT COINS', y2, C.NIGHT);
+    drawTextCentered(buf, 'COLLECT COINS', y2 - 1, C.GOLD);
+    drawTextCentered(buf, 'GRAB THE MUSHROOM FOR 3X!', y2 + 12, C.NIGHT);
+    drawTextCentered(buf, 'GRAB THE MUSHROOM FOR 3X!', y2 + 11, C.ORANGE);
+}
+function drawTitle(buf, t) {
+    // Animated title: bounces a bit.
+    const bob = Math.round(Math.sin(t * 2.4) * 2);
+    const y = 64 + bob;
+    const title = 'SKYBIT';
+    const w = measureText(title, 3);
+    const x = ((VIEW_W - w) / 2) | 0;
+    drawText(buf, title, x + 2, y + 2, C.NIGHT, 3);
+    drawText(buf, title, x, y, C.ORANGE, 3);
+    drawText(buf, title, x + 1, y - 1, C.GOLD, 3);
+
+    const sub = 'A RETRO PIXEL FLYER';
+    drawTextCentered(buf, sub, y + 24, C.NIGHT);
+    drawTextCentered(buf, sub, y + 23, C.CREAM);
+}
+function drawGameOver(buf, score, high, best) {
+    const y = 100;
+    const t = 'GAME OVER';
+    const w = measureText(t, 2);
+    const x = ((VIEW_W - w) / 2) | 0;
+    drawText(buf, t, x + 2, y + 2, C.NIGHT, 2);
+    drawText(buf, t, x, y, C.CRIMSON, 2);
+
+    drawTextCentered(buf, 'SCORE ' + score, y + 24, C.NIGHT);
+    drawTextCentered(buf, 'SCORE ' + score, y + 23, C.WHITE);
+    drawTextCentered(buf, 'BEST  ' + high, y + 38, C.NIGHT);
+    drawTextCentered(buf, 'BEST  ' + high, y + 37, C.GOLD);
+
+    if (best) {
+        drawTextCentered(buf, 'NEW BEST!', y + 54, C.NIGHT);
+        drawTextCentered(buf, 'NEW BEST!', y + 53, C.ORANGE);
+    }
+
+    drawTextCentered(buf, 'TAP TO RETRY', y + 82, C.NIGHT);
+    drawTextCentered(buf, 'TAP TO RETRY', y + 81, C.CREAM);
+}
+
+
+// ----- scenes.js -----
+
+
+
+
+
+
+
+function drawSky(buf, t) {
+    // Multi-band dithered gradient for a lush dusk-to-day sky.
+    buf.gradientBand(0, 0, buf.w, 70, C.INDIGO, C.DUSK);
+    buf.gradientBand(0, 70, buf.w, 80, C.DUSK, C.SKY);
+    buf.gradientBand(0, 150, buf.w, GROUND_Y - 150, C.SKY, C.CREAM);
+
+    // A low sun / moon disc that slowly drifts.
+    const sx = 140, sy = 60 + Math.sin(t * 0.3) * 2;
+    buf.disc(sx, sy, 10, C.CREAM);
+    buf.disc(sx, sy, 8, C.GOLD);
+    buf.disc(sx, sy, 5, C.ORANGE);
+    // Rays/halo
+    buf.ring(sx, sy, 13, C.GOLD);
+}
+
+function drawMountains(buf, mountains, scroll) {
+    // Far mountains — dark indigo silhouette.
+    const len = mountains.length;
+    for (let x = 0; x < buf.w; x++) {
+        const idx = (x + Math.floor(scroll * 0.5)) % len;
+        const h = mountains[idx];
+        buf.rect(x, GROUND_Y - h, 1, h, C.INDIGO);
+    }
+    // Near mountains — medium indigo, shifted.
+    for (let x = 0; x < buf.w; x++) {
+        const idx = (x + Math.floor(scroll * 0.9) + 40) % len;
+        const h = mountains[idx] * 0.75;
+        buf.rect(x, GROUND_Y - h, 1, h, C.NAVY);
+    }
+}
+
+function drawClouds(buf, clouds) {
+    for (const c of clouds) {
+        buf.blit(CLOUD, c.x | 0, c.y | 0);
+    }
+}
+
+function drawGround(buf, scroll) {
+    // Dirt band
+    buf.rect(0, GROUND_Y, buf.w, VIEW_H - GROUND_Y, C.WOOD);
+    // Grass strip on top
+    buf.rect(0, GROUND_Y, buf.w, 4, C.GRASS);
+    buf.rect(0, GROUND_Y + 2, buf.w, 1, C.LEAF);
+
+    // Moving grass tufts + speckles
+    const off = (scroll | 0) % 8;
+    for (let x = -off; x < buf.w; x += 8) {
+        buf.put(x + 1, GROUND_Y - 1, C.LIME);
+        buf.put(x + 5, GROUND_Y - 1, C.LIME);
+    }
+    // Dirt speckles
+    for (let y = GROUND_Y + 6; y < VIEW_H; y += 6) {
+        for (let x = -((scroll * 1.2) | 0) % 10; x < buf.w; x += 10) {
+            buf.put(x + 3, y, C.AMBER);
+        }
+    }
+}
+
+function drawParticles(world, buf) {
+    for (const p of world.particles) p.draw(buf);
+}
+class Game {
+    constructor() {
+        this.scene = 'menu';
+        this.world = new World();
+        this.highScore = loadHighScore();
+        this.newBest = false;
+        this.menuT = 0;
+        this.paused = false;
+        this.crt = true;
+    }
+
+    toMenu() {
+        this.scene = 'menu';
+        this.world.reset();
+        this.newBest = false;
+    }
+
+    startPlay() {
+        this.scene = 'play';
+        this.world.reset();
+        this.newBest = false;
+    }
+
+    toGameOver() {
+        this.scene = 'gameover';
+        if (this.world.score > this.highScore) {
+            this.highScore = this.world.score;
+            this.newBest = true;
+            saveHighScore(this.highScore);
+        }
+    }
+
+    handleFlap() {
+        if (this.paused) { this.paused = false; return; }
+        if (this.scene === 'menu') {
+            this.startPlay();
+            this.world.flap();
+        } else if (this.scene === 'play') {
+            this.world.flap();
+        } else if (this.scene === 'gameover') {
+            // Tiny debounce so the death tap doesn't instantly retry.
+            if (this.world.elapsed > 0.6) this.toMenu();
+        }
+    }
+
+    handlePause() {
+        if (this.scene === 'play') this.paused = !this.paused;
+        sfx.click();
+    }
+
+    update(dt) {
+        if (this.scene === 'menu') {
+            this.menuT += dt;
+            // Keep world ticking softly so parallax moves under the title.
+            this.world.started = false;
+            this.world.update(dt * 0.4);
+            return;
+        }
+        if (this.paused) return;
+
+        // Time-slow during mushroom pickup briefly affects gameplay speed.
+        const scale = this.world.fx.timeScale;
+        this.world.update(dt * scale);
+
+        if (this.scene === 'play' && this.world.gameOver) {
+            // brief delay so the death anim plays before the UI pops in.
+            if (this.world.elapsed > 0.5 || this.world.bird.y >= GROUND_Y - this.world.bird.r - 1) {
+                this.toGameOver();
+            }
+        }
+    }
+
+    render(buf) {
+        const w = this.world;
+        const shake = w.fx.shakeOffset();
+
+        buf.clear(C.NIGHT);
+
+        // Sky + sun
+        drawSky(buf, w.elapsed);
+
+        // Clouds (parallax)
+        drawClouds(buf, w.clouds);
+
+        // Mountains (parallax)
+        drawMountains(buf, w.mountains, w.mountainScroll);
+
+        // Ground
+        drawGround(buf, w.groundScroll);
+
+        // Pipes
+        for (const p of w.pipes) p.draw(buf);
+
+        // Coins
+        for (const c of w.coins) c.draw(buf);
+
+        // Mushrooms
+        for (const m of w.mushrooms) m.draw(buf);
+
+        // Particles (behind bird for subtlety)
+        drawParticles(w, buf);
+
+        // Bird (with pseudo-rotation: we just offset y by angle * 2 px for tilt feel)
+        w.bird.draw(buf);
+
+        // If mushroom buff active, draw a pulsing aura behind the bird.
+        if (w.tripleTimer > 0) {
+            const r = 10 + Math.round(Math.sin(w.elapsed * 10) * 2);
+            buf.ring(w.bird.x, w.bird.y, r, C.ORANGE);
+            buf.ring(w.bird.x, w.bird.y, r + 2, C.GOLD);
+        }
+
+        // Apply shake by translating the pixel buffer contents (nudge next overlay only; simpler: draw HUD at shaken coords? We'll shake the scene by drawing next frame offset — here we just offset HUD screen text so gameplay jiggles aren't needed; keep HUD steady.)
+
+        // Scene overlays
+        if (this.scene === 'menu') {
+            drawTitle(buf, this.menuT);
+            drawStartHint(buf);
+        } else if (this.scene === 'play') {
+            if (!w.started) drawStartHint(buf);
+            const pr = drawHUD(buf, w, this.highScore);
+            this._pauseRect = pr;
+            if (this.paused) {
+                // Dim + PAUSED text
+                for (let i = 0; i < buf.u32.length; i++) {
+                    const p = buf.u32[i];
+                    const r = (p & 0xff) * 0.55 | 0;
+                    const g = ((p >> 8) & 0xff) * 0.55 | 0;
+                    const b = ((p >> 16) & 0xff) * 0.55 | 0;
+                    buf.u32[i] = (0xff << 24) | (b << 16) | (g << 8) | r;
+                }
+                drawTextCentered(buf, 'PAUSED', 150, C.NIGHT, 2);
+                drawTextCentered(buf, 'PAUSED', 149, C.WHITE, 2);
+                drawTextCentered(buf, 'TAP TO RESUME', 170, C.CREAM);
+            }
+        } else if (this.scene === 'gameover') {
+            drawHUD(buf, w, this.highScore);
+            drawGameOver(buf, w.score, this.highScore, this.newBest);
+        }
+
+        // Full-frame flash (death / mushroom)
+        w.fx.applyFlash(buf);
+
+        // CRT overlay
+        if (this.crt) {
+            buf.scanlines(0, 2);
+            buf.vignette(0.35);
+        }
+
+        // Screen shake: simple vertical/horizontal nudge by copying pixels.
+        if (shake.x || shake.y) {
+            // Copy into temp then blit back offset.
+            const tmp = new Uint32Array(buf.u32);
+            buf.u32.fill(PAL[C.NIGHT]);
+            const W = buf.w, H = buf.h;
+            for (let y = 0; y < H; y++) {
+                const sy = y - shake.y;
+                if (sy < 0 || sy >= H) continue;
+                for (let x = 0; x < W; x++) {
+                    const sx = x - shake.x;
+                    if (sx < 0 || sx >= W) continue;
+                    buf.u32[y * W + x] = tmp[sy * W + sx];
+                }
+            }
+        }
+    }
+
+    pauseRect() { return this._pauseRect; }
+}
+
+
+// ----- main.js -----
+
+
+
+
+
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+const buf = new PixelBuffer(VIEW_W, VIEW_H);
+const game = new Game();
+const input = new Input(canvas);
+
+// Load settings
+const settings = loadSettings();
+game.crt = settings.crt !== false;
+setMuted(!!settings.muted);
+
+input.onFlap = () => {
+    unlock();
+    game.handleFlap();
+};
+input.onPause = () => {
+    unlock();
+    game.handlePause();
+};
+
+function resize() { fitCanvasToViewport(canvas); }
+resize();
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', resize);
+
+// Fixed-timestep loop.
+let last = performance.now() / 1000;
+let accum = 0;
+const MAX_STEPS = 5;
+
+function frame(now) {
+    const t = now / 1000;
+    let dt = t - last;
+    last = t;
+    if (dt > 0.25) dt = 0.25; // clamp after tab switch
+    accum += dt;
+    let steps = 0;
+    while (accum >= DT && steps < MAX_STEPS) {
+        game.update(DT);
+        accum -= DT;
+        steps++;
+    }
+    // Render one frame.
+    game.render(buf);
+    ctx.putImageData(buf.image, 0, 0);
+
+    // Update input pause-hit rect from current HUD.
+    const pr = game.pauseRect();
+    if (pr) input.setPauseRect(pr);
+
+    requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// Persist CRT toggle on a key so we don't build a full settings menu.
+window.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyC') {
+        game.crt = !game.crt;
+        saveSettings(Object.assign(loadSettings(), { crt: game.crt }));
+    }
+    if (e.code === 'KeyM') {
+        const s = loadSettings();
+        s.muted = !s.muted;
+        setMuted(s.muted);
+        saveSettings(s);
+    }
+});
+
+})();
+</script>
+</body>
+</html>
