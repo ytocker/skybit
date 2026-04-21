@@ -1,6 +1,6 @@
-# Skybit — Retro Pixel Flyer
+# Skybit — Pocket Sky Flyer
 
-A Flappy-Bird-style casual arcade game written in **Python** with [Pyxel](https://github.com/kitao/pyxel). Navigate a vivid scarlet parrot through pipes, collect glowing coins, and grab the rare mushroom for a **3× coin multiplier** for 8 seconds. Pure procedural pixel art, synthesized chiptune SFX, no external assets.
+A colorful Flappy-style casual arcade game. Fly a **vivid scarlet-macaw parrot** through pipes, collect glowing coins, and grab the rare mushroom for a **3× coin multiplier** that lasts 8 seconds. Built in **Python** with Pygame — procedural graphics, smooth gradients, soft glows, no pixel art.
 
 <p align="center">
   <img src="docs/screenshots/gameplay.png" width="340" alt="Gameplay">
@@ -11,38 +11,40 @@ A Flappy-Bird-style casual arcade game written in **Python** with [Pyxel](https:
 
 ## Play instantly — no install
 
-Open **`play.html`** in any modern browser. It loads Pyxel's WebAssembly runtime from a CDN (~5 MB one-time download) and runs the full Python game in your browser. Works on desktop and mobile.
+Open **`play.html`** in any modern browser. It loads the Pygame runtime on top of WebAssembly (via [pygbag](https://pygame-web.github.io/)) and runs the full Python game in your browser. Works on desktop and mobile.
 
 ```
 git clone https://github.com/ytocker/Claude_test.git
 cd Claude_test
 git checkout claude/retro-pixel-game-gPPYY
-open play.html          # macOS — or double-click the file
+# open play.html through a local web server:
+python3 -m http.server 8000
+# then open http://localhost:8000/play.html
 ```
 
-An active internet connection is required for the first load (the Pyxel WASM runtime). After that the browser caches it.
+The first load pulls a one-time CPython WebAssembly runtime (~10 MB). Subsequent loads are cached.
 
 ---
 
 ## Run natively (Python)
 
 ```bash
-pip install pyxel
+pip install pygame
 python main.py
 ```
 
-Requires Python 3.9+ and Pyxel 2.x.
+Requires Python 3.9+ and Pygame 2.x.
 
 ---
 
 ## How to Play
 
-Tap, click, or press **Space / Up / W** to flap. Survive as long as possible, score points by passing pipes and collecting coins.
+Tap, click, or press **Space / Up / W** to flap. Survive as long as possible, rack up points by passing pipes and collecting coins.
 
 | Action       | Desktop                        | Mobile       |
 |--------------|--------------------------------|--------------|
 | Flap         | Tap / Click · Space · Up · W   | Tap screen   |
-| Pause        | P · Esc · ⏸ button             | Tap ⏸ button |
+| Quit         | Esc                            | —            |
 
 ### Scoring
 
@@ -52,20 +54,18 @@ Tap, click, or press **Space / Up / W** to flap. Survive as long as possible, sc
 | Collect a coin                     | +1     |
 | Collect a coin while 3× is active  | +3     |
 
-Chain coins quickly to build a **combo multiplier** — the badge reads `X4 COMBO!` and so on, with escalating SFX.
+Chain coins quickly to build a **combo multiplier** — a bouncing `X4 COMBO!` badge appears near the bottom of the screen.
 
 ### The Mushroom Power-Up
 
-A red-spotted mushroom occasionally spawns in the gap between pipes (roughly 1-in-10 chance). Grab it to:
+A red-capped mushroom occasionally spawns in the gap between pipes (roughly 1-in-9 chance, with a cooldown). Grab it to:
 
 - Activate **3× POWER** for 8 seconds — coins worth +3 each
-- Trigger a radial sparkle burst and brief time-slow
+- Trigger a radial sparkle burst and a brief time-slow
 - See an orange/gold aura glow around the parrot for the duration
-- Watch a timer bar under the score drain in real time
+- Watch a timer bar below the score drain in real time
 
 ### Difficulty
-
-The game gets harder as your score climbs:
 
 - **Score 0–20**: wide gaps, relaxed scroll speed
 - **Score 20–35**: gaps tighten, speed ramps up
@@ -83,17 +83,17 @@ The game gets harder as your score climbs:
   </td>
   <td align="center">
     <img src="docs/screenshots/gameplay.png" width="280"><br>
-    <sub>Gameplay — arc coin pattern, X4 combo</sub>
+    <sub>Gameplay — coin arc, X4 combo</sub>
   </td>
 </tr>
 <tr>
   <td align="center">
     <img src="docs/screenshots/mushroom.png" width="280"><br>
-    <sub>3X POWER active — aura + sparkle burst</sub>
+    <sub>3X POWER active — timer bar + sparkle</sub>
   </td>
   <td align="center">
     <img src="docs/screenshots/gameover.png" width="280"><br>
-    <sub>Game Over — new best score</sub>
+    <sub>Game Over</sub>
   </td>
 </tr>
 </table>
@@ -103,43 +103,41 @@ The game gets harder as your score climbs:
 ## Project Structure
 
 ```
-main.py                   Entry point — starts the Pyxel app
-play.html                 Browser-playable build (Pyxel WASM + embedded game)
-skybit/
-├── app.py                Pyxel App class: init, run, scene management
-├── config.py             All gameplay constants (physics, spawn rates, timings)
-├── palette.py            Custom 16-colour palette (0xRRGGBB values + aliases)
-├── sprites.py            Procedural drawing: parrot (4-frame flap), pipes,
-│                         coins, mushroom, clouds, parallax bg, bitmap font
-├── entities.py           Bird, Pipe, Coin, Mushroom, Particle, FloatText
-├── world.py              World simulation: scrolling, spawning, collision,
-│                         difficulty ramp, particle FX, screen shake/flash
-├── hud.py                Score, hi-score, coin count, mushroom timer bar,
-│                         combo badge, floating pickup text, pause button
-└── storage.py            High score + settings persistence (JSON file)
+main.py                    Entry point — asyncio loop so pygbag can export to WASM
+play.html                  Browser-playable build (Pygame on WebAssembly)
+game/
+├── config.py              Gameplay constants (physics, spawn rates, timings)
+├── draw.py                Low-level drawing: gradient surfaces, glow caches,
+│                          mountains, clouds, ground, rounded rects
+├── parrot.py              4-frame animated scarlet-macaw sprite (procedural)
+├── entities.py            Bird, Pipe, Coin, Mushroom, Particle, FloatText
+├── world.py               Simulation: scroll, spawn, collision, pickups,
+│                          difficulty ramp, shake, pickup FX
+├── hud.py                 Score, best, coin count, 3X timer, combo badge,
+│                          pause button, menu/game-over overlays
+├── scenes.py              Scene state machine (Menu / Play / GameOver) + App
+└── storage.py             High-score persistence (JSON file)
 tools/
-└── snapshot.py           Headless screenshot generator (Pillow-backed pyxel shim)
-docs/screenshots/         PNG screenshots (regenerate with: python tools/snapshot.py)
+└── snapshot.py            Headless screenshot generator
+docs/screenshots/          PNG screenshots (regenerate with: python tools/snapshot.py)
 ```
 
 ---
 
 ## Technical Notes
 
-- **Screen**: 160 × 240 virtual pixels, displayed at 3× scale (480 × 720) — crisp on any monitor or phone
-- **Language**: Python 3, [Pyxel 2.x](https://github.com/kitao/pyxel) game engine
-- **Palette**: custom 16-colour set tuned for the scarlet-macaw parrot and lush sky tones
-- **Sprites**: every sprite (parrot, pipe, coin, mushroom, clouds, font glyphs) is drawn procedurally via `pyxel.rect/circ/pset` — no image files
-- **SFX**: Pyxel's built-in chiptune synth — flap, coin, combo, mushroom, hit
-- **Physics**: fixed-timestep update at 60 FPS, `GRAVITY = 900 px/s²`, `FLAP_V = −255 px/s`
-- **Persistence**: high score saved to `~/.skybit_save.json`
-- **Web export**: `pyxel package . main.py && pyxel app2html *.pyxapp` → `play.html`
+- **Screen**: 360 × 640 virtual pixels (mobile portrait). Smooth graphics, no integer upscaling.
+- **Language**: Python 3, [Pygame 2.x](https://www.pygame.org/). Rendered with `SRCALPHA` surfaces, `BLEND_ADD` glows, pre-computed gradient/glow caches for performance.
+- **Sprites**: everything — parrot, pipes, coins, mushroom, clouds, mountains, UI — is drawn procedurally (no image files).
+- **Graphics polish**: radial glows around coins, soft drop shadows on pipes, antialiased parrot silhouette with 4 wing-cycle frames, parallax clouds + mountains, spring-decay screen shake, gravity particles.
+- **Physics**: fixed-timestep update at 60 FPS; `GRAVITY = 1600 px/s²`, `FLAP_V = -520 px/s`, `MAX_FALL = 700 px/s`.
+- **Coin pickup**: **localized** gold/white sparkle particles + "+1" / "+3" floating text. No full-screen flash.
+- **Persistence**: high score saved to `skybit_save.json`.
+- **Web export**: `python -m pygbag --build main.py` produces `build/web/index.html`. Copy it to `play.html` in the repo root.
 
 Rebuild `play.html` after editing source:
 ```bash
-pip install pyxel
-pyxel package . main.py
-pyxel app2html *.pyxapp
-mv Claude_test.html play.html
-rm *.pyxapp
+pip install pygbag
+python -m pygbag --build main.py
+cp build/web/index.html play.html
 ```

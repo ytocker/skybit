@@ -1,0 +1,30 @@
+W, H   = 360, 640
+FPS    = 60
+TITLE  = "Skybit"
+
+GROUND_Y   = 595
+CEILING_Y  = 0
+
+GRAVITY   = 1600.0
+FLAP_V    = -520.0
+MAX_FALL  = 700.0
+
+SCROLL_BASE = 160.0
+SCROLL_MAX  = 290.0
+
+PIPE_W        = 58
+PIPE_SPACING  = 280
+GAP_START     = 170
+GAP_MIN       = 115
+
+BIRD_X = 90
+BIRD_R = 14
+
+COIN_R             = 11
+MUSHROOM_R         = 14
+MUSHROOM_CHANCE    = 0.11
+MUSHROOM_COOLDOWN  = 6.0
+TRIPLE_DURATION    = 8.0
+COMBO_WINDOW       = 1.6
+
+SAVE_FILE = "skybit_save.json"

@@ -1,4 +1,11 @@
-from skybit.app import App
+"""Skybit entry point. Uses asyncio so pygbag can export to WebAssembly."""
+import asyncio
 
-if __name__ == '__main__':
-    App()
+from game.scenes import App
+
+
+async def main():
+    await App().run()
+
+
+asyncio.run(main())
