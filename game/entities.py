@@ -15,7 +15,9 @@ from game.config import (
     BIRD_X, BIRD_R, PIPE_W, COIN_R, MUSHROOM_R, GROUND_Y,
 )
 from game.draw import (
-    blit_glow, get_stone_pillar_body, draw_foliage_crown,
+    blit_glow, get_stone_pillar_body,
+    silhouette_blit, silhouette_top_spire, silhouette_bottom_spire,
+    draw_wuling_pine, draw_moss_strand, draw_side_shrub, draw_pillar_mist,
     rounded_rect, lerp_color,
     COIN_GOLD, COIN_LIGHT, COIN_DARK,
     MUSH_CAP, MUSH_CAP2, MUSH_SPOT, MUSH_STEM,
@@ -94,11 +96,33 @@ class Bird:
 # ── Pipe (nature pillar) ─────────────────────────────────────────────────────
 
 class Pipe:
+    """Zhangjiajie 'Slender Spire' pillar. Each instance gets a stable
+    `seed` so its vegetation arrangement is deterministic across frames."""
+
+    # Vegetation pattern walked along the column body, measured in pixels
+    # from the gap-facing tip. Each entry: (offset, side_sign, kind).
+    # side_sign: -1 = anchor near sunlit (left) edge, +1 = shadow (right) edge.
+    _VEG_PATTERN = (
+        (32,   -1, 'pine_med'),
+        (62,   +1, 'moss'),
+        (92,   -1, 'pine_small'),
+        (122,  +1, 'shrub'),
+        (152,  -1, 'moss'),
+        (185,  +1, 'pine_small'),
+        (215,  -1, 'shrub'),
+        (248,  +1, 'moss'),
+        (282,  -1, 'pine_small'),
+        (315,  +1, 'shrub'),
+        (348,  -1, 'moss'),
+    )
+
     def __init__(self, x: float, gap_y: float, gap_h: float):
         self.x = x
         self.gap_y = gap_y
         self.gap_h = gap_h
         self.scored = False
+        # Per-instance random seed for stable vegetation choices
+        self.seed = random.randint(0, 0xFFFFFF)
 
     @property
     def top_rect(self):
@@ -116,40 +140,111 @@ class Pipe:
         return self.top_rect.colliderect(pygame.Rect(cx - r, cy - r, r * 2, r * 2)) or \
                self.bot_rect.colliderect(pygame.Rect(cx - r, cy - r, r * 2, r * 2))
 
-    def _draw_segment(self, surf, rect: pygame.Rect, palette):
+    # ── stone body + silhouette ─────────────────────────────────────────────
+
+    def _paint_stone(self, surf, rect, polygon_fn, palette):
         if rect.height <= 0:
             return
-        light  = palette['stone_light']
-        mid    = palette['stone_mid']
-        dark   = palette['stone_dark']
-        accent = palette['stone_accent']
+        body = get_stone_pillar_body(
+            rect.width, max(1, rect.height),
+            palette['stone_light'], palette['stone_mid'],
+            palette['stone_dark'],  palette['stone_accent'],
+        )
+        polygon = polygon_fn(rect.width, rect.height)
+        silhouette_blit(surf, body, polygon, rect.topleft, shadow_alpha=110)
 
-        # Soft drop shadow (square-cut, matches the column silhouette)
-        shadow = pygame.Surface((rect.width + 14, rect.height + 8), pygame.SRCALPHA)
-        pygame.draw.rect(shadow, (0, 0, 0, 95), (7, 4, rect.width, rect.height))
-        surf.blit(shadow, (rect.x - 4, rect.y + 2))
+    # ── vegetation distributed along the body ───────────────────────────────
 
-        # Sandstone body with vertical erosion striations (cached)
-        body = get_stone_pillar_body(rect.width, max(1, rect.height), light, mid, dark, accent)
-        surf.blit(body, rect.topleft)
+    def _veg_anchor(self, side_sign, rect, y, recess=2):
+        """Return (x, y) anchored near the left/right edge of the rect at
+        height y. side_sign=-1 → sunlit left edge, +1 → shadow right edge."""
+        if side_sign < 0:
+            return (rect.x + recess, y)
+        return (rect.x + rect.width - recess, y)
 
-        # Reinforce the sunlit and shadowed edges
-        pygame.draw.line(surf, light, (rect.x + 1, rect.y), (rect.x + 1, rect.y + rect.height), 1)
-        pygame.draw.line(surf, dark,  (rect.x + rect.width - 2, rect.y),
-                         (rect.x + rect.width - 2, rect.y + rect.height), 1)
+    def _draw_vegetation_along(self, surf, rect, palette, kind):
+        """Walk _VEG_PATTERN from the gap-facing tip downward (bottom pillar)
+        or upward (top pillar) and place pines / moss / shrubs."""
+        rng = random.Random(self.seed)
+        # Tip-relative direction: bottom pillar's tip is at rect.y (top edge),
+        # vegetation marches downward (sign +1). Top pillar's tip is at
+        # rect.bottom, vegetation marches upward (sign -1).
+        if kind == 'bottom':
+            tip_y = rect.y
+            sign = +1
+            grow_dir = 'up'   # pines stand upright
+        else:
+            tip_y = rect.bottom
+            sign = -1
+            grow_dir = 'up'   # side pines on the top pillar still stand up
+            #                   (they cling to ledges sticking out sideways)
+
+        for offset, side, plant_kind in self._VEG_PATTERN:
+            y = tip_y + sign * offset
+            # Skip if outside the body or too close to either end
+            if not (rect.y + 6 < y < rect.bottom - 6):
+                break
+            # Tiny rocky ledge under the plant for "growing on the rock" feel
+            anchor_x, anchor_y = self._veg_anchor(side, rect, y)
+            ledge_w = 12 if plant_kind in ('pine_med', 'shrub') else 9
+            ledge_rect = pygame.Rect(anchor_x - (ledge_w if side > 0 else 0),
+                                     anchor_y - 2,
+                                     ledge_w, 4)
+            pygame.draw.ellipse(surf, palette['stone_dark'], ledge_rect.inflate(2, 1))
+            pygame.draw.ellipse(surf, palette['stone_light'],
+                                ledge_rect.inflate(-2, -1))
+
+            # Slight randomness so identical heights look different per pillar
+            wobble = rng.randint(-2, 2)
+            if plant_kind == 'pine_med':
+                draw_wuling_pine(surf, anchor_x, anchor_y - 1,
+                                 height=22 + wobble, palette=palette,
+                                 lean=side * 5, direction=grow_dir, layers=4)
+            elif plant_kind == 'pine_small':
+                draw_wuling_pine(surf, anchor_x, anchor_y,
+                                 height=14 + wobble, palette=palette,
+                                 lean=side * 3, direction=grow_dir, layers=3)
+            elif plant_kind == 'shrub':
+                draw_side_shrub(surf, anchor_x, anchor_y - 1, palette,
+                                scale=1.0 + (wobble * 0.05))
+            elif plant_kind == 'moss':
+                draw_moss_strand(surf, anchor_x, anchor_y, length=18 + wobble,
+                                 palette=palette, jitter_seed=offset)
+
+    # ── orchestration ───────────────────────────────────────────────────────
+
+    def _draw_top_pillar(self, surf, palette):
+        rect = self.top_rect
+        self._paint_stone(surf, rect, silhouette_top_spire, palette)
+        # Hanging pine clinging to the downward fang at the tip
+        cx = rect.x + rect.width // 2
+        draw_wuling_pine(surf, cx - 4, rect.bottom - 4,
+                         height=34, palette=palette,
+                         lean=-12, direction='down', layers=4)
+        # Vegetation distributed along the body
+        self._draw_vegetation_along(surf, rect, palette, kind='top')
+
+    def _draw_bottom_pillar(self, surf, palette):
+        rect = self.bot_rect
+        self._paint_stone(surf, rect, silhouette_bottom_spire, palette)
+        cx = rect.x + rect.width // 2
+        # Dramatic Wuling pine on the rocky peak
+        draw_wuling_pine(surf, cx + 2, rect.y + 2,
+                         height=58, palette=palette,
+                         lean=14, direction='up', layers=6)
+        # Smaller secondary pine on a ledge just below the peak (left side)
+        draw_wuling_pine(surf, rect.x + 6, rect.y + 28,
+                         height=26, palette=palette,
+                         lean=-5, direction='up', layers=4)
+        # Vegetation distributed along the body
+        self._draw_vegetation_along(surf, rect, palette, kind='bottom')
+        # Mist halo at the base where it meets the ground
+        draw_pillar_mist(surf, cx, rect.bottom, rect.width, alpha=110)
 
     def draw(self, surf, palette=None):
         palette = palette or _DEFAULT_PILLAR
-        tr = self.top_rect
-        br = self.bot_rect
-        self._draw_segment(surf, tr, palette)
-        self._draw_segment(surf, br, palette)
-        # Vegetation grows from the gap-facing end of each pillar.
-        cx = int(self.x + PIPE_W // 2)
-        # Top (hanging) pillar: moss/vines hanging down from its bottom.
-        draw_foliage_crown(surf, cx, tr.bottom, PIPE_W + 14, palette, direction='down')
-        # Bottom pillar: trees and shrubs growing up from its top.
-        draw_foliage_crown(surf, cx, br.top,    PIPE_W + 14, palette, direction='up')
+        self._draw_top_pillar(surf, palette)
+        self._draw_bottom_pillar(surf, palette)
 
 
 # ── Coin ─────────────────────────────────────────────────────────────────────

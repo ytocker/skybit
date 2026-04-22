@@ -377,99 +377,136 @@ def get_stone_pillar_body(w, h, light, mid, dark, accent):
     return s.subsurface((0, 0, w, h))
 
 
-def _draw_tree_silhouette(surf, cx, base_y, palette, size, direction='up'):
-    """A stylised tree / shrub silhouette. direction='up' grows upward from
-    base_y; 'down' grows downward (used on the hanging top pillar)."""
-    top = palette['foliage_top']
-    mid = palette['foliage_mid']
-    dark = palette['foliage_dark']
-    accent = palette['foliage_accent']
+# ── Template A: Slender Spire silhouettes ──────────────────────────────────
 
-    sign = -1 if direction == 'up' else 1
-
-    # Trunk
-    trunk_h = int(size * 0.45)
-    trunk = pygame.Rect(int(cx - 1), int(base_y if sign < 0 else base_y),
-                        3, trunk_h)
-    if sign < 0:
-        trunk = pygame.Rect(int(cx - 1), int(base_y - trunk_h), 3, trunk_h)
-    pygame.draw.rect(surf, (70, 50, 35), trunk)
-
-    # Foliage cluster: three overlapping ellipses
-    cluster_y = base_y - int(size * 0.55) * (1 if sign < 0 else 0)
-    if sign > 0:
-        cluster_y = base_y + int(size * 0.3)
-    ellipses = [
-        (cx - int(size * 0.35), cluster_y - int(size * 0.10), int(size * 0.55), int(size * 0.45)),
-        (cx + int(size * 0.20), cluster_y - int(size * 0.25), int(size * 0.50), int(size * 0.40)),
-        (cx + int(size * 0.05), cluster_y + int(size * 0.05), int(size * 0.60), int(size * 0.45)),
+def silhouette_bottom_spire(w, h):
+    """Bottom-pillar silhouette polygon: tapers to a single asymmetric peak
+    at the top (y=0). Width `w`, height `h`. Coords are local to the rect."""
+    s = w / 90.0
+    pkR = (w // 2 + max(2, int(s * 12)), 0)
+    pkL = (w // 2 - max(2, int(s * 8)),  0)
+    right_taper = [
+        (w - max(1, int(s * 18)), int(s * 18)),
+        (w - max(1, int(s * 6)),  int(s * 40)),
+        (w - max(1, int(s * 4)),  int(s * 80)),
+        (w,                       int(s * 130)),
     ]
-    # Dark base layer
-    for ex, ey, rw, rh in ellipses:
-        pygame.draw.ellipse(surf, dark, (ex - rw // 2, ey - rh // 2, rw, rh))
-    # Mid layer (slightly inset)
-    for ex, ey, rw, rh in ellipses:
-        pygame.draw.ellipse(surf, mid, (ex - rw // 2 + 2, ey - rh // 2 + 1, rw - 4, rh - 2))
-    # Bright top layer (sunlit)
-    for ex, ey, rw, rh in ellipses:
-        pygame.draw.ellipse(surf, top, (ex - rw // 2 + 4, ey - rh // 2 - 2, rw - 10, max(3, rh - 8)))
-    # Accent specks (flowers / berries)
-    for ex, ey, rw, rh in ellipses:
-        pygame.draw.circle(surf, accent, (ex + rw // 4, ey - rh // 3), 2)
+    left_taper = [
+        (0,                  int(s * 130)),
+        (max(1, int(s * 8)), int(s * 80)),
+        (max(1, int(s * 14)), int(s * 40)),
+        (max(1, int(s * 24)), int(s * 18)),
+    ]
+    rs = [pt for pt in right_taper if pt[1] < h]
+    ls = [pt for pt in left_taper  if pt[1] < h]
+    return [pkR] + rs + [(w, h), (0, h)] + ls + [pkL]
 
 
-def draw_foliage_crown(surf, cx, cy, width, palette, direction='up'):
-    """Lush vegetation crown on the gap-facing end of a stone pillar.
-    direction='up' → foliage grows upward (bottom pillar's top).
-    direction='down' → foliage hangs down (top pillar's bottom)."""
+def silhouette_top_spire(w, h):
+    """Top-pillar silhouette polygon: hangs from the ceiling (y=0) and
+    tapers to an asymmetric downward fang at y=h."""
+    s = w / 90.0
+    pkR = (w // 2 + max(2, int(s * 10)), h)
+    pkL = (w // 2 - max(2, int(s * 6)),  h)
+    right_taper = [
+        (w,                        h - int(s * 50)),
+        (w - max(1, int(s * 4)),   h - int(s * 22)),
+        (w - max(1, int(s * 14)),  h - int(s * 8)),
+    ]
+    left_taper = [
+        (max(1, int(s * 16)), h - int(s * 8)),
+        (max(1, int(s * 4)),  h - int(s * 22)),
+        (0,                   h - int(s * 50)),
+    ]
+    rs = [pt for pt in right_taper if pt[1] > 0]
+    ls = [pt for pt in left_taper  if pt[1] > 0]
+    return [(0, 0), (w, 0)] + rs + [pkR, pkL] + ls
 
-    # Rocky summit strip just before the foliage
-    plate_col = palette['stone_light']
-    plate = pygame.Rect(int(cx - width // 2 - 4), int(cy - 4 if direction == 'up' else cy),
-                        width + 8, 6)
-    pygame.draw.rect(surf, plate_col, plate, border_radius=3)
-    pygame.draw.line(surf, palette['stone_dark'],
-                     (plate.x, plate.y + plate.height - 1),
-                     (plate.right, plate.y + plate.height - 1), 1)
 
-    if direction == 'up':
-        # Three trees / shrubs of varying size, rooted on the plate
-        base_y = plate.y
-        _draw_tree_silhouette(surf, cx - width // 3, base_y, palette, size=36, direction='up')
-        _draw_tree_silhouette(surf, cx + width // 4, base_y, palette, size=30, direction='up')
-        _draw_tree_silhouette(surf, cx,              base_y, palette, size=42, direction='up')
-        # Low shrubs along the plate edge
-        for dx in (-width // 2 + 6, width // 2 - 6):
-            pygame.draw.ellipse(surf, palette['foliage_dark'],
-                                (cx + dx - 8, base_y - 6, 16, 10))
-            pygame.draw.ellipse(surf, palette['foliage_mid'],
-                                (cx + dx - 6, base_y - 7, 12, 8))
-    else:
-        # Hanging vines / moss clumps from the bottom end
-        base_y = plate.y + plate.height
-        # Three cascading moss clumps with vines underneath
-        clumps = [
-            (cx - width // 3, 28, 14),
-            (cx + width // 4, 34, 16),
-            (cx,              40, 18),
-            (cx - width // 6, 22, 12),
-            (cx + width // 6 + 4, 26, 12),
-        ]
-        for mx, mh, mw in clumps:
-            # Vine strand
-            for i in range(mh):
-                yy = base_y + i
-                jitter = int(math.sin(i * 0.4 + mx * 0.1) * 1.5)
-                col = lerp_color(palette['foliage_dark'], palette['foliage_mid'], i / max(1, mh))
-                pygame.draw.line(surf, col, (mx + jitter, yy), (mx + jitter, yy + 1), 1)
-            # Bulb at the tip
-            tip_y = base_y + mh
-            pygame.draw.ellipse(surf, palette['foliage_dark'],
-                                (mx - mw // 2, tip_y - mw // 2, mw, mw))
-            pygame.draw.ellipse(surf, palette['foliage_mid'],
-                                (mx - mw // 2 + 2, tip_y - mw // 2, mw - 4, mw - 2))
-            pygame.draw.ellipse(surf, palette['foliage_top'],
-                                (mx - mw // 2 + 3, tip_y - mw // 2, mw - 7, max(2, mw - 8)))
-            # Accent flower/berry
-            pygame.draw.circle(surf, palette['foliage_accent'],
-                               (mx + 2, tip_y - mw // 3), 2)
+def silhouette_blit(target, body, polygon, top_left, shadow_alpha=110):
+    """Mask a stone-body surface to a silhouette polygon and blit to `target`
+    at `top_left`. Includes a soft drop shadow and a dark outline."""
+    w, h = body.get_size()
+    if shadow_alpha > 0:
+        sh_surf = pygame.Surface((w + 8, h + 6), pygame.SRCALPHA)
+        pygame.draw.polygon(sh_surf, (0, 0, 0, shadow_alpha),
+                            [(p[0] + 4, p[1] + 3) for p in polygon])
+        target.blit(sh_surf, (top_left[0] - 2, top_left[1] + 1))
+    masked = body.copy()
+    mask = pygame.Surface((w, h), pygame.SRCALPHA)
+    pygame.draw.polygon(mask, (255, 255, 255, 255), polygon)
+    masked.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+    target.blit(masked, top_left)
+    pygame.draw.polygon(target, (40, 28, 22),
+                        [(p[0] + top_left[0], p[1] + top_left[1]) for p in polygon], 1)
+
+
+# ── Wuling pine + moss strand ────────────────────────────────────────────────
+
+_TRUNK = (60, 42, 28)
+
+
+def draw_wuling_pine(surf, root_x, root_y, height, palette,
+                     lean=0, direction='up', layers=5):
+    """Stylised Wuling pine — narrow trunk + horizontal peacock-tail canopy.
+    Colors come from `palette['foliage_*']` so the tree retints with biome."""
+    pine_dk  = palette['foliage_dark']
+    pine_mid = palette['foliage_mid']
+    pine_lt  = palette['foliage_top']
+    sign = -1 if direction == 'up' else 1
+    tip_x = root_x + lean
+    tip_y = root_y + sign * height
+    pygame.draw.line(surf, _TRUNK, (root_x, root_y), (tip_x, tip_y), 2)
+    for i in range(layers):
+        t = i / max(1, layers - 1)
+        layer_w = max(3, int(height * (0.55 - t * 0.40)))
+        pos_t = 0.30 + t * 0.70
+        cx = int(root_x + (tip_x - root_x) * pos_t)
+        cy = int(root_y + (tip_y - root_y) * pos_t)
+        offset = int(height * 0.10 * (1 if i % 2 == 0 else -1))
+        rect = pygame.Rect(cx - layer_w + offset, cy - 4, layer_w * 2, 8)
+        pygame.draw.ellipse(surf, pine_dk,  rect.inflate(2, 2))
+        pygame.draw.ellipse(surf, pine_mid, rect)
+        pygame.draw.ellipse(surf, pine_lt,  rect.inflate(-6, -4))
+
+
+def draw_moss_strand(surf, x, y, length, palette, jitter_seed=0):
+    """Short cascading moss vine hanging from a crack."""
+    dark = palette['foliage_dark']
+    mid  = palette['foliage_mid']
+    top  = palette['foliage_top']
+    accent = palette['foliage_accent']
+    for i in range(length):
+        yy = y + i
+        jitter = int(math.sin((i + jitter_seed) * 0.45) * 1.2)
+        col = lerp_color(dark, mid, i / max(1, length))
+        pygame.draw.line(surf, col, (x + jitter, yy), (x + jitter, yy + 1), 1)
+    tip_y = y + length
+    bulb = max(5, length // 3)
+    pygame.draw.ellipse(surf, dark, (x - bulb // 2, tip_y - bulb // 2, bulb, bulb))
+    pygame.draw.ellipse(surf, mid,  (x - bulb // 2 + 1, tip_y - bulb // 2, bulb - 2, bulb - 1))
+    pygame.draw.ellipse(surf, top,  (x - bulb // 2 + 2, tip_y - bulb // 2, max(2, bulb - 5), max(2, bulb - 5)))
+    pygame.draw.circle(surf, accent, (x + 2, tip_y - bulb // 3), 2)
+
+
+def draw_side_shrub(surf, x, y, palette, scale=1.0):
+    """A small dome of leaves clinging to the rock face."""
+    dark = palette['foliage_dark']
+    mid  = palette['foliage_mid']
+    top  = palette['foliage_top']
+    rw = max(6, int(10 * scale))
+    rh = max(4, int(6 * scale))
+    pygame.draw.ellipse(surf, dark, (x - rw, y - rh, rw * 2, rh * 2))
+    pygame.draw.ellipse(surf, mid,  (x - rw + 2, y - rh + 1, rw * 2 - 4, rh * 2 - 2))
+    pygame.draw.ellipse(surf, top,  (x - rw + 4, y - rh,     rw * 2 - 8, max(2, rh)))
+
+
+def draw_pillar_mist(surf, cx, base_y, width, alpha=110):
+    """Soft fog halo around the base of a pillar where it meets the ground."""
+    layers = [(width * 4, 32, alpha // 3),
+              (width * 3, 22, alpha // 2),
+              (width * 2, 14, alpha)]
+    for w, h, a in layers:
+        s = pygame.Surface((w, h), pygame.SRCALPHA)
+        pygame.draw.ellipse(s, (255, 255, 255, a), s.get_rect())
+        surf.blit(s, (cx - w // 2, base_y - h // 2 + 4))
