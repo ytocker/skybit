@@ -11,21 +11,23 @@ A colorful Flappy-style casual arcade game. Fly a **vivid scarlet-macaw parrot**
 
 ## Play online — share the link
 
-Once GitHub Pages is enabled on this repo, the game lives at:
+Two zero-install URLs. Send either to anyone — phone, tablet, desktop. Nothing to install, no account, it just loads and plays.
+
+### 1. GitHub Pages (canonical, auto-updating)
 
 **<https://ytocker.github.io/Claude_test/>**
 
-Send that URL to anyone — phone, tablet, desktop. No install, no account, it just loads and plays.
+Served by the workflow at `.github/workflows/pages.yml`, which rebuilds the WebAssembly bundle on every push to `claude/retro-pixel-game-gPPYY` (and `main`) and auto-enables Pages on the first run (`configure-pages` is set with `enablement: true`). First deploy takes ~1–2 minutes after the push; subsequent pushes redeploy in ~30 seconds.
 
-The included workflow at `.github/workflows/pages.yml` rebuilds the WebAssembly bundle on every push to `claude/retro-pixel-game-gPPYY` (and `main`). Enable it once:
+If Pages hasn't kicked in yet, watch the run at **Actions → Deploy Skybit to GitHub Pages**.
 
-1. Push this branch to GitHub (already done if you cloned).
-2. Open the repo on github.com → **Settings → Pages**.
-3. Under *Build and deployment → Source*, choose **GitHub Actions**.
-4. Trigger the workflow: push a commit, or **Actions → Deploy Skybit to GitHub Pages → Run workflow**.
-5. After the run finishes (~1 minute) the Pages URL above is live.
+### 2. raw.githack.com (instant, zero-setup fallback)
 
-> **Heads up**: GitHub Pages is free for public repos. For private repos you need GitHub Pro / Team. If you don't want to make the repo public, other host options that work with the `play.html` + `skybit.apk` pair: **Netlify Drop** (drag-and-drop), **Cloudflare Pages**, **Vercel static**, or any S3/nginx that serves static files.
+**<https://raw.githack.com/ytocker/Claude_test/claude/retro-pixel-game-gPPYY/play.html>**
+
+This works the moment the branch is pushed — no Pages, no Actions, no config. raw.githack.com proxies any public GitHub file with correct MIME types and CORS headers, so `play.html` and its sibling `skybit.apk` load directly from the repo. Ideal for sharing a WIP build before a Pages deploy finishes.
+
+> **Other free options** that also work with the `play.html` + `skybit.apk` pair if you ever need them: **Netlify Drop** (drag-and-drop the repo folder), **Cloudflare Pages**, **Vercel static**, **itch.io** (HTML5 game upload), or any S3/nginx that serves static files. GitHub Pages is free for public repos; private repos need GitHub Pro / Team.
 
 ### Run locally in a browser
 
