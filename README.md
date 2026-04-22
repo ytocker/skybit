@@ -11,23 +11,35 @@ A colorful Flappy-style casual arcade game. Fly a **vivid scarlet-macaw parrot**
 
 ## Play online — share the link
 
-Two zero-install URLs. Send either to anyone — phone, tablet, desktop. Nothing to install, no account, it just loads and plays.
+Three zero-install URLs in order of recommendation. Each works on phone, tablet, and desktop browsers.
 
-### 1. GitHub Pages (canonical, auto-updating)
+### 1. Netlify (recommended)
+
+A `netlify.toml` is committed at the repo root. **One-time setup (≈90 seconds, free tier):**
+
+1. Sign in at <https://app.netlify.com/start> with GitHub.
+2. *Import an existing project* → *Deploy with GitHub* → pick `ytocker/Claude_test`.
+3. Branch: `claude/retro-pixel-game-gPPYY`. Leave build command blank, publish directory `.` (auto-detected from `netlify.toml`).
+4. *Deploy*. ~30 seconds later you get a `https://<random-name>.netlify.app` URL. Rename it from *Site settings → Change site name* to anything you like.
+
+Every push to the branch redeploys automatically. `netlify.toml` makes `/` serve `play.html`, sets long-cache headers on `skybit.apk`, and adds `Access-Control-Allow-Origin: *` so the WASM runtime loads.
+
+**Instant fallback while you're setting that up — Netlify Drop:**
+Open <https://app.netlify.com/drop>, drag the local repo folder onto the page (or just `play.html` + `skybit.apk`). You get a live URL in ~10 seconds, no account needed.
+
+### 2. GitHub Pages (canonical CI deploy)
 
 **<https://ytocker.github.io/Claude_test/>**
 
-Served by the workflow at `.github/workflows/pages.yml`, which rebuilds the WebAssembly bundle on every push to `claude/retro-pixel-game-gPPYY` (and `main`) and auto-enables Pages on the first run (`configure-pages` is set with `enablement: true`). First deploy takes ~1–2 minutes after the push; subsequent pushes redeploy in ~30 seconds.
+Driven by `.github/workflows/pages.yml`. Auto-enables Pages on first run via `actions/configure-pages` with `enablement: true`. If the Pages URL hasn't gone live yet, check **Actions → Deploy Skybit to GitHub Pages** for build status — the workflow may need to be re-run manually (*Run workflow* button) if a previous run failed before `enablement` was added.
 
-If Pages hasn't kicked in yet, watch the run at **Actions → Deploy Skybit to GitHub Pages**.
-
-### 2. raw.githack.com (instant, zero-setup fallback)
+### 3. raw.githack.com (instant, zero-setup)
 
 **<https://raw.githack.com/ytocker/Claude_test/claude/retro-pixel-game-gPPYY/play.html>**
 
-This works the moment the branch is pushed — no Pages, no Actions, no config. raw.githack.com proxies any public GitHub file with correct MIME types and CORS headers, so `play.html` and its sibling `skybit.apk` load directly from the repo. Ideal for sharing a WIP build before a Pages deploy finishes.
+Proxies the public repo files with the right MIME types. Works the moment the branch is pushed. No setup needed.
 
-> **Other free options** that also work with the `play.html` + `skybit.apk` pair if you ever need them: **Netlify Drop** (drag-and-drop the repo folder), **Cloudflare Pages**, **Vercel static**, **itch.io** (HTML5 game upload), or any S3/nginx that serves static files. GitHub Pages is free for public repos; private repos need GitHub Pro / Team.
+> **Other free options** that also work with the `play.html` + `skybit.apk` pair: **Cloudflare Pages**, **Vercel static**, **itch.io** (HTML5 game upload), or any S3/nginx that serves static files. A FastAPI/Flask backend is overkill — these are static assets and a CDN-backed static host is faster, free, and zero-maintenance.
 
 ### Run locally in a browser
 
