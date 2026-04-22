@@ -184,12 +184,17 @@ class HUD:
 
         # Top band — score + game over label
         _text(surf, "GAME OVER", (W // 2, 80), size=30, color=UI_RED)
-        _text(surf, "SCORE", (W // 2, 118), size=13, color=UI_CREAM, shadow=False)
-        _text(surf, str(score), (W // 2, 148), size=38, color=UI_GOLD)
-
-        if new_best:
-            pulse = 1 + math.sin(self.title_t * 6) * 0.1
-            _text(surf, "NEW BEST!", (W // 2, 182), size=int(17 * pulse), color=UI_ORANGE)
+        if score > 0:
+            _text(surf, "SCORE", (W // 2, 118), size=13, color=UI_CREAM, shadow=False)
+            _text(surf, str(score), (W // 2, 148), size=38, color=UI_GOLD)
+            if new_best:
+                pulse = 1 + math.sin(self.title_t * 6) * 0.1
+                _text(surf, "NEW BEST!", (W // 2, 182), size=int(17 * pulse), color=UI_ORANGE)
+        else:
+            # Dying before the first pipe shouldn't read as a graded result.
+            pulse = 1 + math.sin(self.title_t * 4) * 0.05
+            _text(surf, "TRY AGAIN!", (W // 2, 138), size=int(26 * pulse),
+                  color=UI_ORANGE)
 
         # Leaderboard card
         self._draw_leaderboard(surf, y_top=200, highlight_rank=highlight_rank, scores=scores)
@@ -210,25 +215,33 @@ class HUD:
         f_row = _font(15, True)
         f_small = _font(14, False)
         row_y = card.y + 46
+        muted = (110, 130, 170)
         for i in range(10):
-            if i < len(scores):
+            filled = i < len(scores)
+            if filled:
                 entry = scores[i]
                 name = entry["name"]
                 score = entry["score"]
             else:
                 name = "---"
-                score = 0
+                score = None
             bg_col = (40, 60, 120) if i == highlight_rank else None
             if bg_col is not None:
                 rr = pygame.Rect(card.x + 8, row_y - 10, card.width - 16, 24)
                 rounded_rect(surf, rr, 6, bg_col, 200)
-            rank_color = UI_GOLD if i == 0 else (UI_ORANGE if i == 1 else (UI_CREAM if i == 2 else WHITE))
+            if filled:
+                rank_color = UI_GOLD if i == 0 else (UI_ORANGE if i == 1 else (UI_CREAM if i == 2 else WHITE))
+                name_color = WHITE
+                score_color = UI_GOLD
+            else:
+                rank_color = name_color = score_color = muted
             rank_img = f_row.render(f"{i + 1:>2}.", True, rank_color)
             surf.blit(rank_img, (card.x + 16, row_y - 8))
-            name_img = f_row.render(name, True, WHITE)
+            name_img = f_row.render(name, True, name_color)
             surf.blit(name_img, (card.x + 62, row_y - 8))
-            score_img = f_row.render(str(score), True, UI_GOLD)
-            sr = score_img.get_rect()
-            sr.topright = (card.right - 20, row_y - 8)
-            surf.blit(score_img, sr.topleft)
+            if score is not None:
+                score_img = f_row.render(str(score), True, score_color)
+                sr = score_img.get_rect()
+                sr.topright = (card.right - 20, row_y - 8)
+                surf.blit(score_img, sr.topleft)
             row_y += 26

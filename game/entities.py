@@ -194,22 +194,27 @@ class Pipe:
             pygame.draw.ellipse(surf, palette['stone_light'],
                                 ledge_rect.inflate(-2, -1))
 
-            # Slight randomness so identical heights look different per pillar
-            wobble = rng.randint(-2, 2)
+            # Variety: bigger wobble + lean jitter so repeating pattern slots
+            # don't read as identical copies of each other.
+            h_wobble    = rng.randint(-6, 8)
+            lean_jitter = rng.randint(-4, 4)
             if plant_kind == 'pine_med':
                 draw_wuling_pine(surf, anchor_x, anchor_y - 1,
-                                 height=22 + wobble, palette=palette,
-                                 lean=side * 5, direction=grow_dir, layers=4)
+                                 height=24 + h_wobble, palette=palette,
+                                 lean=side * 5 + lean_jitter,
+                                 direction=grow_dir, layers=4)
             elif plant_kind == 'pine_small':
                 draw_wuling_pine(surf, anchor_x, anchor_y,
-                                 height=14 + wobble, palette=palette,
-                                 lean=side * 3, direction=grow_dir, layers=3)
+                                 height=15 + h_wobble // 2, palette=palette,
+                                 lean=side * 3 + lean_jitter,
+                                 direction=grow_dir, layers=3)
             elif plant_kind == 'shrub':
                 draw_side_shrub(surf, anchor_x, anchor_y - 1, palette,
-                                scale=1.0 + (wobble * 0.05))
+                                scale=0.85 + rng.random() * 0.45)
             elif plant_kind == 'moss':
-                draw_moss_strand(surf, anchor_x, anchor_y, length=18 + wobble,
-                                 palette=palette, jitter_seed=offset)
+                draw_moss_strand(surf, anchor_x, anchor_y,
+                                 length=16 + rng.randint(0, 10),
+                                 palette=palette, jitter_seed=offset + self.seed)
 
     # ── orchestration ───────────────────────────────────────────────────────
 

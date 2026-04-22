@@ -329,12 +329,8 @@ class World:
         color = UI_GOLD if value == 1 else UI_ORANGE
         self.float_texts.append(FloatText(label, coin.x, coin.y - 8, color, size=22, life=0.9))
 
-        if self.combo >= 3:
-            self.float_texts.append(FloatText(
-                f"X{self.combo} COMBO!",
-                self.bird.x + 60, self.bird.y - 36,
-                UI_ORANGE, size=20, life=0.9,
-            ))
+        # Combo is communicated by the persistent bouncing HUD badge — no
+        # per-pickup FloatText spawn, which would stack mid-air on fast streaks.
 
     def _on_mushroom(self, m: Mushroom):
         self.triple_timer = TRIPLE_DURATION
