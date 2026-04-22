@@ -193,3 +193,22 @@ pip install pygbag
 python -m pygbag --build main.py
 cp build/web/index.html play.html
 ```
+
+---
+
+## Pillar design templates (work in progress)
+
+Three candidate Zhangjiajie-pillar designs, rendered side-by-side for review. The chosen template will replace the current in-game pillar art.
+
+<p align="center">
+  <img src="docs/screenshots/pillar_preview.png" width="900" alt="Three Zhangjiajie pillar templates — Slender Spire / Twin-Peak Crag / Forested Mesa">
+</p>
+
+- **A — Slender Spire**: tapered single peak with a dramatic Wuling pine clinging to the summit; smaller secondary pine on a side ledge.
+- **B — Twin-Peak Crag**: top splits into two uneven rocky spires with a pine on each and a shrub in the cleft; hanging vines from the larger fang on the inverted version.
+- **C — Forested Mesa**: trunk narrows in the middle and flares into a wide bumpy plateau crowded with conifers; cascading moss tendrils from the inverted version's ledge.
+
+Regenerate with:
+```bash
+python tools/pillar_preview.py
+```
