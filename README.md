@@ -22,12 +22,16 @@ Requires Python 3.9+ and Pygame 2.x.
 
 ## How to Play
 
-Press **Space / Up / W** or click to flap. Survive as long as possible, rack up points by passing pipes and collecting coins.
+Press **Space / Up / W** or click to flap. A pulsing **TAP TO FLY** prompt holds the world still for a moment when a run starts, so you can orient before the first pillar scrolls in.
 
 | Action       | Input                          |
 |--------------|--------------------------------|
 | Flap         | Space · Up · W · Click         |
 | Quit         | Esc                            |
+
+### Sound
+
+Every action has a procedurally-synthesized cue: flap whoosh, coin tink, combo ping, triple-coin arpeggio during 3X, mushroom fanfare, and a descending thud on impact. No asset files — everything is generated with the stdlib `wave` module at startup and falls back silently if the system has no audio device.
 
 ### Scoring
 
@@ -132,9 +136,18 @@ game/
 ├── scenes.py              Scene state machine (Menu / Play / NameEntry /
 │                          GameOver) + App
 └── storage.py             Top-10 leaderboard persistence (JSON file)
+├── audio.py               Procedural SFX — stdlib wave module, no asset files
 tools/
-└── snapshot.py            Headless screenshot generator
-docs/screenshots/          PNG screenshots (regenerate with: python tools/snapshot.py)
+├── snapshot.py            Headless screenshot generator (README shots)
+├── playtest_shots.py      21-shot reviewer-grade capture suite → docs/review/
+├── pillar_preview.py      Side-by-side comparison render of pillar templates
+└── autoplay.py            Heuristic AI that plays rounds for gameplay capture
+docs/
+├── screenshots/           README shots (regenerate: python tools/snapshot.py)
+├── review/                REVIEW.md reference frames — 21 scripted moments
+├── critique/              Earlier autoplay-captured frames
+├── REVIEW.md              Seasoned-reviewer playtest write-up
+└── CRITIQUE.md            Earlier focused critique notes
 ```
 
 ---
@@ -144,7 +157,9 @@ docs/screenshots/          PNG screenshots (regenerate with: python tools/snapsh
 - **Screen**: 360 × 640 virtual pixels (mobile portrait). Smooth graphics, no integer upscaling.
 - **Language**: Python 3, [Pygame 2.x](https://www.pygame.org/). Rendered with `SRCALPHA` surfaces, `BLEND_ADD` glows, pre-computed gradient/glow caches for performance.
 - **Sprites**: everything — parrot, pillars, coins, mushroom, clouds, mountains, UI — is drawn procedurally (no image files).
-- **Graphics polish**: radial glows around coins, soft drop shadows on pillars, antialiased parrot silhouette with 4 wing-cycle frames, parallax clouds + mountains, spring-decay screen shake, gravity particles.
-- **Physics**: fixed-timestep update at 60 FPS; `GRAVITY = 1600 px/s²`, `FLAP_V = -520 px/s`, `MAX_FALL = 700 px/s`.
-- **Coin pickup**: **localized** gold/white sparkle particles + "+1" / "+3" floating text. No full-screen flash.
+- **Graphics polish**: radial glows around coins, soft drop shadows on pillars, antialiased parrot silhouette with 4 wing-cycle frames and a 1-px dark outline, **three-layer parallax mountains** (back / far / near), **five hand-tuned cloud silhouettes** picked per-slot so the sky doesn't repeat, spring-decay screen shake, gravity particles. Per-pillar erosion-crack seed so adjacent columns don't share horizontal seams.
+- **HUD polish**: centered score sits on a soft dark-gradient ellipse so digits stay legible against any background. The **BEST** and **coin** pills in the top corners fade out when the bird climbs into the upper 60 px, so the sprite never disappears behind UI chrome.
+- **Audio**: procedurally-synthesized SFX via the stdlib `wave` module (no asset files). Events: flap, coin, coin-combo, triple-coin (during 3X), mushroom fanfare, impact thud, game-over sting.
+- **Physics**: fixed-timestep update at 60 FPS; `GRAVITY = 1600 px/s²`, `FLAP_V = -520 px/s`, `MAX_FALL = 700 px/s`. Downward tilt capped at ≈41° so fast falls don't read as already-crashing. 1-second "TAP TO FLY" freeze at round start.
+- **Coin pickup**: **localized** gold/white sparkle particles + "+1" / "+3" floating text (the "+3" is oversized and offset further from the bird so the 3X aura doesn't swallow it). No full-screen flash.
 - **Persistence**: high score saved to `skybit_save.json`, top-10 leaderboard to `skybit_scores.json`.

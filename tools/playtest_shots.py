@@ -48,13 +48,16 @@ def _advance(app, frames, dt=1 / 60.0):
         app._update(dt)
 
 
-def _setup_world(app, *, score=0, coins=0, biome_t=12.0, seed=1):
+def _setup_world(app, *, score=0, coins=0, biome_t=12.0, seed=1, ready=False):
     random.seed(seed)
     app._start_play()
     w = app.world
     w.score = score
     w.coin_count = coins
     w.biome_time = biome_t
+    # Most scripted scenes depict mid-play, not the "get ready" freeze.
+    if not ready:
+        w.ready_t = 0.0
     return w
 
 
@@ -96,6 +99,15 @@ def shot_menu():
     _advance(app, 30)
     app._render()
     _save(app, "01_menu.png")
+
+
+def shot_get_ready():
+    """First frame of Play — 'TAP TO FLY' prompt pulsing over a still bird."""
+    app = App()
+    _setup_world(app, biome_t=15.0, seed=3, ready=True)
+    _advance(app, 4)  # let the title_t pulse settle a tick
+    app._render()
+    _save(app, "00_get_ready.png")
 
 
 def shot_gameover_tryagain():
@@ -287,8 +299,8 @@ def shot_triple_active_plus3():
         w.particles.append(Particle(cx, cy,
                                     math.cos(ang) * spd, math.sin(ang) * spd,
                                     0.6, 3, col, gravity=300))
-    w.float_texts.append(FloatText("+3", cx, cy - 8,
-                                   UI_ORANGE, size=24, life=0.9))
+    w.float_texts.append(FloatText("+3", cx, cy - 18,
+                                   UI_ORANGE, size=30, life=0.9))
     _advance(app, 4)
     app._render()
     _save(app, "11_triple_active_+3.png")
@@ -413,6 +425,7 @@ def main():
     pygame.display.set_mode((W, H))
     # A
     shot_menu()
+    shot_get_ready()
     shot_gameover_tryagain()
     shot_gameover_leaderboard()
     shot_gameover_new_best()

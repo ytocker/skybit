@@ -72,42 +72,78 @@ class HUD:
         self.title_t = 0.0
 
     def draw_play(self, surf, world, best: int):
-        # Score — large, centered under status strip
+        # ── Score: centered, with a soft dark backdrop so the digits stay
+        # legible against any sky/pillar/cloud behind them.
         score_txt = str(world.score)
         cf = _font(48, True)
         img = cf.render(score_txt, True, UI_SCORE)
         shadow = cf.render(score_txt, True, NEAR_BLACK)
         outline = cf.render(score_txt, True, UI_GOLD)
         r = img.get_rect(center=(W // 2, 72))
+        # Soft dark ellipse behind the score, wider+shorter than the text
+        back_w = r.width + 48
+        back_h = r.height + 18
+        back = pygame.Surface((back_w, back_h), pygame.SRCALPHA)
+        pygame.draw.ellipse(back, (0, 0, 20, 100), back.get_rect())
+        pygame.draw.ellipse(back, (0, 0, 20, 70), back.get_rect().inflate(20, 10))
+        surf.blit(back, (W // 2 - back_w // 2, r.y - 9))
         # gold outline by offsetting
         for ox, oy in ((-2, 0), (2, 0), (0, -2), (0, 2)):
             surf.blit(outline, (r.x + ox, r.y + oy))
         surf.blit(shadow, (r.x + 3, r.y + 4))
         surf.blit(img, r.topleft)
 
-        # Hi-score pill
-        hi_rect = pygame.Rect(10, 14, 94, 34)
-        rounded_rect(surf, hi_rect, 12, (15, 25, 60), 200)
-        # trophy icon (stylised cup) on the left
-        tx, ty = hi_rect.x + 18, hi_rect.y + 17
-        pygame.draw.polygon(surf, UI_GOLD, [
+        # ── Top-left BEST pill and top-right coin pill fade out when the
+        # bird flies up into the upper 60 px so the player never loses the
+        # sprite behind UI chrome.
+        bird_y = world.bird.y
+        if bird_y >= 80:
+            ui_alpha = 255
+        elif bird_y <= 20:
+            ui_alpha = 40
+        else:
+            ui_alpha = int(40 + (215 * (bird_y - 20) / 60))
+
+        hi_pill = pygame.Surface((94, 34), pygame.SRCALPHA)
+        rounded_rect(hi_pill, hi_pill.get_rect(), 12, (15, 25, 60), 200)
+        tx, ty = 18, 17
+        pygame.draw.polygon(hi_pill, UI_GOLD, [
             (tx - 7, ty - 7), (tx + 7, ty - 7),
             (tx + 5, ty + 3), (tx - 5, ty + 3),
         ])
-        pygame.draw.rect(surf, UI_GOLD, (tx - 3, ty + 3, 6, 4))
-        pygame.draw.rect(surf, UI_GOLD, (tx - 6, ty + 7, 12, 3), border_radius=2)
-        # label + value stacked
-        _text(surf, "BEST", (hi_rect.x + 60, hi_rect.y + 11), size=12, color=UI_CREAM, shadow=False)
-        _text(surf, str(best), (hi_rect.x + 60, hi_rect.y + 23), size=15, color=UI_GOLD, shadow=False)
+        pygame.draw.rect(hi_pill, UI_GOLD, (tx - 3, ty + 3, 6, 4))
+        pygame.draw.rect(hi_pill, UI_GOLD, (tx - 6, ty + 7, 12, 3), border_radius=2)
+        _text(hi_pill, "BEST", (60, 11), size=12, color=UI_CREAM, shadow=False)
+        _text(hi_pill, str(best), (60, 23), size=15, color=UI_GOLD, shadow=False)
+        hi_pill.set_alpha(ui_alpha)
+        surf.blit(hi_pill, (10, 14))
 
-        # Coin count (top-right, just left of pause button)
-        cc_rect = pygame.Rect(W - 156, 14, 88, 34)
-        rounded_rect(surf, cc_rect, 12, (15, 25, 60), 170)
-        _coin_icon(surf, cc_rect.x + 18, cc_rect.y + 17, 10)
-        _text(surf, f"x{world.coin_count}", (cc_rect.x + 54, cc_rect.y + 18), size=18, color=UI_GOLD, shadow=False)
+        cc_pill = pygame.Surface((88, 34), pygame.SRCALPHA)
+        rounded_rect(cc_pill, cc_pill.get_rect(), 12, (15, 25, 60), 170)
+        _coin_icon(cc_pill, 18, 17, 10)
+        _text(cc_pill, f"x{world.coin_count}", (54, 18),
+              size=18, color=UI_GOLD, shadow=False)
+        cc_pill.set_alpha(ui_alpha)
+        surf.blit(cc_pill, (W - 156, 14))
 
         # Pause button
         self.pause_btn.draw(surf, paused=False)
+
+        # "Get ready" prompt while the pre-start freeze is active.
+        if world.ready_t > 0:
+            pulse = 0.5 + 0.5 * math.sin(self.title_t * 5)
+            alpha = int(180 + 60 * pulse)
+            font_big = _font(22, True)
+            label = font_big.render("TAP TO FLY", True, WHITE)
+            label.set_alpha(alpha)
+            lr = label.get_rect(center=(W // 2, 340))
+            # dark plate behind for legibility
+            plate = pygame.Surface((lr.width + 36, lr.height + 18),
+                                   pygame.SRCALPHA)
+            pygame.draw.ellipse(plate, (0, 0, 20, 140), plate.get_rect())
+            surf.blit(plate, (W // 2 - plate.get_width() // 2,
+                              lr.y - 9))
+            surf.blit(label, lr.topleft)
 
         # Mushroom timer bar under score
         if world.triple_timer > 0:

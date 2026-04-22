@@ -17,6 +17,7 @@ from game.storage import (
     load_scores, save_scores, qualifies_for_top, insert_score, best_score,
 )
 from game.nameentry import NameEntry
+from game import audio
 
 
 STATE_MENU = 0
@@ -31,6 +32,7 @@ class App:
         pygame.display.set_caption(TITLE)
         self.screen = pygame.display.set_mode((W, H))
         self.clock = pygame.time.Clock()
+        audio.init()
         self.world = World()
         self.hud = HUD()
         self.scores: list[dict] = load_scores()
@@ -135,6 +137,7 @@ class App:
     def _on_death(self):
         score = self.world.score
         self.prev_best_at_death = self.best
+        audio.play_gameover()
         if qualifies_for_top(score, self.scores):
             # insert a preview entry so the user sees the rank, then overwrite name
             preview, rank = insert_score(self.scores, "???", score)
@@ -165,9 +168,14 @@ class App:
         sky = get_sky_surface_biome(W, H, GROUND_Y, palette, bucket)
         surf.blit(sky, (0, 0))
         scroll = self.world.bg_scroll
-        for i, (bx, by, sc) in enumerate(((20, 90, 0.9), (180, 140, 1.1), (60, 220, 0.8), (230, 60, 0.7))):
-            ox = ((bx - scroll * (0.04 + 0.02 * i)) % (W + 120)) - 60
-            draw_cloud(surf, ox, by + math.sin(self._cloud_phase * 0.3 + i) * 3, sc)
+        for i, (bx, by, sc, variant) in enumerate((
+                (20, 90, 0.9, 0), (180, 140, 1.1, 2),
+                (60, 220, 0.8, 3), (230, 60, 0.7, 1),
+                (320, 180, 0.9, 4))):
+            ox = ((bx - scroll * (0.04 + 0.02 * i)) % (W + 160)) - 80
+            draw_cloud(surf, ox,
+                       by + math.sin(self._cloud_phase * 0.3 + i) * 3,
+                       sc, variant=variant)
         draw_mountains(surf, scroll, GROUND_Y, W, palette['mtn_far'], palette['mtn_near'])
         draw_ground(surf, GROUND_Y, W, H, scroll,
                     palette['ground_top'], palette['ground_mid'], (60, 40, 25))

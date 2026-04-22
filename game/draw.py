@@ -238,38 +238,72 @@ def blit_glow(surf, cx, cy, radius, color, alpha=160):
 def draw_mountains(surf, scroll, ground_y, w, far_color=None, near_color=None):
     far_color  = far_color  or MTN_FAR
     near_color = near_color or MTN_NEAR
+    # Tint the back layer halfway between sky-bottom-ish and far colour so
+    # it reads as genuinely further away without needing a new palette key.
+    back_color = (
+        max(0, min(255, (far_color[0] + 200) // 2)),
+        max(0, min(255, (far_color[1] + 210) // 2)),
+        max(0, min(255, (far_color[2] + 230) // 2)),
+    )
+    pts_back = [(0, ground_y)]
     pts_far  = [(0, ground_y)]
     pts_near = [(0, ground_y)]
     for x in range(0, w + 1, 2):
+        bx = x + scroll * 0.06
+        hb = int(105 + math.sin(bx * 0.008) * 32 + math.sin(bx * 0.023 + 2.1) * 14)
+        pts_back.append((x, ground_y - hb))
         fx = x + scroll * 0.15
         hf = int(80 + math.sin(fx * 0.012) * 42 + math.sin(fx * 0.031) * 22)
         pts_far.append((x, ground_y - hf))
         nx = x + scroll * 0.28
         hn = int(55 + math.sin(nx * 0.019 + 1.4) * 34 + math.sin(nx * 0.047 + 0.7) * 16)
         pts_near.append((x, ground_y - hn))
-    pts_far.append((w, ground_y))
-    pts_near.append((w, ground_y))
+    for pts in (pts_back, pts_far, pts_near):
+        pts.append((w, ground_y))
+    pygame.draw.polygon(surf, back_color, pts_back)
     pygame.draw.polygon(surf, far_color,  pts_far)
     pygame.draw.polygon(surf, near_color, pts_near)
 
 
 # ── cloud drawing ────────────────────────────────────────────────────────────
 
-def draw_cloud(surf, x, y, scale=1.0):
-    def _circ(ox, oy, r, a=220):
-        s = pygame.Surface((r*2+2, r*2+2), pygame.SRCALPHA)
-        pygame.draw.circle(s, (255,255,255,a), (r+1,r+1), r)
-        surf.blit(s, (int(x+ox*scale)-r-1, int(y+oy*scale)-r-1))
-    ri = int
-    _circ(0,     0,  ri(22*scale), 230)
-    _circ(28*scale,  -6*scale, ri(28*scale), 235)
-    _circ(56*scale,   0,       ri(20*scale), 225)
-    _circ(14*scale,  10*scale, ri(18*scale), 220)
-    _circ(42*scale,  10*scale, ri(18*scale), 220)
-    # Soft shadow underside
-    shadow = pygame.Surface((int(80*scale), int(14*scale)), pygame.SRCALPHA)
-    shadow.fill((130, 170, 220, 60))
-    surf.blit(shadow, (int(x), int(y + 14*scale)))
+# Five hand-tuned cloud puff layouts: (ox, oy, radius, alpha). Each column in
+# the list is one variant, so scenes that draw multiple clouds can pick
+# different variants via modulo.
+_CLOUD_VARIANTS: list[list[tuple[float, float, float, int]]] = [
+    # V0 — classic wide, 5-bump
+    [(0, 0, 22, 230), (28, -6, 28, 235), (56, 0, 20, 225),
+     (14, 10, 18, 220), (42, 10, 18, 220)],
+    # V1 — narrow tall, 4-bump with a tall centre
+    [(0, 2, 18, 220), (22, -8, 24, 235), (40, 0, 20, 225),
+     (16, 12, 16, 215)],
+    # V2 — long stretched wisp, 6-bump
+    [(0, 4, 16, 205), (18, -2, 22, 230), (38, -6, 22, 235),
+     (58, -2, 20, 225), (78, 4, 14, 205), (28, 12, 16, 215)],
+    # V3 — compact puff, 3-bump almost round
+    [(0, 2, 22, 230), (20, -8, 26, 235), (42, 4, 18, 220)],
+    # V4 — asymmetric, heavy on the left
+    [(0, -4, 26, 235), (26, 2, 22, 228), (48, -2, 18, 222),
+     (12, 14, 18, 215), (36, 14, 14, 205)],
+]
+
+
+def draw_cloud(surf, x, y, scale=1.0, variant: int = 0):
+    """Draw a stylised cloud. `variant` picks one of the hand-tuned shapes
+    so scenes don't paint the same 5-circle blob repeatedly."""
+    puffs = _CLOUD_VARIANTS[variant % len(_CLOUD_VARIANTS)]
+    max_ox = max(p[0] for p in puffs)
+    for ox, oy, r, a in puffs:
+        rr = max(2, int(r * scale))
+        s = pygame.Surface((rr * 2 + 2, rr * 2 + 2), pygame.SRCALPHA)
+        pygame.draw.circle(s, (255, 255, 255, a), (rr + 1, rr + 1), rr)
+        surf.blit(s, (int(x + ox * scale) - rr - 1,
+                      int(y + oy * scale) - rr - 1))
+    # Soft shadow underside stretched to the variant's footprint
+    sh_w = max(40, int((max_ox + 24) * scale))
+    shadow = pygame.Surface((sh_w, int(14 * scale)), pygame.SRCALPHA)
+    shadow.fill((130, 170, 220, 55))
+    surf.blit(shadow, (int(x - 4 * scale), int(y + 14 * scale)))
 
 
 # ── ground drawing ───────────────────────────────────────────────────────────
@@ -318,10 +352,11 @@ def _shade(c, d):
             max(0, min(255, c[2] + d)))
 
 
-def _make_stone_pillar_body(w, h, light, mid, dark, accent):
+def _make_stone_pillar_body(w, h, light, mid, dark, accent, body_seed=0):
     """Zhangjiajie quartzite column: vertical striations + erosion fissures,
-    warm sunlit side → cool shadow side, no mid-column banding. The surface
-    tapers slightly at the top but we leave that to the caller's rect."""
+    warm sunlit side → cool shadow side, no mid-column banding. `body_seed`
+    shifts the pseudo-random crack layout so adjacent pillars don't share
+    horizontal seam heights (REVIEW.md finding)."""
     surf = pygame.Surface((w, h), pygame.SRCALPHA)
 
     # Horizontal cylinder shading (sunlit left → shadow right).
@@ -344,7 +379,7 @@ def _make_stone_pillar_body(w, h, light, mid, dark, accent):
 
     # Vertical erosion striations — long thin grooves.
     import random as _r
-    rng = _r.Random(w * 7919 + h)
+    rng = _r.Random(w * 7919 + h + body_seed * 6151)
     for _ in range(4):
         gx = rng.randint(3, w - 4)
         col = _shade(dark, -10)
@@ -366,13 +401,15 @@ def _make_stone_pillar_body(w, h, light, mid, dark, accent):
 _pillar_body_cache: dict = {}
 
 
-def get_stone_pillar_body(w, h, light, mid, dark, accent):
+def get_stone_pillar_body(w, h, light, mid, dark, accent, body_seed=0):
     # Quantize very-tall heights so we don't re-cache tiny differences.
+    # Bucket body_seed to 8 distinct layouts so the cache stays finite.
     qh = ((h + 7) // 8) * 8
-    key = (w, qh, light, mid, dark, accent)
+    bucket = body_seed % 8
+    key = (w, qh, light, mid, dark, accent, bucket)
     s = _pillar_body_cache.get(key)
     if s is None or s.get_height() < h:
-        s = _make_stone_pillar_body(w, max(qh, h), light, mid, dark, accent)
+        s = _make_stone_pillar_body(w, max(qh, h), light, mid, dark, accent, bucket)
         _pillar_body_cache[key] = s
     return s.subsurface((0, 0, w, h))
 

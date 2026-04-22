@@ -54,7 +54,9 @@ class Bird:
 
     @property
     def tilt_deg(self):
-        t = max(-0.5, min(1.1, self.vy / 500.0))
+        # Clamp the downward dive so a fast-falling bird doesn't read as
+        # already crashing (REVIEW.md feedback).
+        t = max(-0.5, min(0.75, self.vy / 500.0))
         return -t * 55.0
 
     def flap(self):
@@ -149,6 +151,7 @@ class Pipe:
             rect.width, max(1, rect.height),
             palette['stone_light'], palette['stone_mid'],
             palette['stone_dark'],  palette['stone_accent'],
+            body_seed=self.seed,
         )
         polygon = polygon_fn(rect.width, rect.height)
         silhouette_blit(surf, body, polygon, rect.topleft, shadow_alpha=110)
@@ -387,11 +390,23 @@ class Mushroom:
     def draw(self, surf):
         cx = int(self.x)
         cy = int(self.y)
-        # Double halo: warm outer + magenta inner
-        outer_r = MUSHROOM_R + 14 + int(math.sin(self.pulse) * 4)
-        inner_r = MUSHROOM_R + 6  + int(math.sin(self.pulse * 1.4) * 2)
-        blit_glow(surf, cx, cy - 4, outer_r, (255, 230, 160), 160)
-        blit_glow(surf, cx, cy - 4, inner_r, (255,  90, 180), 170)
+        # Layered soft-aura halo — three wide, horizontally-stretched ellipses
+        # blended additively. Reads as "this mushroom is radiating warmth",
+        # not as a speech bubble. REVIEW.md fix: the old single opaque white
+        # disc felt like a call-out container.
+        pulse = math.sin(self.pulse) * 0.5 + 0.5
+        layers = [
+            (38, 22, (255, 210, 120), 55),
+            (28, 18, (255, 140,  80), 70),
+            (18, 14, (255, 240, 200), 90),
+        ]
+        for rw, rh, col, a in layers:
+            rw2 = rw + int(pulse * 4)
+            rh2 = rh + int(pulse * 2)
+            aura = pygame.Surface((rw2 * 2 + 4, rh2 * 2 + 4), pygame.SRCALPHA)
+            pygame.draw.ellipse(aura, (*col, a), aura.get_rect())
+            surf.blit(aura, (cx - rw2 - 2, cy - rh2 - 6),
+                      special_flags=pygame.BLEND_ADD)
 
         # Stem with vivid highlight
         stem = pygame.Rect(cx - 7, cy, 14, 13)

@@ -171,9 +171,29 @@ def _build_frame(wing_angle_deg):
     return surf
 
 
+def _add_outline(src: pygame.Surface, outline_color=(20, 12, 18, 220)) -> pygame.Surface:
+    """Return a surface with a 1-px dark outline around the sprite silhouette.
+
+    Makes the bird pop against warm sunset stone and dark night skies
+    (REVIEW.md finding — bird was hard to track in `14_death_hitflash.png`)."""
+    w, h = src.get_size()
+    pad = 2
+    out = pygame.Surface((w + pad * 2, h + pad * 2), pygame.SRCALPHA)
+    # Build an opaque silhouette mask from the source's alpha channel.
+    mask = pygame.mask.from_surface(src, threshold=8)
+    silhouette = mask.to_surface(setcolor=outline_color, unsetcolor=(0, 0, 0, 0))
+    # Blit the silhouette at the 8 neighbour offsets to grow it by 1 px.
+    for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1),
+                   (-1, -1), (1, -1), (-1, 1), (1, 1)):
+        out.blit(silhouette, (pad + dx, pad + dy))
+    # Stamp the real sprite on top.
+    out.blit(src, (pad, pad))
+    return out
+
+
 # Four wing angles — up, mid-up, level, down
 _WING_ANGLES = (50, 20, -10, -40)
-FRAMES: list[pygame.Surface] = [_build_frame(a) for a in _WING_ANGLES]
+FRAMES: list[pygame.Surface] = [_add_outline(_build_frame(a)) for a in _WING_ANGLES]
 
 
 _rot_cache: dict = {}

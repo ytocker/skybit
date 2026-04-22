@@ -24,6 +24,7 @@ from game.draw import (
     UI_GOLD, UI_ORANGE, UI_CREAM, WHITE, BIRD_RED,
 )
 from game import biome
+from game import audio
 
 
 def _lerp(a, b, t):
@@ -56,6 +57,11 @@ class World:
 
         # Real elapsed gameplay seconds — drives the day/night biome cycle.
         self.biome_time = 0.0
+
+        # "Get ready" freeze at the start of a round: physics paused until
+        # the player flaps or the timer expires. Gives new players a moment
+        # to orient before the first pillar scrolls in (REVIEW.md finding).
+        self.ready_t = 1.0
 
         self.game_over = False
         self.time_scale = 1.0    # supports mushroom-pickup slow-mo
@@ -136,7 +142,12 @@ class World:
 
     def flap(self):
         if not self.game_over:
+            # A tap during the "get ready" freeze both lifts the bird and
+            # kicks the world into motion immediately.
+            if self.ready_t > 0:
+                self.ready_t = 0.0
             self.bird.flap()
+            audio.play_flap()
             # small puff
             for _ in range(3):
                 self.particles.append(Particle(
@@ -155,6 +166,23 @@ class World:
             self.time_scale_t -= dt
             self.time_scale = 0.35 if self.time_scale_t > 0 else 1.0
         sdt = dt * self.time_scale
+
+        # While the "get ready" prompt is up, hold everything still except
+        # a tiny idle animation on the bird.
+        if self.ready_t > 0 and not self.game_over:
+            self.ready_t = max(0.0, self.ready_t - dt)
+            # Gentle bob without physics integration.
+            self.bird.vy = 0
+            self.bird.y = H * 0.42 + math.sin(self.biome_time * 4.0) * 6
+            self.bird.frame_t += dt * 6.0
+            # Keep particles / float-texts ticking so nothing freezes visually.
+            for p in self.particles:
+                p.update(dt)
+            self.particles = [p for p in self.particles if p.alive()]
+            for t in self.float_texts:
+                t.update(dt)
+            self.float_texts = [t for t in self.float_texts if t.alive()]
+            return
 
         if not self.game_over:
             self.bird.update(sdt)
@@ -270,6 +298,7 @@ class World:
         self.shake_mag = 8
         self.shake_t = 0.45
         self.combo = 1
+        audio.play_death()
         for _ in range(26):
             self.particles.append(Particle(
                 self.bird.x, self.bird.y,
@@ -325,9 +354,29 @@ class World:
                 random.randint(2, 4),
                 col, gravity=300,
             ))
-        label = f"+{value}"
-        color = UI_GOLD if value == 1 else UI_ORANGE
-        self.float_texts.append(FloatText(label, coin.x, coin.y - 8, color, size=22, life=0.9))
+        # "+3" during the buff is bigger and offset further from the bird
+        # so the 3X aura doesn't swallow it (see REVIEW.md finding).
+        if value == 3:
+            label = "+3"
+            color = UI_ORANGE
+            size = 30
+            text_y_offset = 18
+        else:
+            label = "+1"
+            color = UI_GOLD
+            size = 22
+            text_y_offset = 8
+        self.float_texts.append(
+            FloatText(label, coin.x, coin.y - text_y_offset, color,
+                      size=size, life=0.9))
+
+        # Pick the richest available audio cue for this pickup.
+        if value == 3:
+            audio.play_coin_triple()
+        elif self.combo >= 3:
+            audio.play_coin_combo()
+        else:
+            audio.play_coin()
 
         # Combo is communicated by the persistent bouncing HUD badge — no
         # per-pickup FloatText spawn, which would stack mid-air on fast streaks.
@@ -338,6 +387,7 @@ class World:
         self.shake_t = max(self.shake_t, 0.25)
         self.time_scale = 0.35
         self.time_scale_t = 0.25
+        audio.play_mushroom()
         for _ in range(30):
             ang = random.uniform(0, math.tau)
             spd = random.uniform(100, 320)
