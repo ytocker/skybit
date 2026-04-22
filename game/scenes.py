@@ -1,8 +1,7 @@
 """
 Scene state machine (Menu / Play / NameEntry / GameOver) plus the
-top-level App class. App.run() is async so pygbag can export to WebAssembly.
+top-level App class.
 """
-import asyncio
 import math
 import pygame
 
@@ -76,7 +75,7 @@ class App:
 
     # ── run loop ────────────────────────────────────────────────────────────
 
-    async def run(self):
+    def run(self):
         self._cooldown_t = 0.0
         while self._running:
             dt = min(self.clock.tick(FPS) / 1000.0, 1 / 20.0)
@@ -85,7 +84,6 @@ class App:
             self._update(dt)
             self._render()
             pygame.display.flip()
-            await asyncio.sleep(0)
         pygame.quit()
 
     def _handle_event(self, e):

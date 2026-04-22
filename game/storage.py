@@ -3,7 +3,7 @@
 File format (JSON):
   { "scores": [ {"name": "YAN", "score": 42 }, ... ] }
 
-Tolerant of web/pygbag filesystem quirks (all writes silently no-op on failure).
+All writes silently no-op on failure so a missing/locked file never crashes the game.
 """
 import json
 import os

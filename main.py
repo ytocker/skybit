@@ -1,11 +1,6 @@
-"""Skybit entry point. Uses asyncio so pygbag can export to WebAssembly."""
-import asyncio
-
+"""Skybit entry point."""
 from game.scenes import App
 
 
-async def main():
-    await App().run()
-
-
-asyncio.run(main())
+if __name__ == "__main__":
+    App().run()
