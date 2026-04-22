@@ -76,11 +76,50 @@ def snap_gameplay():
     for _ in range(8):
         app.world.flap()
         app._update(1 / 60)
-    app.world.coin_count = 7
-    app.world.score = 12
+    app.world.coin_count = 2
+    app.world.score = 0          # day biome for the primary shot
     app.world.combo = 4
     app.world.combo_timer = 1.2
     _render_to_png(app, "gameplay.png")
+
+
+def _biome_scene(app, target_score, y_bird=300):
+    """Populate a stable gameplay frame at a given score (drives biome phase)."""
+    from game.entities import Pipe, Coin
+    from game.config import PIPE_W
+    import math
+    app.state = STATE_PLAY
+    app.world.pipes.clear()
+    app.world.coins.clear()
+    app.world.mushrooms.clear()
+    app.world.pipes.extend((
+        Pipe(220, 320, 165),
+        Pipe(220 + 280, 240, 160),
+    ))
+    for t in (0.0, 0.25, 0.5, 0.75, 1.0):
+        ang = -math.pi * 0.35 + math.pi * 0.7 * t
+        app.world.coins.append(Coin(170 + math.sin(ang) * 36, 315 + math.cos(ang) * 42 - 10))
+    app.world.score = target_score
+    app.world.coin_count = target_score // 2
+    app.world.bird.y = y_bird
+    app.world.bird.vy = -50
+    for _ in range(6):
+        app.world.flap()
+        app._update(1 / 60)
+
+
+def snap_sunset():
+    random.seed(11)
+    app = App()
+    _biome_scene(app, target_score=10)   # ~phase 0.37 (sunset)
+    _render_to_png(app, "sunset.png")
+
+
+def snap_night():
+    random.seed(17)
+    app = App()
+    _biome_scene(app, target_score=18)   # ~phase 0.64 (night)
+    _render_to_png(app, "night.png")
 
 
 def snap_mushroom():
@@ -187,6 +226,8 @@ def snap_nameentry():
 if __name__ == "__main__":
     snap_title()
     snap_gameplay()
+    snap_sunset()
+    snap_night()
     snap_mushroom()
     snap_nameentry()
     snap_gameover()

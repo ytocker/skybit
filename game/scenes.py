@@ -8,9 +8,10 @@ import pygame
 
 from game.config import W, H, FPS, TITLE, GROUND_Y
 from game.draw import (
-    get_sky_surface, draw_mountains, draw_cloud, draw_ground,
+    get_sky_surface_biome, draw_mountains, draw_cloud, draw_ground,
     blit_glow, UI_RED,
 )
+from game import biome as _biome
 from game.world import World
 from game.hud import HUD, _font
 from game.storage import (
@@ -160,22 +161,27 @@ class App:
     # ── render ──────────────────────────────────────────────────────────────
 
     def _draw_background(self, surf):
-        sky = get_sky_surface(W, H, GROUND_Y)
+        phase = self.world.biome_phase
+        palette = self.world.biome_palette
+        bucket = _biome.phase_bucket(phase)
+        sky = get_sky_surface_biome(W, H, GROUND_Y, palette, bucket)
         surf.blit(sky, (0, 0))
         scroll = self.world.bg_scroll
         for i, (bx, by, sc) in enumerate(((20, 90, 0.9), (180, 140, 1.1), (60, 220, 0.8), (230, 60, 0.7))):
             ox = ((bx - scroll * (0.04 + 0.02 * i)) % (W + 120)) - 60
             draw_cloud(surf, ox, by + math.sin(self._cloud_phase * 0.3 + i) * 3, sc)
-        draw_mountains(surf, scroll, GROUND_Y, W)
-        draw_ground(surf, GROUND_Y, W, H, scroll)
+        draw_mountains(surf, scroll, GROUND_Y, W, palette['mtn_far'], palette['mtn_near'])
+        draw_ground(surf, GROUND_Y, W, H, scroll,
+                    palette['ground_top'], palette['ground_mid'], (60, 40, 25))
 
     def _render(self):
         sx, sy = self.world.shake_offset() if self.state == STATE_PLAY else (0, 0)
         sx, sy = int(sx), int(sy)
         self._draw_background(self.screen)
 
+        pipe_palette = self.world.biome_palette
         for p in self.world.pipes:
-            p.draw(self.screen)
+            p.draw(self.screen, pipe_palette)
         for c in self.world.coins:
             c.draw(self.screen)
         for m in self.world.mushrooms:

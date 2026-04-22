@@ -99,6 +99,17 @@ Cracking the **top 10** pops up an arcade-style name-entry screen after Game Ove
 - **Score 20–35**: gaps tighten, speed ramps up
 - **Score 35+**: near-minimum gap, maximum scroll speed
 
+### Evolving scenery
+
+The sky and the nature pillars follow a continuous **day → golden hour → sunset → dusk → starry night → predawn → sunrise → day** cycle. One full cycle every ~30 points, interpolated smoothly — every run looks different depending on how far you get.
+
+| Phase       | Sky tone                | Pillar tint          |
+|-------------|-------------------------|----------------------|
+| Day         | Bright cyan             | Lush green with gold bands |
+| Sunset      | Pink-orange horizon     | Warm coral pillars, cream bands |
+| Night       | Navy + scattered stars  | Cool cyan-silver with glowing gems |
+| Sunrise     | Peach + pink bloom      | Blush-pink with amber leaves |
+
 ---
 
 ## Screenshots
@@ -107,11 +118,21 @@ Cracking the **top 10** pops up an arcade-style name-entry screen after Game Ove
 <tr>
   <td align="center">
     <img src="docs/screenshots/title.png" width="280"><br>
-    <sub>Title screen</sub>
+    <sub>Title — day biome</sub>
   </td>
   <td align="center">
     <img src="docs/screenshots/gameplay.png" width="280"><br>
     <sub>Gameplay — coin arc, X4 combo</sub>
+  </td>
+</tr>
+<tr>
+  <td align="center">
+    <img src="docs/screenshots/sunset.png" width="280"><br>
+    <sub>Sunset biome (~score 10)</sub>
+  </td>
+  <td align="center">
+    <img src="docs/screenshots/night.png" width="280"><br>
+    <sub>Starry night biome (~score 18)</sub>
   </td>
 </tr>
 <tr>
@@ -121,7 +142,7 @@ Cracking the **top 10** pops up an arcade-style name-entry screen after Game Ove
   </td>
   <td align="center">
     <img src="docs/screenshots/gameover.png" width="280"><br>
-    <sub>Game Over</sub>
+    <sub>Game Over + Top 10</sub>
   </td>
 </tr>
 </table>
@@ -135,9 +156,10 @@ main.py                    Entry point — asyncio loop so pygbag can export to 
 play.html                  Browser-playable build (Pygame on WebAssembly)
 game/
 ├── config.py              Gameplay constants (physics, spawn rates, timings)
+├── biome.py               Day/night palette keyframes + phase interpolation
 ├── draw.py                Low-level drawing: gradient surfaces, glow caches,
-│                          mountains, clouds, ground, rounded rects
-├── parrot.py              4-frame animated scarlet-macaw sprite (procedural)
+│                          mountains, clouds, ground, nature-pillar bodies
+├── parrot.py              4-frame scarlet-macaw w/ aviator sunglasses (procedural)
 ├── entities.py            Bird, Pipe, Coin, Mushroom, Particle, FloatText
 ├── world.py               Simulation: scroll, spawn, collision, pickups,
 │                          difficulty ramp, shake, pickup FX

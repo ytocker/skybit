@@ -149,6 +149,44 @@ def get_sky_surface(w, h, ground_y):
     return _bg_cache[key]
 
 
+def get_sky_surface_biome(w, h, ground_y, palette, phase_bucket):
+    """Biome-aware sky: cached by quantized phase bucket."""
+    key = ('sky_b', w, h, phase_bucket)
+    cached = _bg_cache.get(key)
+    if cached is not None:
+        return cached
+    stops = [
+        (0.0,  palette['sky_top']),
+        (0.45, palette['sky_mid']),
+        (0.85, palette['sky_bot']),
+        (1.0,  palette['horizon']),
+    ]
+    surf = make_gradient_surface(w, ground_y, stops)
+
+    # Sprinkle stars on dark skies. Deterministic via phase bucket.
+    sa = int(palette.get('star_alpha', 0))
+    if sa > 0:
+        import random as _r
+        rng = _r.Random(phase_bucket * 7919 + w)
+        star_band = int(ground_y * 0.72)
+        n = 60 if sa > 180 else 30
+        for _ in range(n):
+            sx = rng.randint(0, w - 1)
+            sy = rng.randint(0, star_band)
+            sz = rng.choice((1, 1, 1, 2))
+            col = (255, 255, 255, sa)
+            pygame.draw.circle(surf, col, (sx, sy), sz)
+        # Add a handful of warm-tinted brighter stars
+        for _ in range(6):
+            sx = rng.randint(0, w - 1)
+            sy = rng.randint(0, star_band)
+            col = (255, 240, 200, min(255, sa + 20))
+            pygame.draw.circle(surf, col, (sx, sy), 2)
+
+    _bg_cache[key] = surf
+    return surf
+
+
 def get_pipe_body_gradient(w, h):
     key = ('pipebody', w, h)
     if key not in _bg_cache:
@@ -197,8 +235,9 @@ def blit_glow(surf, cx, cy, radius, color, alpha=160):
 
 # ── mountain drawing ─────────────────────────────────────────────────────────
 
-def draw_mountains(surf, scroll, ground_y, w):
-    # Far range
+def draw_mountains(surf, scroll, ground_y, w, far_color=None, near_color=None):
+    far_color  = far_color  or MTN_FAR
+    near_color = near_color or MTN_NEAR
     pts_far  = [(0, ground_y)]
     pts_near = [(0, ground_y)]
     for x in range(0, w + 1, 2):
@@ -210,8 +249,8 @@ def draw_mountains(surf, scroll, ground_y, w):
         pts_near.append((x, ground_y - hn))
     pts_far.append((w, ground_y))
     pts_near.append((w, ground_y))
-    pygame.draw.polygon(surf, MTN_FAR,  pts_far)
-    pygame.draw.polygon(surf, MTN_NEAR, pts_near)
+    pygame.draw.polygon(surf, far_color,  pts_far)
+    pygame.draw.polygon(surf, near_color, pts_near)
 
 
 # ── cloud drawing ────────────────────────────────────────────────────────────
@@ -235,24 +274,118 @@ def draw_cloud(surf, x, y, scale=1.0):
 
 # ── ground drawing ───────────────────────────────────────────────────────────
 
-def draw_ground(surf, ground_y, w, h, scroll):
+def draw_ground(surf, ground_y, w, h, scroll, top_color=None, mid_color=None, bot_color=None):
+    top_color = top_color or GROUND_TOP
+    mid_color = mid_color or GROUND_MID
+    bot_color = bot_color or GROUND_BOT
+
     # Grass strip
     grass_h = 22
     for i in range(grass_h):
         t = i / (grass_h - 1)
-        c = lerp_color(GROUND_TOP, GROUND_MID, t)
+        c = lerp_color(top_color, mid_color, t)
         pygame.draw.line(surf, c, (0, ground_y + i), (w - 1, ground_y + i))
 
     # Dirt below
     for i in range(h - ground_y - grass_h):
         t = i / max(1, h - ground_y - grass_h - 1)
-        c = lerp_color(GROUND_MID, GROUND_BOT, t)
+        c = lerp_color(mid_color, bot_color, t)
         pygame.draw.line(surf, c, (0, ground_y + grass_h + i), (w - 1, ground_y + grass_h + i))
 
-    # Grass blade highlights
+    # Grass blade highlights (brighter tint of top color)
+    blade_col = (
+        min(255, top_color[0] + 40),
+        min(255, top_color[1] + 40),
+        min(255, top_color[2] + 40),
+    )
+    edge_col = (
+        min(255, top_color[0] + 60),
+        min(255, top_color[1] + 60),
+        min(255, top_color[2] + 60),
+    )
     off = int(scroll * 0.7) % 30
     for gx in range(-off, w, 30):
-        pygame.draw.line(surf, (100, 240, 100), (gx, ground_y), (gx - 4, ground_y - 8), 2)
-        pygame.draw.line(surf, (100, 240, 100), (gx+12, ground_y), (gx+8, ground_y - 6), 2)
-    # Ground edge highlight
-    pygame.draw.line(surf, (140, 255, 140), (0, ground_y), (w-1, ground_y), 2)
+        pygame.draw.line(surf, blade_col, (gx, ground_y), (gx - 4, ground_y - 8), 2)
+        pygame.draw.line(surf, blade_col, (gx + 12, ground_y), (gx + 8, ground_y - 6), 2)
+    pygame.draw.line(surf, edge_col, (0, ground_y), (w - 1, ground_y), 2)
+
+
+# ── nature-pillar pipe drawing ───────────────────────────────────────────────
+
+def _make_pillar_body(w, h, light, mid, dark):
+    """Vertical gradient pillar (trunk-like) with two vertical grain lines."""
+    surf = pygame.Surface((w, h), pygame.SRCALPHA)
+    # Horizontal gradient across the width (cylinder shading)
+    for x in range(w):
+        t = abs(x - w / 2) / (w / 2)
+        # Use smoothstep
+        t = t * t * (3 - 2 * t)
+        if x < w / 2:
+            c = lerp_color(light, mid, t)
+        else:
+            c = lerp_color(mid, dark, t)
+        pygame.draw.line(surf, c, (x, 0), (x, h - 1))
+    # Vertical grain lines
+    grain = (
+        max(0, dark[0] - 10),
+        max(0, dark[1] - 10),
+        max(0, dark[2] - 10),
+    )
+    pygame.draw.line(surf, grain, (int(w * 0.35), 0), (int(w * 0.35), h - 1), 1)
+    pygame.draw.line(surf, grain, (int(w * 0.70), 0), (int(w * 0.70), h - 1), 1)
+    return surf
+
+
+_pillar_body_cache: dict = {}
+
+
+def get_pillar_body(w, h, light, mid, dark):
+    key = (w, h, light, mid, dark)
+    s = _pillar_body_cache.get(key)
+    if s is None:
+        s = _make_pillar_body(w, h, light, mid, dark)
+        _pillar_body_cache[key] = s
+    return s
+
+
+def draw_pillar_bands(surf, rect, band_color, light_color, spacing=42):
+    """Paint horizontal carved bands with a glowing accent stripe."""
+    x, y, w, h = rect
+    # darken helper
+    dark = (max(0, band_color[0] - 60), max(0, band_color[1] - 60), max(0, band_color[2] - 60))
+    first = y + (spacing - (y % spacing))
+    for by in range(first, y + h, spacing):
+        if by - y < 6 or (y + h) - by < 6:
+            continue
+        # shadow line above
+        pygame.draw.line(surf, dark, (x + 1, by - 2), (x + w - 2, by - 2), 1)
+        # bright band
+        band = pygame.Surface((w - 2, 3), pygame.SRCALPHA)
+        band.fill((*band_color, 220))
+        surf.blit(band, (x + 1, by))
+        # gem glow dot centred on the band
+        gem_cx = x + w // 2
+        blit_glow(surf, gem_cx, by + 1, 8, light_color, 180)
+
+
+def draw_pillar_leaves(surf, cx, y, leaf_color, width, direction='down'):
+    """Stylised fern tufts at the top or bottom cap edges.
+    direction='down' draws leaves drooping below the cap; 'up' draws them
+    rising up from a bottom cap."""
+    sign = 1 if direction == 'down' else -1
+    shade = (
+        max(0, leaf_color[0] - 40),
+        max(0, leaf_color[1] - 40),
+        max(0, leaf_color[2] - 40),
+    )
+    for dx, dy, rx, ry in ((-width // 2 + 4, 0, 8, 14),
+                           (width // 2 - 4, 0, 8, 14),
+                           (-width // 3, 4, 6, 10),
+                           (width // 3,  4, 6, 10)):
+        ex = cx + dx
+        ey = y + dy * sign
+        rect = pygame.Rect(int(ex - rx), int(ey - ry if sign > 0 else ey), int(rx * 2), int(ry))
+        if sign < 0:
+            rect = pygame.Rect(int(ex - rx), int(ey), int(rx * 2), int(ry))
+        pygame.draw.ellipse(surf, shade, rect.inflate(2, 2))
+        pygame.draw.ellipse(surf, leaf_color, rect)

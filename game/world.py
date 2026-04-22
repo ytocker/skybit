@@ -23,6 +23,7 @@ from game.draw import (
     PARTICLE_GOLD, PARTICLE_ORNG, PARTICLE_WHT, PARTICLE_CRIM,
     UI_GOLD, UI_ORANGE, UI_CREAM, WHITE, BIRD_RED,
 )
+from game import biome
 
 
 def _lerp(a, b, t):
@@ -63,6 +64,16 @@ class World:
 
     def _diff_t(self):
         return max(0.0, min(1.0, self.score / 40.0))
+
+    # ── biome ────────────────────────────────────────────────────────────────
+
+    @property
+    def biome_phase(self):
+        return biome.phase_for_score(self.score)
+
+    @property
+    def biome_palette(self):
+        return biome.palette_for_phase(self.biome_phase)
 
     def _current_gap(self):
         return int(_lerp(GAP_START, GAP_MIN, self._diff_t()))
