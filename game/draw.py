@@ -310,82 +310,166 @@ def draw_ground(surf, ground_y, w, h, scroll, top_color=None, mid_color=None, bo
     pygame.draw.line(surf, edge_col, (0, ground_y), (w - 1, ground_y), 2)
 
 
-# ── nature-pillar pipe drawing ───────────────────────────────────────────────
+# ── Zhangjiajie-style stone pillar drawing ──────────────────────────────────
 
-def _make_pillar_body(w, h, light, mid, dark):
-    """Vertical gradient pillar (trunk-like) with two vertical grain lines."""
+def _shade(c, d):
+    return (max(0, min(255, c[0] + d)),
+            max(0, min(255, c[1] + d)),
+            max(0, min(255, c[2] + d)))
+
+
+def _make_stone_pillar_body(w, h, light, mid, dark, accent):
+    """Zhangjiajie quartzite column: vertical striations + erosion fissures,
+    warm sunlit side → cool shadow side, no mid-column banding. The surface
+    tapers slightly at the top but we leave that to the caller's rect."""
     surf = pygame.Surface((w, h), pygame.SRCALPHA)
-    # Horizontal gradient across the width (cylinder shading)
+
+    # Horizontal cylinder shading (sunlit left → shadow right).
     for x in range(w):
-        t = abs(x - w / 2) / (w / 2)
-        # Use smoothstep
-        t = t * t * (3 - 2 * t)
-        if x < w / 2:
-            c = lerp_color(light, mid, t)
+        t = x / max(1, w - 1)
+        if t < 0.18:
+            c = lerp_color(mid, light, (0.18 - t) / 0.18)
+        elif t < 0.55:
+            seg = (t - 0.18) / 0.37
+            c = lerp_color(light, mid, seg * seg * (3 - 2 * seg))
         else:
-            c = lerp_color(mid, dark, t)
+            seg = (t - 0.55) / 0.45
+            c = lerp_color(mid, dark, seg * seg * (3 - 2 * seg))
         pygame.draw.line(surf, c, (x, 0), (x, h - 1))
-    # Vertical grain lines
-    grain = (
-        max(0, dark[0] - 10),
-        max(0, dark[1] - 10),
-        max(0, dark[2] - 10),
-    )
-    pygame.draw.line(surf, grain, (int(w * 0.35), 0), (int(w * 0.35), h - 1), 1)
-    pygame.draw.line(surf, grain, (int(w * 0.70), 0), (int(w * 0.70), h - 1), 1)
+
+    # Warm accent highlight stripe along the sunlit side (subtle).
+    accent_surf = pygame.Surface((3, h), pygame.SRCALPHA)
+    accent_surf.fill((*accent, 90))
+    surf.blit(accent_surf, (int(w * 0.14), 0))
+
+    # Vertical erosion striations — long thin grooves.
+    import random as _r
+    rng = _r.Random(w * 7919 + h)
+    for _ in range(4):
+        gx = rng.randint(3, w - 4)
+        col = _shade(dark, -10)
+        pygame.draw.line(surf, col, (gx, 0), (gx, h - 1), 1)
+    # Occasional horizontal crack for erosion realism.
+    crack_step = 80
+    ystart = rng.randint(10, crack_step)
+    for cy in range(ystart, h - 10, crack_step):
+        jitter = rng.randint(-3, 3)
+        col = _shade(dark, -20)
+        pygame.draw.line(surf, col, (2, cy + jitter), (w - 3, cy + jitter + rng.randint(-1, 1)), 1)
+        # Tiny bright pebble flecks just below the crack
+        pygame.draw.line(surf, light, (rng.randint(4, w - 5), cy + jitter + 1),
+                         (rng.randint(4, w - 5), cy + jitter + 2), 1)
+
     return surf
 
 
 _pillar_body_cache: dict = {}
 
 
-def get_pillar_body(w, h, light, mid, dark):
-    key = (w, h, light, mid, dark)
+def get_stone_pillar_body(w, h, light, mid, dark, accent):
+    # Quantize very-tall heights so we don't re-cache tiny differences.
+    qh = ((h + 7) // 8) * 8
+    key = (w, qh, light, mid, dark, accent)
     s = _pillar_body_cache.get(key)
-    if s is None:
-        s = _make_pillar_body(w, h, light, mid, dark)
+    if s is None or s.get_height() < h:
+        s = _make_stone_pillar_body(w, max(qh, h), light, mid, dark, accent)
         _pillar_body_cache[key] = s
-    return s
+    return s.subsurface((0, 0, w, h))
 
 
-def draw_pillar_bands(surf, rect, band_color, light_color, spacing=42):
-    """Paint horizontal carved bands with a glowing accent stripe."""
-    x, y, w, h = rect
-    # darken helper
-    dark = (max(0, band_color[0] - 60), max(0, band_color[1] - 60), max(0, band_color[2] - 60))
-    first = y + (spacing - (y % spacing))
-    for by in range(first, y + h, spacing):
-        if by - y < 6 or (y + h) - by < 6:
-            continue
-        # shadow line above
-        pygame.draw.line(surf, dark, (x + 1, by - 2), (x + w - 2, by - 2), 1)
-        # bright band
-        band = pygame.Surface((w - 2, 3), pygame.SRCALPHA)
-        band.fill((*band_color, 220))
-        surf.blit(band, (x + 1, by))
-        # gem glow dot centred on the band
-        gem_cx = x + w // 2
-        blit_glow(surf, gem_cx, by + 1, 8, light_color, 180)
+def _draw_tree_silhouette(surf, cx, base_y, palette, size, direction='up'):
+    """A stylised tree / shrub silhouette. direction='up' grows upward from
+    base_y; 'down' grows downward (used on the hanging top pillar)."""
+    top = palette['foliage_top']
+    mid = palette['foliage_mid']
+    dark = palette['foliage_dark']
+    accent = palette['foliage_accent']
+
+    sign = -1 if direction == 'up' else 1
+
+    # Trunk
+    trunk_h = int(size * 0.45)
+    trunk = pygame.Rect(int(cx - 1), int(base_y if sign < 0 else base_y),
+                        3, trunk_h)
+    if sign < 0:
+        trunk = pygame.Rect(int(cx - 1), int(base_y - trunk_h), 3, trunk_h)
+    pygame.draw.rect(surf, (70, 50, 35), trunk)
+
+    # Foliage cluster: three overlapping ellipses
+    cluster_y = base_y - int(size * 0.55) * (1 if sign < 0 else 0)
+    if sign > 0:
+        cluster_y = base_y + int(size * 0.3)
+    ellipses = [
+        (cx - int(size * 0.35), cluster_y - int(size * 0.10), int(size * 0.55), int(size * 0.45)),
+        (cx + int(size * 0.20), cluster_y - int(size * 0.25), int(size * 0.50), int(size * 0.40)),
+        (cx + int(size * 0.05), cluster_y + int(size * 0.05), int(size * 0.60), int(size * 0.45)),
+    ]
+    # Dark base layer
+    for ex, ey, rw, rh in ellipses:
+        pygame.draw.ellipse(surf, dark, (ex - rw // 2, ey - rh // 2, rw, rh))
+    # Mid layer (slightly inset)
+    for ex, ey, rw, rh in ellipses:
+        pygame.draw.ellipse(surf, mid, (ex - rw // 2 + 2, ey - rh // 2 + 1, rw - 4, rh - 2))
+    # Bright top layer (sunlit)
+    for ex, ey, rw, rh in ellipses:
+        pygame.draw.ellipse(surf, top, (ex - rw // 2 + 4, ey - rh // 2 - 2, rw - 10, max(3, rh - 8)))
+    # Accent specks (flowers / berries)
+    for ex, ey, rw, rh in ellipses:
+        pygame.draw.circle(surf, accent, (ex + rw // 4, ey - rh // 3), 2)
 
 
-def draw_pillar_leaves(surf, cx, y, leaf_color, width, direction='down'):
-    """Stylised fern tufts at the top or bottom cap edges.
-    direction='down' draws leaves drooping below the cap; 'up' draws them
-    rising up from a bottom cap."""
-    sign = 1 if direction == 'down' else -1
-    shade = (
-        max(0, leaf_color[0] - 40),
-        max(0, leaf_color[1] - 40),
-        max(0, leaf_color[2] - 40),
-    )
-    for dx, dy, rx, ry in ((-width // 2 + 4, 0, 8, 14),
-                           (width // 2 - 4, 0, 8, 14),
-                           (-width // 3, 4, 6, 10),
-                           (width // 3,  4, 6, 10)):
-        ex = cx + dx
-        ey = y + dy * sign
-        rect = pygame.Rect(int(ex - rx), int(ey - ry if sign > 0 else ey), int(rx * 2), int(ry))
-        if sign < 0:
-            rect = pygame.Rect(int(ex - rx), int(ey), int(rx * 2), int(ry))
-        pygame.draw.ellipse(surf, shade, rect.inflate(2, 2))
-        pygame.draw.ellipse(surf, leaf_color, rect)
+def draw_foliage_crown(surf, cx, cy, width, palette, direction='up'):
+    """Lush vegetation crown on the gap-facing end of a stone pillar.
+    direction='up' → foliage grows upward (bottom pillar's top).
+    direction='down' → foliage hangs down (top pillar's bottom)."""
+
+    # Rocky summit strip just before the foliage
+    plate_col = palette['stone_light']
+    plate = pygame.Rect(int(cx - width // 2 - 4), int(cy - 4 if direction == 'up' else cy),
+                        width + 8, 6)
+    pygame.draw.rect(surf, plate_col, plate, border_radius=3)
+    pygame.draw.line(surf, palette['stone_dark'],
+                     (plate.x, plate.y + plate.height - 1),
+                     (plate.right, plate.y + plate.height - 1), 1)
+
+    if direction == 'up':
+        # Three trees / shrubs of varying size, rooted on the plate
+        base_y = plate.y
+        _draw_tree_silhouette(surf, cx - width // 3, base_y, palette, size=36, direction='up')
+        _draw_tree_silhouette(surf, cx + width // 4, base_y, palette, size=30, direction='up')
+        _draw_tree_silhouette(surf, cx,              base_y, palette, size=42, direction='up')
+        # Low shrubs along the plate edge
+        for dx in (-width // 2 + 6, width // 2 - 6):
+            pygame.draw.ellipse(surf, palette['foliage_dark'],
+                                (cx + dx - 8, base_y - 6, 16, 10))
+            pygame.draw.ellipse(surf, palette['foliage_mid'],
+                                (cx + dx - 6, base_y - 7, 12, 8))
+    else:
+        # Hanging vines / moss clumps from the bottom end
+        base_y = plate.y + plate.height
+        # Three cascading moss clumps with vines underneath
+        clumps = [
+            (cx - width // 3, 28, 14),
+            (cx + width // 4, 34, 16),
+            (cx,              40, 18),
+            (cx - width // 6, 22, 12),
+            (cx + width // 6 + 4, 26, 12),
+        ]
+        for mx, mh, mw in clumps:
+            # Vine strand
+            for i in range(mh):
+                yy = base_y + i
+                jitter = int(math.sin(i * 0.4 + mx * 0.1) * 1.5)
+                col = lerp_color(palette['foliage_dark'], palette['foliage_mid'], i / max(1, mh))
+                pygame.draw.line(surf, col, (mx + jitter, yy), (mx + jitter, yy + 1), 1)
+            # Bulb at the tip
+            tip_y = base_y + mh
+            pygame.draw.ellipse(surf, palette['foliage_dark'],
+                                (mx - mw // 2, tip_y - mw // 2, mw, mw))
+            pygame.draw.ellipse(surf, palette['foliage_mid'],
+                                (mx - mw // 2 + 2, tip_y - mw // 2, mw - 4, mw - 2))
+            pygame.draw.ellipse(surf, palette['foliage_top'],
+                                (mx - mw // 2 + 3, tip_y - mw // 2, mw - 7, max(2, mw - 8)))
+            # Accent flower/berry
+            pygame.draw.circle(surf, palette['foliage_accent'],
+                               (mx + 2, tip_y - mw // 3), 2)

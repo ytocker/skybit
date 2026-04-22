@@ -54,6 +54,9 @@ class World:
         self.shake_mag = 0.0
         self.shake_t = 0.0
 
+        # Real elapsed gameplay seconds — drives the day/night biome cycle.
+        self.biome_time = 0.0
+
         self.game_over = False
         self.time_scale = 1.0    # supports mushroom-pickup slow-mo
         self.time_scale_t = 0.0
@@ -69,7 +72,7 @@ class World:
 
     @property
     def biome_phase(self):
-        return biome.phase_for_score(self.score)
+        return biome.phase_for_time(self.biome_time)
 
     @property
     def biome_palette(self):
@@ -145,6 +148,9 @@ class World:
     # ── update ──────────────────────────────────────────────────────────────
 
     def update(self, dt):
+        # Advance the biome cycle with real time, not slow-mo time.
+        self.biome_time += dt
+
         if self.time_scale_t > 0:
             self.time_scale_t -= dt
             self.time_scale = 0.35 if self.time_scale_t > 0 else 1.0
@@ -218,6 +224,7 @@ class World:
     def world_idle_tick(self, dt):
         """Run the background without handling bird death/pipe spawning
         logic — used by the Menu scene to keep visuals alive."""
+        self.biome_time += dt
         self.bg_scroll += SCROLL_BASE * 0.5 * dt
         for p in self.pipes:
             p.x -= SCROLL_BASE * 0.25 * dt

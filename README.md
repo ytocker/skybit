@@ -101,14 +101,14 @@ Cracking the **top 10** pops up an arcade-style name-entry screen after Game Ove
 
 ### Evolving scenery
 
-The sky and the nature pillars follow a continuous **day → golden hour → sunset → dusk → starry night → predawn → sunrise → day** cycle. One full cycle every ~30 points, interpolated smoothly — every run looks different depending on how far you get.
+The sky and the **Zhangjiajie-style stone pillars** follow a continuous **day → golden hour → sunset → dusk → starry night → predawn → sunrise → day** cycle. One full cycle every **5 minutes of gameplay** (real time, independent of score), interpolated smoothly — long runs cover the whole arc.
 
-| Phase       | Sky tone                | Pillar tint          |
-|-------------|-------------------------|----------------------|
-| Day         | Bright cyan             | Lush green with gold bands |
-| Sunset      | Pink-orange horizon     | Warm coral pillars, cream bands |
-| Night       | Navy + scattered stars  | Cool cyan-silver with glowing gems |
-| Sunrise     | Peach + pink bloom      | Blush-pink with amber leaves |
+| Phase       | Sky tone                | Pillar + canopy                       |
+|-------------|-------------------------|---------------------------------------|
+| Day         | Bright cyan             | Warm tan sandstone, lush green trees  |
+| Sunset      | Pink-orange horizon     | Rose-stone pillars, autumn canopy     |
+| Night       | Navy + scattered stars  | Moonlit blue-grey stone, dark teal moss |
+| Sunrise     | Peach + pink bloom      | Peach stone, fresh-green canopy       |
 
 ---
 

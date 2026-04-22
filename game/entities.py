@@ -2,9 +2,9 @@
 Game entities: Bird, Pipe, Coin, Mushroom, Particle, FloatText.
 All drawing is smooth (gradients, alpha, glows) — no pixel art.
 
-Pipes are nature-pillar style and re-tint with the active biome palette.
-Coins have a bold embossed star for clarity. The mushroom uses a pulsing
-magenta halo and a much higher-contrast cap.
+Pipes are Zhangjiajie-style sandstone pillars topped with living vegetation,
+re-tinted by the active biome palette. Coins are slow-rotating metallic gold
+discs with embossed detail.
 """
 import math
 import random
@@ -15,24 +15,26 @@ from game.config import (
     BIRD_X, BIRD_R, PIPE_W, COIN_R, MUSHROOM_R, GROUND_Y,
 )
 from game.draw import (
-    blit_glow, get_pillar_body, draw_pillar_bands, draw_pillar_leaves,
+    blit_glow, get_stone_pillar_body, draw_foliage_crown,
     rounded_rect, lerp_color,
     COIN_GOLD, COIN_LIGHT, COIN_DARK,
     MUSH_CAP, MUSH_CAP2, MUSH_SPOT, MUSH_STEM,
-    PIPE_HILIGHT, PIPE_MID, PIPE_DARK, PIPE_SHADOW,
     PARTICLE_GOLD, PARTICLE_ORNG, PARTICLE_WHT, PARTICLE_CRIM,
     WHITE, NEAR_BLACK,
 )
 from game import parrot
 
 
-# Default pillar palette (fallback when no biome provided)
+# Default pillar palette (fallback when no biome provided).
 _DEFAULT_PILLAR = {
-    'pillar_light': PIPE_HILIGHT,
-    'pillar_mid':   PIPE_MID,
-    'pillar_dark':  PIPE_DARK,
-    'pillar_band':  (255, 240, 160),
-    'pillar_leaf':  (90, 200, 100),
+    'stone_light':     (225, 195, 155),
+    'stone_mid':       (175, 140, 105),
+    'stone_dark':      (95, 70, 55),
+    'stone_accent':    (255, 220, 170),
+    'foliage_top':     (140, 220, 110),
+    'foliage_mid':     (70, 170, 75),
+    'foliage_dark':    (30, 100, 50),
+    'foliage_accent':  (255, 240, 120),
 }
 
 
@@ -92,8 +94,6 @@ class Bird:
 # ── Pipe (nature pillar) ─────────────────────────────────────────────────────
 
 class Pipe:
-    CAP_H = 22
-
     def __init__(self, x: float, gap_y: float, gap_h: float):
         self.x = x
         self.gap_y = gap_y
@@ -119,68 +119,24 @@ class Pipe:
     def _draw_segment(self, surf, rect: pygame.Rect, palette):
         if rect.height <= 0:
             return
-        light = palette['pillar_light']
-        mid   = palette['pillar_mid']
-        dark  = palette['pillar_dark']
-        band  = palette['pillar_band']
+        light  = palette['stone_light']
+        mid    = palette['stone_mid']
+        dark   = palette['stone_dark']
+        accent = palette['stone_accent']
 
-        # Soft drop shadow
-        shadow = pygame.Surface((rect.width + 12, rect.height + 8), pygame.SRCALPHA)
-        pygame.draw.rect(shadow, (0, 0, 0, 90), (6, 4, rect.width, rect.height), border_radius=5)
-        surf.blit(shadow, (rect.x - 3, rect.y + 2))
+        # Soft drop shadow (square-cut, matches the column silhouette)
+        shadow = pygame.Surface((rect.width + 14, rect.height + 8), pygame.SRCALPHA)
+        pygame.draw.rect(shadow, (0, 0, 0, 95), (7, 4, rect.width, rect.height))
+        surf.blit(shadow, (rect.x - 4, rect.y + 2))
 
-        # Pillar body (cylinder shading, cached)
-        body = get_pillar_body(rect.width, max(1, rect.height), light, mid, dark)
+        # Sandstone body with vertical erosion striations (cached)
+        body = get_stone_pillar_body(rect.width, max(1, rect.height), light, mid, dark, accent)
         surf.blit(body, rect.topleft)
 
-        # Glowing horizontal bands with central gem
-        draw_pillar_bands(surf, rect, band, light, spacing=44)
-
-        # Bright left edge and dark right edge for sculpted feel
+        # Reinforce the sunlit and shadowed edges
         pygame.draw.line(surf, light, (rect.x + 1, rect.y), (rect.x + 1, rect.y + rect.height), 1)
         pygame.draw.line(surf, dark,  (rect.x + rect.width - 2, rect.y),
                          (rect.x + rect.width - 2, rect.y + rect.height), 1)
-
-    def _draw_cap(self, surf, cy_top, palette, direction='down'):
-        """Draw the ornate crown cap. direction='down' → cap on a top pillar
-        (leaves droop downward into the gap). 'up' → cap on bottom pillar."""
-        light = palette['pillar_light']
-        mid   = palette['pillar_mid']
-        dark  = palette['pillar_dark']
-        band  = palette['pillar_band']
-        leaf  = palette['pillar_leaf']
-
-        cap_w = PIPE_W + 14
-        cap_x = int(self.x - 7)
-        cap_rect = pygame.Rect(cap_x, int(cy_top), cap_w, self.CAP_H)
-
-        # Shadow
-        shadow = pygame.Surface((cap_rect.width + 12, cap_rect.height + 8), pygame.SRCALPHA)
-        pygame.draw.rect(shadow, (0, 0, 0, 100), (6, 4, cap_rect.width, cap_rect.height), border_radius=7)
-        surf.blit(shadow, (cap_rect.x - 3, cap_rect.y + 2))
-
-        # Body
-        cap = get_pillar_body(cap_rect.width, cap_rect.height, light, mid, dark).copy()
-        mask = pygame.Surface(cap.get_size(), pygame.SRCALPHA)
-        pygame.draw.rect(mask, (255, 255, 255, 255), mask.get_rect(), border_radius=7)
-        cap.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
-        surf.blit(cap, cap_rect.topleft)
-
-        # Bright top highlight strip
-        hi = pygame.Surface((cap_rect.width - 8, 3), pygame.SRCALPHA)
-        hi.fill((*light, 220))
-        surf.blit(hi, (cap_rect.x + 4, cap_rect.y + 3))
-
-        # Central gem stamp on the cap
-        cx = cap_rect.x + cap_rect.width // 2
-        cy = cap_rect.y + cap_rect.height // 2
-        pygame.draw.circle(surf, dark, (cx, cy), 4)
-        pygame.draw.circle(surf, band, (cx, cy), 3)
-        blit_glow(surf, cx, cy, 10, band, 180)
-
-        # Leaves / fern tufts along the edge facing the gap
-        leaf_y = cap_rect.y + cap_rect.height if direction == 'down' else cap_rect.y
-        draw_pillar_leaves(surf, cx, leaf_y, leaf, cap_rect.width, direction=direction)
 
     def draw(self, surf, palette=None):
         palette = palette or _DEFAULT_PILLAR
@@ -188,8 +144,12 @@ class Pipe:
         br = self.bot_rect
         self._draw_segment(surf, tr, palette)
         self._draw_segment(surf, br, palette)
-        self._draw_cap(surf, tr.bottom - self.CAP_H, palette, direction='down')
-        self._draw_cap(surf, br.top,                 palette, direction='up')
+        # Vegetation grows from the gap-facing end of each pillar.
+        cx = int(self.x + PIPE_W // 2)
+        # Top (hanging) pillar: moss/vines hanging down from its bottom.
+        draw_foliage_crown(surf, cx, tr.bottom, PIPE_W + 14, palette, direction='down')
+        # Bottom pillar: trees and shrubs growing up from its top.
+        draw_foliage_crown(surf, cx, br.top,    PIPE_W + 14, palette, direction='up')
 
 
 # ── Coin ─────────────────────────────────────────────────────────────────────
@@ -221,51 +181,95 @@ def _get_star(r, color):
 
 
 class Coin:
+    """Slow-rotating metallic gold disc.
+
+    The coin is drawn as a full circle (its "face") for most of its rotation,
+    and only briefly narrows to an edge-on sliver — so the collectable always
+    reads as a coin. COIN_R governs both the face radius and the collision
+    radius so what you see is what you collect.
+    """
+
+    # ≈ 5.7 seconds per full rotation.
+    SPIN_RATE = 1.1
+
     def __init__(self, x, y):
         self.x = x
         self.y = y
         self.spin = random.uniform(0, math.tau)
         self.collected = False
         self.float_t = random.uniform(0, math.tau)
+        # Independent sweep phase for the animated rim glint
+        self.shimmer_t = random.uniform(0, math.tau)
 
     def update(self, dt):
-        self.spin = (self.spin + dt * 4.0) % math.tau
+        self.spin = (self.spin + dt * self.SPIN_RATE) % math.tau
         self.float_t += dt
+        self.shimmer_t += dt
 
     def draw(self, surf):
         cx = int(self.x)
         cy = int(self.y + math.sin(self.float_t * 2.2) * 2)
-        # Outer glow
-        blit_glow(surf, cx, cy, COIN_R + 12, COIN_GOLD, 170)
-        blit_glow(surf, cx, cy, COIN_R + 6,  COIN_LIGHT, 130)
 
-        rx = max(2, int(abs(math.cos(self.spin)) * COIN_R))
+        # Pulsing outer + inner glow for collect appeal
+        pulse = 0.5 + 0.5 * math.sin(self.shimmer_t * 3.0)
+        blit_glow(surf, cx, cy, COIN_R + 14, COIN_GOLD, int(150 + 50 * pulse))
+        blit_glow(surf, cx, cy, COIN_R + 4,  COIN_LIGHT, int(110 + 30 * pulse))
+
+        cos_s = math.cos(self.spin)
+        rx = cos_s * COIN_R
         ry = COIN_R
 
-        # Outline ring (dark, high contrast)
-        pygame.draw.ellipse(surf, NEAR_BLACK, (cx - rx - 2, cy - ry - 2, (rx + 2) * 2, (ry + 2) * 2))
-        # Dark edge
-        pygame.draw.ellipse(surf, COIN_DARK, (cx - rx - 1, cy - ry - 1, (rx + 1) * 2, (ry + 1) * 2))
-        # Gold face
-        pygame.draw.ellipse(surf, COIN_GOLD, (cx - rx, cy - ry, rx * 2, ry * 2))
-        # Bright upper-left arc highlight
-        pygame.draw.ellipse(surf, COIN_LIGHT, (cx - rx + 1, cy - ry + 2, max(2, rx - 1), max(2, ry - 4)))
+        if abs(cos_s) > 0.35:
+            # ── Face-on: draw the full metallic disc ────────────────────────
+            rx_i = max(2, int(abs(rx)))
+            # Outer black outline ring for crispness
+            pygame.draw.ellipse(surf, NEAR_BLACK, (cx - rx_i - 2, cy - ry - 2,
+                                                   (rx_i + 2) * 2, (ry + 2) * 2))
+            # Thick metallic rim: bright gold upper-left, dark gold lower-right.
+            pygame.draw.ellipse(surf, COIN_LIGHT, (cx - rx_i - 1, cy - ry - 1,
+                                                   (rx_i + 1) * 2, (ry + 1) * 2))
+            # Mask the bottom-right of the rim to COIN_DARK for depth.
+            pygame.draw.ellipse(surf, COIN_DARK, (cx - rx_i, cy - ry + 1,
+                                                  rx_i * 2, ry * 2 - 1))
+            # Main gold face
+            pygame.draw.ellipse(surf, COIN_GOLD, (cx - rx_i + 1, cy - ry + 1,
+                                                   (rx_i - 1) * 2, (ry - 1) * 2))
+            # Top-left radial highlight
+            hi_rx = max(2, int(rx_i * 0.65))
+            hi_ry = max(2, int(ry * 0.55))
+            pygame.draw.ellipse(surf, COIN_LIGHT, (cx - rx_i + 2, cy - ry + 2,
+                                                    hi_rx, hi_ry))
 
-        # Embossed star when mostly face-on; side view shows a dark band
-        if rx > COIN_R * 0.55:
-            star_r = max(3, int(rx * 0.55))
-            # shadow
-            sh = _get_star(star_r, (*COIN_DARK, 255))
-            surf.blit(sh, (cx - star_r, cy - star_r + 1))
-            # bright face
-            fg = _get_star(star_r - 1, (*COIN_LIGHT, 255))
-            surf.blit(fg, (cx - (star_r - 1), cy - (star_r - 1)))
+            # Embossed 5-point star stamp
+            star_r = max(3, int(ry * 0.55))
+            shadow = _get_star(star_r, (*COIN_DARK, 255))
+            face   = _get_star(star_r - 1, (*COIN_LIGHT, 255))
+            surf.blit(shadow, (cx - star_r + 1, cy - star_r + 1))
+            surf.blit(face,   (cx - (star_r - 1), cy - (star_r - 1)))
+
+            # Animated rim glint: a short bright arc that sweeps around the coin
+            ang = self.shimmer_t * 1.3
+            gx = cx + int(math.cos(ang) * (rx_i - 2))
+            gy = cy + int(math.sin(ang) * (ry - 2))
+            pygame.draw.circle(surf, WHITE, (gx, gy), 2)
+            pygame.draw.circle(surf, (255, 255, 255, 180), (gx, gy), 1)
         else:
-            # Side-on: single dark stripe
-            pygame.draw.line(surf, COIN_DARK, (cx - rx + 1, cy), (cx + rx - 1, cy), 2)
-
-        # Pinprick white glint
-        pygame.draw.circle(surf, WHITE, (cx - max(1, rx - 3), cy - ry + 3), 1)
+            # ── Near edge-on: a slim gold bar (the coin's thickness) ────────
+            rx_i = max(2, int(abs(rx)))
+            # Dark outline
+            pygame.draw.ellipse(surf, NEAR_BLACK, (cx - rx_i - 1, cy - ry,
+                                                   (rx_i + 1) * 2, ry * 2))
+            # Gold core
+            pygame.draw.ellipse(surf, COIN_GOLD, (cx - rx_i, cy - ry,
+                                                  rx_i * 2, ry * 2))
+            # Thin bright highlight stripe down the middle
+            pygame.draw.line(surf, COIN_LIGHT,
+                             (cx, cy - ry + 2), (cx, cy + ry - 2), 1)
+            # Darker top/bottom caps suggesting the coin's edge curvature
+            pygame.draw.line(surf, COIN_DARK,
+                             (cx - rx_i, cy - ry + 1), (cx + rx_i, cy - ry + 1), 1)
+            pygame.draw.line(surf, COIN_DARK,
+                             (cx - rx_i, cy + ry - 1), (cx + rx_i, cy + ry - 1), 1)
 
 
 # ── Mushroom ─────────────────────────────────────────────────────────────────

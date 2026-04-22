@@ -110,15 +110,19 @@ def _biome_scene(app, target_score, y_bird=300):
 
 def snap_sunset():
     random.seed(11)
+    from game.biome import CYCLE_SECONDS
     app = App()
-    _biome_scene(app, target_score=10)   # ~phase 0.37 (sunset)
+    _biome_scene(app, target_score=0)
+    app.world.biome_time = CYCLE_SECONDS * 0.28   # → phase ≈ 0.32 sunset
     _render_to_png(app, "sunset.png")
 
 
 def snap_night():
     random.seed(17)
+    from game.biome import CYCLE_SECONDS
     app = App()
-    _biome_scene(app, target_score=18)   # ~phase 0.64 (night)
+    _biome_scene(app, target_score=0)
+    app.world.biome_time = CYCLE_SECONDS * 0.58   # → phase ≈ 0.62 night
     _render_to_png(app, "night.png")
 
 
