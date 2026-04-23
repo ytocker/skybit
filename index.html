@@ -297,32 +297,70 @@ html, body {
   overflow: hidden !important;
   background: #000 !important;
 }
-canvas#canvas {
-  position: fixed !important;
-  left: 50% !important;
-  top: 50% !important;
-  transform: translate(-50%, -50%) !important;
-  width: min(100vw, calc(100vh * 9 / 16)) !important;
-  height: min(100vh, calc(100vw * 16 / 9)) !important;
-  image-rendering: pixelated !important;
-  image-rendering: crisp-edges !important;
-}
 </style>
 <script>
-// Resume SDL's WebAudio context on every click/touch so it is in
-// 'running' state by the time Python's pygame.mixer.init() runs.
-// We keep the listener permanently (not once:true) because SDL may
-// create its AudioContext lazily on first mixer open.
+(function() {
+  'use strict';
+  function computeSize() {
+    var vw = window.innerWidth, vh = window.innerHeight;
+    var s = Math.min(vw / 9, vh / 16);
+    return { w: Math.round(9 * s), h: Math.round(16 * s) };
+  }
+  function applyStyle(c) {
+    if (!c) return;
+    var sz = computeSize();
+    var left = Math.round((window.innerWidth  - sz.w) / 2);
+    var top  = Math.round((window.innerHeight - sz.h) / 2);
+    // Idempotency guard: if our target size is already applied,
+    // skip to avoid infinite MutationObserver loops.
+    if (c.style.width  === sz.w + 'px' &&
+        c.style.height === sz.h + 'px' &&
+        c.style.left   === left + 'px' &&
+        c.style.top    === top  + 'px') return;
+    c.style.setProperty('position',        'fixed',       'important');
+    c.style.setProperty('left',            left + 'px',   'important');
+    c.style.setProperty('top',             top  + 'px',   'important');
+    c.style.setProperty('right',           'auto',        'important');
+    c.style.setProperty('bottom',          'auto',        'important');
+    c.style.setProperty('width',           sz.w + 'px',   'important');
+    c.style.setProperty('height',          sz.h + 'px',   'important');
+    c.style.setProperty('margin',          '0',           'important');
+    c.style.setProperty('transform',       'none',        'important');
+    c.style.setProperty('image-rendering', 'pixelated',   'important');
+    c.style.setProperty('z-index',         '5',           'important');
+  }
+  var canvas = null;
+  var obs = new MutationObserver(function() { applyStyle(canvas); });
+  function bind() {
+    canvas = document.getElementById('canvas');
+    if (!canvas) { setTimeout(bind, 50); return; }
+    applyStyle(canvas);
+    obs.observe(canvas, { attributes: true,
+      attributeFilter: ['style', 'width', 'height'] });
+    window.addEventListener('resize', function() { applyStyle(canvas); });
+    window.addEventListener('orientationchange', function() {
+      setTimeout(function() { applyStyle(canvas); }, 100);
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bind);
+  } else {
+    bind();
+  }
+})();
+
+// Unlock SDL's WebAudio context on first click/touch so that
+// pygame.mixer.init() (called later from Python) finds the
+// AudioContext already 'running'.
 (function() {
   function resumeSDLAudio() {
-    // Emscripten SDL2 stores the context on window.SDL2 or Module.SDL2
     var sdl = window.SDL2 || (window.Module && window.Module.SDL2);
     if (sdl && sdl.audioContext && sdl.audioContext.state !== 'running') {
       sdl.audioContext.resume();
     }
   }
   ['click', 'touchstart', 'keydown'].forEach(function(t) {
-    document.addEventListener(t, resumeSDLAudio, {capture: true, passive: true});
+    document.addEventListener(t, resumeSDLAudio, { capture: true, passive: true });
   });
 })();
 </script>
