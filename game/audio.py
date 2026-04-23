@@ -4,7 +4,8 @@ Procedural audio for Skybit.
 Every sound effect is synthesized on import using Python's stdlib (`wave`,
 `struct`, `io`, `math`) — no external asset files, no numpy. Falls back to
 no-op when `pygame.mixer.init()` can't open an audio device (e.g. headless
-snapshot runs with SDL_AUDIODRIVER=dummy).
+snapshot runs with SDL_AUDIODRIVER=dummy, or the Emscripten/Pyodide browser
+build before the first user gesture).
 
 Call the module-level `play_*` helpers; they guard against a missing mixer.
 """
@@ -12,6 +13,7 @@ import io
 import math
 import os
 import struct
+import sys
 import wave
 
 import pygame
@@ -23,13 +25,19 @@ _mixer_ok = False
 
 
 def _safe_init_mixer() -> bool:
-    """Open the audio device. Swallow failures so headless tests keep running."""
+    """Open the audio device. Swallow *any* failure so headless tests
+    and the browser (Pyodide) keep running. In the browser we also
+    skip the call entirely because pygame.mixer.init can block until
+    the first user gesture, which would freeze the main loop."""
     if os.environ.get("SDL_AUDIODRIVER") == "dummy":
+        return False
+    if sys.platform == "emscripten":
+        # Browser build: mixer must init lazily after a click; skip now.
         return False
     try:
         pygame.mixer.init(frequency=SAMPLE_RATE, size=-16, channels=1, buffer=512)
         return True
-    except pygame.error:
+    except Exception:
         return False
 
 
