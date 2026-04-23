@@ -1,20 +1,18 @@
 """
 Procedural audio for Skybit.
 
-Every sound effect is synthesized on import using Python's stdlib
-(`struct`, `math`) — no external asset files, no numpy. Falls back to
-no-op when `pygame.mixer.init()` can't open an audio device (e.g. headless
-snapshot runs with SDL_AUDIODRIVER=dummy).
+Two backends:
+  * Native (desktop): synthesize WAV bytes with stdlib (`math`, `struct`) and
+    play through `pygame.mixer`. No external asset files, no numpy.
+  * Browser (pygbag / Pyodide / emscripten): route every play_* call through
+    JavaScript's Web Audio API via `platform.window.skyPlay(name, volume)`.
+    pygame.mixer in pygbag is unreliable (pygbag issue #19, discussion #88);
+    the JS helper is defined in web.tmpl and synthesizes the same sounds in
+    the browser on the first user gesture.
 
-Browser (Pyodide/emscripten) note: the Web Audio context requires a user
-gesture before it can open. We skip init at module load and retry lazily
-on the first flap (guaranteed user gesture). `play_flap` calls `lazy_init`
-before playing; all other sounds benefit once the mixer is open.
-
-We emit the 44-byte PCM-WAV header by hand rather than importing `wave`,
-because pygbag's Pyodide build strips the `wave` module from the stdlib.
-
-Call the module-level `play_*` helpers; they guard against a missing mixer.
+Both backends degrade gracefully when the audio device can't be opened
+(headless snapshots, missing JS helper, etc.) — every play_* call is a
+silent no-op in that case.
 """
 import math
 import os
@@ -31,220 +29,197 @@ _BITS_PER_SAMPLE = 8 * _SAMPLE_WIDTH
 _BYTE_RATE = SAMPLE_RATE * _CHANNELS * _SAMPLE_WIDTH
 _BLOCK_ALIGN = _CHANNELS * _SAMPLE_WIDTH
 
-_mixer_ok = False
-_mixer_attempted = False  # True once lazy_init has run (prevents pointless retries)
+_IS_BROWSER = sys.platform == "emscripten"
 
 
-def _open_mixer() -> bool:
-    """Attempt to open the audio device. Returns True on success."""
-    if os.environ.get("SDL_AUDIODRIVER") == "dummy":
-        return False
-    try:
-        pygame.mixer.init(frequency=SAMPLE_RATE, size=-16, channels=1, buffer=512)
-        return True
-    except Exception:
-        return False
+# ── Browser backend (Web Audio via platform.window.skyPlay) ──────────────────
+
+if _IS_BROWSER:
+    # platform is pygbag's bridge to the JS `window` object.
+    import platform as _pgb  # noqa: E402
+
+    def init() -> None:
+        """No-op — JS (web.tmpl) sets up the AudioContext on first user gesture."""
+        return
+
+    def _play(name: str, volume: float) -> None:
+        try:
+            _pgb.window.skyPlay(name, volume)
+        except Exception:
+            # JS helper missing or AudioContext not yet ready — drop silently.
+            pass
+
+    def play_flap() -> None:          _play("flap", 0.55)
+    def play_coin() -> None:          _play("coin", 0.75)
+    def play_coin_combo() -> None:    _play("coin_combo", 0.80)
+    def play_coin_triple() -> None:   _play("coin_triple", 0.85)
+    def play_mushroom() -> None:      _play("mushroom", 0.85)
+    def play_magnet() -> None:        _play("magnet", 0.75)
+    def play_slowmo() -> None:        _play("slowmo", 0.75)
+    def play_thunder() -> None:       _play("thunder", 0.85)
+    def play_death() -> None:         _play("death", 0.75)
+    def play_gameover() -> None:      _play("gameover", 0.70)
 
 
-def _wav_bytes(samples: list[int]) -> bytes:
-    """Pack 16-bit mono PCM samples into an in-memory WAV blob.
-    Header built by hand — `wave` isn't present in pygbag's Pyodide."""
-    data = b"".join(struct.pack("<h", s) for s in samples)
-    data_size = len(data)
-    # RIFF chunk (12) + fmt sub-chunk (24) + data sub-chunk header (8) + data
-    # RIFF "file size" field = total size - 8 = 4 + 24 + 8 + data_size
-    riff_size = 4 + 24 + 8 + data_size
-    return b"".join((
-        b"RIFF",
-        struct.pack("<I", riff_size),
-        b"WAVE",
-        b"fmt ",
-        struct.pack("<I", 16),              # PCM fmt sub-chunk size
-        struct.pack("<H", 1),               # format = PCM
-        struct.pack("<H", _CHANNELS),
-        struct.pack("<I", SAMPLE_RATE),
-        struct.pack("<I", _BYTE_RATE),
-        struct.pack("<H", _BLOCK_ALIGN),
-        struct.pack("<H", _BITS_PER_SAMPLE),
-        b"data",
-        struct.pack("<I", data_size),
-        data,
-    ))
+# ── Native backend (pygame.mixer + synthesized WAV) ──────────────────────────
 
+else:
+    _mixer_ok = False
+    _sounds: "dict[str, pygame.mixer.Sound]" = {}
 
-def _shape(shape: str, phase: float) -> float:
-    """Return a waveform sample in [-1, 1] for a unit-phase cycle."""
-    x = math.sin(2 * math.pi * phase)
-    if shape == "sine":
+    def _open_mixer() -> bool:
+        if os.environ.get("SDL_AUDIODRIVER") == "dummy":
+            return False
+        try:
+            pygame.mixer.init(frequency=SAMPLE_RATE, size=-16, channels=1, buffer=512)
+            return True
+        except Exception:
+            return False
+
+    def _wav_bytes(samples: list[int]) -> bytes:
+        data = b"".join(struct.pack("<h", s) for s in samples)
+        data_size = len(data)
+        riff_size = 4 + 24 + 8 + data_size
+        return b"".join((
+            b"RIFF",
+            struct.pack("<I", riff_size),
+            b"WAVE",
+            b"fmt ",
+            struct.pack("<I", 16),
+            struct.pack("<H", 1),
+            struct.pack("<H", _CHANNELS),
+            struct.pack("<I", SAMPLE_RATE),
+            struct.pack("<I", _BYTE_RATE),
+            struct.pack("<H", _BLOCK_ALIGN),
+            struct.pack("<H", _BITS_PER_SAMPLE),
+            b"data",
+            struct.pack("<I", data_size),
+            data,
+        ))
+
+    def _shape(shape: str, phase: float) -> float:
+        x = math.sin(2 * math.pi * phase)
+        if shape == "sine":
+            return x
+        if shape == "square":
+            return 1.0 if x > 0 else -1.0
+        if shape == "triangle":
+            p = phase - math.floor(phase)
+            return 4 * abs(p - 0.5) - 1
         return x
-    if shape == "square":
-        return 1.0 if x > 0 else -1.0
-    if shape == "triangle":
-        p = phase - math.floor(phase)
-        return 4 * abs(p - 0.5) - 1
-    return x
 
+    def _envelope(i: int, n: int, attack_s: float = 0.008, release_s: float = 0.12) -> float:
+        a = max(1, int(attack_s * SAMPLE_RATE))
+        r = max(1, int(release_s * SAMPLE_RATE))
+        if i < a:
+            return i / a
+        if i > n - r:
+            return max(0.0, (n - i) / r)
+        return 1.0
 
-def _envelope(i: int, n: int, attack_s: float = 0.008, release_s: float = 0.12) -> float:
-    """Linear attack/hold/release envelope."""
-    a = max(1, int(attack_s * SAMPLE_RATE))
-    r = max(1, int(release_s * SAMPLE_RATE))
-    if i < a:
-        return i / a
-    if i > n - r:
-        return max(0.0, (n - i) / r)
-    return 1.0
-
-
-def _synth(duration_s: float, f_start: float, f_end: float,
-           shape: str = "sine", volume: float = 0.35,
-           attack_s: float = 0.008, release_s: float = 0.12) -> bytes:
-    n = int(duration_s * SAMPLE_RATE)
-    samples: list[int] = []
-    phase = 0.0
-    for i in range(n):
-        t = i / n
-        f = f_start + (f_end - f_start) * t
-        phase += f / SAMPLE_RATE
-        env = _envelope(i, n, attack_s, release_s)
-        s = _shape(shape, phase) * env * volume
-        samples.append(max(-32768, min(32767, int(s * 32767))))
-    return _wav_bytes(samples)
-
-
-def _synth_sequence(steps: list[tuple[float, float, float, str, float]]) -> bytes:
-    """Concatenate several tone segments.
-    Each step: (duration_s, f_start, f_end, shape, volume)."""
-    samples: list[int] = []
-    for dur, f0, f1, shape, vol in steps:
-        n = int(dur * SAMPLE_RATE)
+    def _synth(duration_s: float, f_start: float, f_end: float,
+               shape: str = "sine", volume: float = 0.35,
+               attack_s: float = 0.008, release_s: float = 0.12) -> bytes:
+        n = int(duration_s * SAMPLE_RATE)
+        samples: list[int] = []
         phase = 0.0
         for i in range(n):
-            t = i / max(1, n)
-            f = f0 + (f1 - f0) * t
+            t = i / n
+            f = f_start + (f_end - f_start) * t
             phase += f / SAMPLE_RATE
-            env = _envelope(i, n, 0.01, 0.08)
-            s = _shape(shape, phase) * env * vol
+            env = _envelope(i, n, attack_s, release_s)
+            s = _shape(shape, phase) * env * volume
             samples.append(max(-32768, min(32767, int(s * 32767))))
-    return _wav_bytes(samples)
+        return _wav_bytes(samples)
 
+    def _synth_sequence(steps) -> bytes:
+        samples: list[int] = []
+        for dur, f0, f1, shape, vol in steps:
+            n = int(dur * SAMPLE_RATE)
+            phase = 0.0
+            for i in range(n):
+                t = i / max(1, n)
+                f = f0 + (f1 - f0) * t
+                phase += f / SAMPLE_RATE
+                env = _envelope(i, n, 0.01, 0.08)
+                s = _shape(shape, phase) * env * vol
+                samples.append(max(-32768, min(32767, int(s * 32767))))
+        return _wav_bytes(samples)
 
-# ── Sound loading ─────────────────────────────────────────────────────────────
+    def _load_sounds() -> None:
+        global _mixer_ok
+        try:
+            _sounds["flap"] = pygame.mixer.Sound(
+                buffer=_synth(0.07, 260, 520, "square", 0.25, 0.004, 0.05))
+            _sounds["coin"] = pygame.mixer.Sound(
+                buffer=_synth(0.10, 880, 1320, "sine", 0.40, 0.004, 0.08))
+            _sounds["coin_combo"] = pygame.mixer.Sound(
+                buffer=_synth(0.13, 1175, 1760, "sine", 0.45, 0.003, 0.09))
+            _sounds["coin_triple"] = pygame.mixer.Sound(
+                buffer=_synth_sequence([
+                    (0.05, 880, 880, "sine", 0.35),
+                    (0.06, 1175, 1175, "sine", 0.40),
+                    (0.08, 1568, 1568, "sine", 0.45),
+                ]))
+            _sounds["mushroom"] = pygame.mixer.Sound(
+                buffer=_synth_sequence([
+                    (0.08, 523, 523, "triangle", 0.42),
+                    (0.08, 659, 659, "triangle", 0.42),
+                    (0.14, 784, 988, "triangle", 0.50),
+                ]))
+            _sounds["magnet"] = pygame.mixer.Sound(
+                buffer=_synth_sequence([
+                    (0.10, 220, 660, "triangle", 0.40),
+                    (0.12, 660, 990, "sine", 0.42),
+                ]))
+            _sounds["slowmo"] = pygame.mixer.Sound(
+                buffer=_synth_sequence([
+                    (0.10, 880, 660, "triangle", 0.38),
+                    (0.10, 660, 440, "triangle", 0.40),
+                    (0.18, 440, 220, "sine", 0.45),
+                ]))
+            _sounds["thunder"] = pygame.mixer.Sound(
+                buffer=_synth_sequence([
+                    (0.20, 80,  60, "triangle", 0.38),
+                    (0.20, 60,  50, "triangle", 0.35),
+                    (0.40, 50,  40, "sine",     0.32),
+                ]))
+            _sounds["death"] = pygame.mixer.Sound(
+                buffer=_synth(0.32, 330, 90, "square", 0.45, 0.005, 0.18))
+            _sounds["gameover"] = pygame.mixer.Sound(
+                buffer=_synth_sequence([
+                    (0.12, 523, 523, "triangle", 0.35),
+                    (0.12, 440, 440, "triangle", 0.35),
+                    (0.14, 349, 349, "triangle", 0.38),
+                    (0.18, 262, 262, "triangle", 0.42),
+                ]))
+        except pygame.error:
+            _sounds.clear()
+            _mixer_ok = False
 
-_sounds: dict[str, pygame.mixer.Sound] = {}
+    def init() -> None:
+        global _mixer_ok
+        _mixer_ok = _open_mixer()
+        if _mixer_ok:
+            _load_sounds()
 
+    def _play(name: str, volume: float = 1.0) -> None:
+        if not _mixer_ok:
+            return
+        s = _sounds.get(name)
+        if s is None:
+            return
+        ch = s.play()
+        if ch is not None:
+            ch.set_volume(volume)
 
-def _load_sounds() -> None:
-    """Synthesize and cache all sounds. Called once after mixer is open."""
-    global _mixer_ok
-    try:
-        _sounds["flap"] = pygame.mixer.Sound(
-            buffer=_synth(0.07, 260, 520, "square", 0.25, 0.004, 0.05))
-        _sounds["coin"] = pygame.mixer.Sound(
-            buffer=_synth(0.10, 880, 1320, "sine", 0.40, 0.004, 0.08))
-        _sounds["coin_combo"] = pygame.mixer.Sound(
-            buffer=_synth(0.13, 1175, 1760, "sine", 0.45, 0.003, 0.09))
-        _sounds["coin_triple"] = pygame.mixer.Sound(
-            buffer=_synth_sequence([
-                (0.05, 880, 880, "sine", 0.35),
-                (0.06, 1175, 1175, "sine", 0.40),
-                (0.08, 1568, 1568, "sine", 0.45),
-            ]))
-        _sounds["mushroom"] = pygame.mixer.Sound(
-            buffer=_synth_sequence([
-                (0.08, 523, 523, "triangle", 0.42),
-                (0.08, 659, 659, "triangle", 0.42),
-                (0.14, 784, 988, "triangle", 0.50),
-            ]))
-        _sounds["magnet"] = pygame.mixer.Sound(
-            buffer=_synth_sequence([
-                (0.10, 220, 660, "triangle", 0.40),
-                (0.12, 660, 990, "sine", 0.42),
-            ]))
-        _sounds["slowmo"] = pygame.mixer.Sound(
-            buffer=_synth_sequence([
-                (0.10, 880, 660, "triangle", 0.38),
-                (0.10, 660, 440, "triangle", 0.40),
-                (0.18, 440, 220, "sine", 0.45),
-            ]))
-        _sounds["thunder"] = pygame.mixer.Sound(
-            buffer=_synth_sequence([
-                (0.20, 80,  60, "triangle", 0.38),
-                (0.20, 60,  50, "triangle", 0.35),
-                (0.40, 50,  40, "sine",     0.32),
-            ]))
-        _sounds["death"] = pygame.mixer.Sound(
-            buffer=_synth(0.32, 330, 90, "square", 0.45, 0.005, 0.18))
-        _sounds["gameover"] = pygame.mixer.Sound(
-            buffer=_synth_sequence([
-                (0.12, 523, 523, "triangle", 0.35),
-                (0.12, 440, 440, "triangle", 0.35),
-                (0.14, 349, 349, "triangle", 0.38),
-                (0.18, 262, 262, "triangle", 0.42),
-            ]))
-    except pygame.error:
-        _sounds.clear()
-        _mixer_ok = False
-
-
-# ── Public API ────────────────────────────────────────────────────────────────
-
-def init() -> None:
-    """Open the mixer and generate every sound. Safe to call once at startup.
-
-    On emscripten the Web Audio context is blocked until a user gesture, so
-    we skip the attempt here and rely on `lazy_init()` being called from the
-    first flap instead.
-    """
-    global _mixer_ok
-    if sys.platform == "emscripten":
-        return  # deferred to lazy_init() after first tap
-    _mixer_ok = _open_mixer()
-    if _mixer_ok:
-        _load_sounds()
-
-
-def lazy_init() -> None:
-    """Try to open the mixer now that we have a user gesture.
-
-    Called from play_flap() on every tap. The JavaScript audio-unlock snippet
-    in index.html resumes SDL's WebAudio context synchronously in the browser's
-    click handler; by the time this runs the context is already in 'running'
-    state, so pygame.mixer.init() succeeds.
-
-    Idempotent — after the first attempt (success or failure) we never retry,
-    so the overhead per flap is a single bool check.
-    """
-    global _mixer_ok, _mixer_attempted
-    if _mixer_attempted:
-        return
-    _mixer_attempted = True
-    _mixer_ok = _open_mixer()
-    if _mixer_ok:
-        _load_sounds()
-
-
-def _play(name: str, volume: float = 1.0) -> None:
-    if not _mixer_ok:
-        return
-    s = _sounds.get(name)
-    if s is None:
-        return
-    ch = s.play()
-    if ch is not None:
-        ch.set_volume(volume)
-
-
-def play_flap() -> None:
-    lazy_init()          # first tap opens the audio context in the browser
-    _play("flap", 0.55)
-
-def play_coin() -> None:          _play("coin", 0.75)
-def play_coin_combo() -> None:    _play("coin_combo", 0.80)
-def play_coin_triple() -> None:   _play("coin_triple", 0.85)
-def play_mushroom() -> None:      _play("mushroom", 0.85)
-def play_magnet() -> None:        _play("magnet", 0.75)
-def play_slowmo() -> None:        _play("slowmo", 0.75)
-def play_thunder() -> None:       _play("thunder", 0.85)
-def play_death() -> None:         _play("death", 0.75)
-def play_gameover() -> None:      _play("gameover", 0.70)
+    def play_flap() -> None:          _play("flap", 0.55)
+    def play_coin() -> None:          _play("coin", 0.75)
+    def play_coin_combo() -> None:    _play("coin_combo", 0.80)
+    def play_coin_triple() -> None:   _play("coin_triple", 0.85)
+    def play_mushroom() -> None:      _play("mushroom", 0.85)
+    def play_magnet() -> None:        _play("magnet", 0.75)
+    def play_slowmo() -> None:        _play("slowmo", 0.75)
+    def play_thunder() -> None:       _play("thunder", 0.85)
+    def play_death() -> None:         _play("death", 0.75)
+    def play_gameover() -> None:      _play("gameover", 0.70)
