@@ -3,514 +3,219 @@
 print("""
 Loading claude_test from claude_test.apk
     Pygbag Version : 0.9.3
-    Template Version : 0.9.3
+    Template Version : skybit-custom-1
     Python  : 3.12
     CDN URL : https://pygame-web.github.io/cdn/0.9.3/
     Screen  : 360x640
-    Title   : claude_test
-    Folder  : claude_test
-    Authors : pgw
-    SPDX-License-Identifier: cookiecutter.spdx
-
 """)
 
 import sys
 import asyncio
 import platform
-import json
 from pathlib import Path
 
-# do not rename
 async def custom_site():
     import embed
-    platform.document.body.style.background = "#7f7f7f"
-
-    platform.window.transfer.hidden = true
-    platform.window.canvas.style.visibility = "visible"
-
 
     bundle = "claude_test"
-
-    # the C or js loader could do that but be explicit.
-    appdir = Path(f"/data/data/{bundle}") # /data/data/claude_test
+    appdir = Path(f"/data/data/{bundle}")
     appdir.mkdir()
 
+    import tarfile
+    async with platform.fopen("claude_test.tar.gz", "rb") as archive:
+        tar = tarfile.open(fileobj=archive, mode="r:gz")
+        tar.extractall(path=appdir.as_posix(), filter='tar')
+        tar.close()
 
-    # unpack filesystem from compressed archive into work dir
-    if platform.window.location.host.find('.itch.zone')>0:
-        import zipfile
-        async with platform.fopen("claude_test.apk", "rb") as archive:
-            with zipfile.ZipFile(archive) as zip_ref:
-                zip_ref.extractall(appdir.as_posix())
-    else:
-        import tarfile
-        async with platform.fopen("claude_test.tar.gz", "rb") as archive:
-            tar = tarfile.open(fileobj=archive, mode="r:gz")
-            tar.extractall(path=appdir.as_posix(), filter='tar')
-            tar.close()
-
-    # preloader will change to work dir and prepend it to sys.path
     platform.run_main(PyConfig, loaderhome= appdir / "assets", loadermain=None)
 
-
-    # wait preloading complete : that includes images and wasm compilation of bundled modules
     while embed.counter()<0:
         await asyncio.sleep(.1)
 
     main = appdir / "assets" / "main.py"
 
-    # TODO: test for window.webkitAudioContext and block aio loop until gesture if accessing media manager play
-    # before a gesture is recorded ( touch or click )
-
-    # test/wait user media interaction
     if not platform.window.MM.UME:
-
-        # now that apk is mounted we have access to font cache
-        # but we need to fill __file__ that is not yet set
         __import__(__name__).__file__ = main
-
-        # now make a prompt
-        msg  = "Ready to start ! Please click/touch page"
-        platform.window.infobox.innerText = msg
-        print("\n"*4, f"    * Waiting for media user engagement. {msg} *" , "\n"*4)
-
         while not platform.window.MM.UME:
             await asyncio.sleep(.1)
 
-    # start async top level machinery if not started and add a console in any case if requested.
     await TopLevel_async_handler.start_toplevel(platform.shell, console=window.python.config.debug)
-
-    # now that apk is mounted we have access to font cache
-    # but we need to fill __file__/__name__ that are not yet set
     __import__(__name__).__file__ = main
 
+    await shell.source(main)
 
-    def ui_callback(pkg):
-        platform.window.infobox.innerText = f"installing {pkg}"
-
-    await shell.source(main, callback=ui_callback)
-
-    # if you don't reach that step
-    # your main.py has an infinite sync loop somewhere !
-
-    platform.window.infobox.style.display = "none"
-    platform.window.config.gui_divider = 1
-    platform.window.window_resize()
-    print("default.tmpl: done")
+    # DO NOT call window_resize() — our CSS/JS controls layout.
+    print("web.tmpl: done")
 
     shell.interactive()
 
 asyncio.run( custom_site() )
 
-
-
-
-
-
-
-
-
-
-
-
-# BEGIN BLOCK
-#
-# now this is the html part you can (and should) customize
-# It is not mandatory : pygame-script when it reads the first line (also called
-# shebang ) of above code create absolute minimal widget set
-# required for running with default rules
-#
-# do not alter that comment block it is separating python code from html code
-# =============================================================================
-# --></script><head><!--
-//=============================================================================
-//
-//
-//
-//
-//
-//
-//
-
-    {%- if cookiecutter.comment != "" -%}
-{{cookiecutter.comment}}
-    {% endif %}
-
---><script type="application/javascript">
-// END BLOCK
-
-
-
-// this dict is available under PyConfig.config from __main__
+# --></script><head>
+<script type="application/javascript">
+// Neutralize the CDN's window_resize before it's defined: set a getter that
+// always returns a no-op, so pythons.js can't replace it. Runs inline, so
+// executes before any deferred module script.
+Object.defineProperty(window, 'window_resize', {
+  value: function(){ /* intentionally empty — our CSS+JS owns canvas sizing */ },
+  writable: false,
+  configurable: false,
+});
 
 config = {
-    xtermjs : "1" ,
-    _sdl2 : "canvas",
-    user_canvas : 0,
-    user_canvas_managed : 0,
-    gui_divider : 2,
-    ume_block : 0,
-    can_close : 1,
-    archive : "claude_test",
-    gui_debug : 2,
-    cdn : "https://pygame-web.github.io/cdn/0.9.3/",
-    autorun : 1,
-    PYBUILD : "3.12",
-    fb_ar   :  0.5625,
-    fb_width : "360",
-    fb_height : "640"
-}
+  xtermjs: "0",
+  _sdl2: "canvas",
+  user_canvas: 0,
+  user_canvas_managed: 0,
+  gui_divider: 1,
+  ume_block: 0,
+  can_close: 1,
+  archive: "claude_test",
+  gui_debug: 2,
+  cdn: "https://pygame-web.github.io/cdn/0.9.3/",
+  autorun: 0,
+  PYBUILD: "3.12",
+  fb_ar: 0.5625,
+  fb_width: "360",
+  fb_height: "640"
+};
 
-function show_infobox() {
-    infobox.style.display = "block";
-
-    // Measure box
-    const w = infobox.offsetWidth;
-    const h = infobox.offsetHeight;
-
-    // Center in viewport
-    const left = (window.innerWidth - w) / 2;
-    const top = (window.innerHeight - h) / 2;
-
-    infobox.style.left = left + "px";
-    infobox.style.top = top + "px";
-}
-
+function show_infobox(){ /* no-op — we hide the infobox entirely */ }
 </script>
 
-    <title>claude_test</title>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="viewport" content="height=device-height, initial-scale=1.0">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes"/>
-
-
-    <link rel="icon" type="image/png" href="favicon.png" sizes="16x16">
-
-    <style>
-        #status {
-            display: inline-block;
-            vertical-align: top;
-            margin-top: 20px;
-            margin-left: 30px;
-            font-weight: bold;
-            color: rgb(120, 120, 120);
-        }
-
-        #progress {
-            height: 20px;
-            width: 300px;
-        }
-
-        #infobox {
-            position: fixed; /* center relative to viewport */
-            background: green;
-            color: blue;
-            font-weight: bold;
-            padding: 12px 24px;
- /*           display: none; */
-            z-index: 999999;
-        }
-        div.emscripten { text-align: center; }
-        div.emscripten_border { border: 1px solid black; }
-        div.thick_border { border: 4px solid black; }
-
-        /* the canvas *must not* have any border or padding, or mouse coords will be wrong */
-        /* average size of droid screen 470dp x 320dp  */
-        canvas.emscripten {
-            border: 0px none;
-            background-color: transparent;
-            width: 100%;
-            height: 100%;
-            z-index: 5;
-
-            padding: 0;
-            margin: 0 auto;
-
-            position: absolute;
-            top: 0;
-            bottom: 0;
-            left: 0;
-            right: 0;
-        }
-
-        body {
-            font-family: arial;
-            margin: 0;
-            padding: none;
-            background-color:powderblue;
-        }
-
-        .topright{
-           position:absolute;
-           top:0px;
-           right:0px;
-        }
-
-        .bottomright {
-            position:absolute;
-            top: 40%;
-            right: 0px;
-        }
-
-        .center {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .trinfo{
-           position: relative;
-           right: 0px;
-           border: 1px solid black;
-        }
-
-        .framed{
-           position: relative;
-           top: 150px;
-           right: 10px;
-           border: 1px solid black;
-        }
-    </style>
-
-    <script>
-/*
-        if (navigator.serviceWorker)
-            navigator.serviceWorker.register("https://pygame-web.github.io/cdn/0.9.3/pygbag0.9.3.js")
-        else
-            console.warn("Service workers not supported")
-*/
-    </script>
-
-    <script src="https://pygame-web.github.io/cdn/0.9.3//browserfs.min.js"></script>
-
+<title>claude_test</title>
+<meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<link rel="icon" type="image/png" href="favicon.png" sizes="16x16">
 
 <style>
-#transfer, #pyconsole, #terminal, .xterm, #infobox {
+html, body {
+  width: 100%; height: 100%;
+  margin: 0; padding: 0;
+  overflow: hidden;
+  background: #000;
+}
+/* Hide everything pygbag might render beside the canvas. */
+#transfer, #pyconsole, #terminal, #infobox, #crt, #html, #dlg,
+#system, #box, #canvas3d {
   display: none !important;
 }
-html, body {
-  width: 100% !important; height: 100% !important;
-  margin: 0 !important; padding: 0 !important;
-  overflow: hidden !important;
-  background: #000 !important;
+/* Canvas fills the viewport with letterboxing (portrait 9:16). */
+canvas#canvas {
+  display: block;
+  position: fixed;
+  left: 0; top: 0;
+  width: 100vw; height: 100vh;
+  background: #000;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  z-index: 1;
 }
 </style>
-<script>
-(function() {
-  'use strict';
-  function computeSize() {
-    var vw = window.innerWidth, vh = window.innerHeight;
-    var s = Math.min(vw / 9, vh / 16);
-    return { w: Math.round(9 * s), h: Math.round(16 * s) };
-  }
-  function applyStyle(c) {
-    if (!c) return;
-    var sz = computeSize();
-    var left = Math.round((window.innerWidth  - sz.w) / 2);
-    var top  = Math.round((window.innerHeight - sz.h) / 2);
-    // Idempotency guard: if our target size is already applied,
-    // skip to avoid infinite MutationObserver loops.
-    if (c.style.width  === sz.w + 'px' &&
-        c.style.height === sz.h + 'px' &&
-        c.style.left   === left + 'px' &&
-        c.style.top    === top  + 'px') return;
-    c.style.setProperty('position',        'fixed',       'important');
-    c.style.setProperty('left',            left + 'px',   'important');
-    c.style.setProperty('top',             top  + 'px',   'important');
-    c.style.setProperty('right',           'auto',        'important');
-    c.style.setProperty('bottom',          'auto',        'important');
-    c.style.setProperty('width',           sz.w + 'px',   'important');
-    c.style.setProperty('height',          sz.h + 'px',   'important');
-    c.style.setProperty('margin',          '0',           'important');
-    c.style.setProperty('transform',       'none',        'important');
-    c.style.setProperty('image-rendering', 'pixelated',   'important');
-    c.style.setProperty('z-index',         '5',           'important');
-  }
-  var canvas = null;
-  var obs = new MutationObserver(function() { applyStyle(canvas); });
-  function bind() {
-    canvas = document.getElementById('canvas');
-    if (!canvas) { setTimeout(bind, 50); return; }
-    applyStyle(canvas);
-    obs.observe(canvas, { attributes: true,
-      attributeFilter: ['style', 'width', 'height'] });
-    window.addEventListener('resize', function() { applyStyle(canvas); });
-    window.addEventListener('orientationchange', function() {
-      setTimeout(function() { applyStyle(canvas); }, 100);
-    });
-  }
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', bind);
-  } else {
-    bind();
-  }
-})();
 
-// Unlock SDL's WebAudio context on first click/touch so that
-// pygame.mixer.init() (called later from Python) finds the
-// AudioContext already 'running'.
-(function() {
-  function resumeSDLAudio() {
-    var sdl = window.SDL2 || (window.Module && window.Module.SDL2);
-    if (sdl && sdl.audioContext && sdl.audioContext.state !== 'running') {
-      sdl.audioContext.resume();
-    }
-  }
-  ['click', 'touchstart', 'keydown'].forEach(function(t) {
-    document.addEventListener(t, resumeSDLAudio, { capture: true, passive: true });
-  });
-})();
-</script>
+<script src="https://pygame-web.github.io/cdn/0.9.3/browserfs.min.js"></script>
 </head>
 
 <body>
+  <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex=1></canvas>
+  <canvas id="canvas3d" hidden></canvas>
 
-    <div id="transfer" align=center>
-<!--        <div class="spinner" id='spinner'></div> -->
-        <div class="emscripten" id="status">Downloading...</div>
-        <div class="emscripten">
-            <progress value="0" max="100" id="progress"></progress>
-        </div>
+  <!-- Required placeholders referenced by pythons.js. Kept but hidden. -->
+  <div id="transfer" style="display:none">
+    <div id="status"></div>
+    <progress id="progress" value="0" max="100"></progress>
+  </div>
+  <div id="infobox" style="display:none">Loading...</div>
+  <div id="html" style="display:none"></div>
+  <div id="crt" style="display:none">
+    <div id="system" hidden>
+      <button id="aiostop" disabled></button>
+      <button id="aiopaused_true" disabled></button>
+      <button id="aiopaused_false" disabled></button>
+      <button id="pygame_mixer_music_pause" disabled></button>
+      <div id="load_min"></div><div id="load_avg"></div><div id="load_max"></div>
+      <button id="load_rst" disabled></button>
+      <div id="level"></div><div id="stateBattery"></div>
     </div>
-
-
-
-    <canvas class="emscripten" id="canvas"
-width="1px"
-height="1px"
-    oncontextmenu="event.preventDefault()" tabindex=1>
-    </canvas>
-
-    <canvas class="emscripten" id="canvas3d"
-width="360px"
-height="640px"
-    oncontextmenu="event.preventDefault()" tabindex=1 hidden>
-    </canvas>
-
-    <div id="infobox">Loading, please wait ...</div>
-
-    <div id=html></div>
-
-    <div id=crt  class=bottomright >
-
-        <div id="system" hidden>
-            <div class="button-container">
-                <button id="aiostop" disabled>AIO ⏏︎</button>
-                <button id="aiopaused_true" disabled>AIO ■</button>
-                <button id="aiopaused_false" disabled>AIO ▶</button>
-                <button id="pygame_mixer_music_pause" disabled>Music ■</button>
-            </div>
-
-            <div class="button-container">
-                <div id=load_min>min</div>
-                <div id=load_avg>avg</div>
-                <div id=load_max>max</div>
-              <button id="load_rst" disabled>RESET</button>
-            </div>
-
-            <div id="level">(battery level unknown)</div>
-            <div id="stateBattery">(charging state unknown)</div>
-
-        </div>
-
-        <div id=box class="emscripten_border" hidden=true>
-
-            <div id="info" class="trinfo"></div>
-
-            <iframe id="iframe" class="framed" name="iframe"
-width="470px" height="90%"
-allowtransparency="true"
-style="z-index: 10;"
-style="background: #FFFFFF;"
-frameborder="1"
-                allowfullscreen="true"
-                webkitallowfullscreen="true"
-                msallowfullscreen="true"
-                mozallowfullscreen="true"
-                sandbox="allow-same-origin allow-top-navigation allow-scripts allow-pointer-lock"
-                allow="autoplay; fullscreen *; geolocation; microphone; camera; midi; monetization; xr-spatial-tracking; gamepad; gyroscope; accelerometer; xr; cross-origin-isolated"
-                src="https://pygame-web.github.io/cdn/0.9.3/empty.html"
-                scrolling="yes">
-            </iframe>
-        </div>
-
+    <div id="box" hidden>
+      <div id="info"></div>
+      <iframe id="iframe" name="iframe" src="https://pygame-web.github.io/cdn/0.9.3/empty.html"></iframe>
     </div>
+  </div>
+  <div id="dlg" hidden>
+    <input type="file" id="dlg_multifile" multiple accept="image/*">
+  </div>
+  <div id="pyconsole" style="display:none">
+    <div id="terminal"></div>
+  </div>
 
+<script type="application/javascript">
+// Required hooks for pythons.js — all no-ops.
+globalThis.__canvas_resized = function(){};
+async function custom_onload(debug_hidden){}
+function custom_prerun(){}
+function custom_postrun(){}
+function debug(){ python.config.debug = true; }
+function info_inline(d){}
+function info_online(u){}
+function frame_online(u){}
 
-    <div id="dlg" hidden>
-        <input type="file" id="dlg_multifile" multiple accept="image/*">
-        <label for="dlg_multifile">Select files</label>
-    </div>
+// Force canvas CSS dimensions with inline !important. MutationObserver
+// re-applies on every mutation (beats emscripten Browser.updateCanvasDimensions
+// inline !important — verified behavior per emscripten issue #6353).
+(function(){
+  'use strict';
+  function apply(c){
+    if (!c) return;
+    var vw = window.innerWidth, vh = window.innerHeight;
+    if (c.style.width === vw + 'px' && c.style.height === vh + 'px') return;
+    c.style.setProperty('position',        'fixed',     'important');
+    c.style.setProperty('left',            '0',         'important');
+    c.style.setProperty('top',             '0',         'important');
+    c.style.setProperty('right',           'auto',      'important');
+    c.style.setProperty('bottom',          'auto',      'important');
+    c.style.setProperty('width',           vw + 'px',   'important');
+    c.style.setProperty('height',          vh + 'px',   'important');
+    c.style.setProperty('margin',          '0',         'important');
+    c.style.setProperty('transform',       'none',      'important');
+    c.style.setProperty('image-rendering', 'pixelated', 'important');
+    c.style.setProperty('z-index',         '1',         'important');
+    c.style.setProperty('display',         'block',     'important');
+  }
+  var obs = new MutationObserver(function(){
+    var c = document.getElementById('canvas');
+    apply(c);
+  });
+  function bind(){
+    var c = document.getElementById('canvas');
+    if (!c){ setTimeout(bind, 30); return; }
+    apply(c);
+    obs.observe(c, {attributes:true, attributeFilter:['style','width','height']});
+    window.addEventListener('resize', function(){ apply(c); });
+    window.addEventListener('orientationchange', function(){
+      setTimeout(function(){ apply(c); }, 100);
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
+  else bind();
+})();
 
-    <div id="pyconsole">
-        <div id="terminal" tabIndex=1 align="left"></div>
-    </div>
-
-    <script type="application/javascript">
-
-    globalThis.__canvas_resized = (self, ecw, ech) => {
-        console.warn("TODO: panda3d canvas monitor", self, ecw, ech)
-    }
-
-    async function custom_onload(debug_hidden) {
-        // this is called before anything python is loaded
-        // make your js customization here
-        console.log(__FILE__, "custom_onload")
-
-        pyconsole.hidden = debug_hidden
-        system.hidden = debug_hidden
-        transfer.hidden = debug_hidden
-        info.hidden = debug_hidden
-        box.hidden =  debug_hidden
-
-        show_infobox()
-    }
-
-    function custom_prerun(){
-        // no python main and no (MEMFS + VFS) yet.
-        console.log(__FILE__, "custom_prerun")
-
-    }
-
-    function custom_postrun(){
-        // python main and no VFS filesystem yet.
-        console.log(__FILE__, "custom_postrun")
-
-    }
-
-    function debug() {
-        // allow to gain access to dev tools from js console
-        // but only on desktop. difficult to reach when in iframe
-        python.config.debug = true
-        custom_onload(false)
-        Module.PyRun_SimpleString("shell.uptime()")
-        window_resize()
-    }
-
-    function info_inline(data){
-        document.getElementById("info").innerHTML = data
-    }
-
-    function info_online(url) {
-        // display info about current APK
-        fetch( url /*, options */)
-            .then((response) => response.text())
-            .then((html) => {
-                info_inline(html);
-        })
-        .catch((error) => {
-            console.warn(error);
-        });
-    }
-
-    function frame_online(url) {
-        window.frames["iframe"].location = url;
-    }
-
-    </script>
-
+// Resume SDL AudioContext on first gesture so pygame.mixer.init() in
+// Python finds it already running.
+(function(){
+  function resume(){
+    var sdl = window.SDL2 || (window.Module && window.Module.SDL2);
+    if (sdl && sdl.audioContext && sdl.audioContext.state !== 'running') sdl.audioContext.resume();
+  }
+  ['click','touchstart','keydown'].forEach(function(t){
+    document.addEventListener(t, resume, {capture:true, passive:true});
+  });
+})();
+</script>
 </body>
 </html>
