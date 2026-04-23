@@ -1,0 +1,63 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [claude/retro-pixel-game-gPPYY, main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pygbag
+        run: pip install pygbag
+
+      - name: Patch pygbag autorun 0 → 1
+        # pygbag hard-codes "autorun": "0" in its HTML template (see
+        # pygbag/app.py) with no CLI/INI override. Without this patch the
+        # deployed page sits at a gray canvas forever waiting on a user-
+        # media-engagement gesture that doesn't surface. Fail loudly if
+        # the template literal ever moves so we notice instead of
+        # silently shipping a broken page.
+        run: |
+          python - <<'PY'
+          import pathlib, sys, pygbag
+          p = pathlib.Path(pygbag.__file__).parent / "app.py"
+          src = p.read_text()
+          if '"autorun": "0"' not in src and '"autorun":"0"' not in src:
+              sys.exit("pygbag template changed — 'autorun' literal not found in " + str(p))
+          new = (src
+                 .replace('"autorun": "0"', '"autorun": "1"')
+                 .replace('"autorun":"0"',  '"autorun":"1"'))
+          p.write_text(new)
+          print("patched autorun → 1 in", p)
+          PY
+
+      - name: Build web bundle
+        # --ume_block 0: skip the User Media Engagement gate so the
+        #   runtime starts without needing an extra click overlay.
+        # --can_close 1: let the runtime clean up on page unload
+        #   (recommended by pygbag alongside --ume_block 0).
+        run: pygbag --build --ume_block 0 --can_close 1 .
+
+      - name: Log generated index.html head
+        # Keeps the first few KB of the generated HTML in the action log
+        # so debugging post-build issues doesn't need a fresh CI run.
+        run: head -c 4000 build/web/index.html || true
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./build/web

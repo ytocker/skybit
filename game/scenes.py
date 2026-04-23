@@ -94,6 +94,13 @@ class App:
     # ── run loop ────────────────────────────────────────────────────────────
 
     def run(self):
+        # Sync entry point for native execution. Browser builds (pygbag) must
+        # call async_run() directly so the page's event loop stays alive.
+        import asyncio
+        asyncio.run(self.async_run())
+
+    async def async_run(self):
+        import asyncio
         self._cooldown_t = 0.0
         while self._running:
             dt = min(self.clock.tick(FPS) / 1000.0, 1 / 20.0)
@@ -102,6 +109,9 @@ class App:
             self._update(dt)
             self._render()
             pygame.display.flip()
+            # Yield to the browser's event loop each frame. On native runs
+            # this is a zero-cost no-op between ticks.
+            await asyncio.sleep(0)
         pygame.quit()
 
     def _handle_event(self, e):

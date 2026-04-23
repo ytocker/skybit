@@ -1,5 +1,6 @@
 """HUD: score, hi-score, coin count, mushroom timer bar, combo, pause button."""
 import math
+import os
 import pygame
 
 from game.config import W, H, TRIPLE_DURATION, MAGNET_DURATION, SLOWMO_DURATION
@@ -14,11 +15,19 @@ from game.draw import (
 _fonts: dict = {}
 
 
+# Vendored Liberation Sans (metric-compatible Arial replacement) so the
+# browser/pygbag build doesn't depend on a system font that isn't there.
+_FONT_DIR = os.path.join(os.path.dirname(__file__), "assets")
+_FONT_BOLD = os.path.join(_FONT_DIR, "LiberationSans-Bold.ttf")
+_FONT_REG  = os.path.join(_FONT_DIR, "LiberationSans-Regular.ttf")
+
+
 def _font(size, bold=True):
     k = (size, bold)
     f = _fonts.get(k)
     if f is None:
-        f = pygame.font.SysFont("arial", size, bold=bold)
+        path = _FONT_BOLD if bold else _FONT_REG
+        f = pygame.font.Font(path, size)
         _fonts[k] = f
     return f
 

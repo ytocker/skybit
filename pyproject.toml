@@ -1,0 +1,11 @@
+[project]
+name = "skybit"
+version = "1.1.0"
+description = "Skybit — Pocket Sky Flyer"
+requires-python = ">=3.11"
+dependencies = ["pygame>=2.0"]
+
+[tool.pygbag]
+title = "Skybit"
+version = "1.1.0"
+optimize = 1

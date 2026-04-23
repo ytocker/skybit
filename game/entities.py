@@ -474,12 +474,19 @@ class Particle:
 
 _float_font_cache: dict = {}
 
+import os as _os
+
+_FLOAT_FONT_DIR = _os.path.join(_os.path.dirname(__file__), "assets")
+_FLOAT_BOLD = _os.path.join(_FLOAT_FONT_DIR, "LiberationSans-Bold.ttf")
+_FLOAT_REG  = _os.path.join(_FLOAT_FONT_DIR, "LiberationSans-Regular.ttf")
+
 
 def _get_float_font(size, bold=True):
     key = (size, bold)
     f = _float_font_cache.get(key)
     if f is None:
-        f = pygame.font.SysFont("arial", size, bold=bold)
+        path = _FLOAT_BOLD if bold else _FLOAT_REG
+        f = pygame.font.Font(path, size)
         _float_font_cache[key] = f
     return f
 

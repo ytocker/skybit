@@ -1,6 +1,11 @@
-"""Skybit entry point."""
+"""Skybit entry point — runs natively and as a pygbag/WASM browser bundle."""
+import asyncio
+
 from game.scenes import App
 
 
-if __name__ == "__main__":
-    App().run()
+async def main():
+    await App().async_run()
+
+
+asyncio.run(main())
