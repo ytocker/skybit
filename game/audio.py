@@ -4,8 +4,12 @@ Procedural audio for Skybit.
 Every sound effect is synthesized on import using Python's stdlib
 (`struct`, `math`) — no external asset files, no numpy. Falls back to
 no-op when `pygame.mixer.init()` can't open an audio device (e.g. headless
-snapshot runs with SDL_AUDIODRIVER=dummy, or the Emscripten/Pyodide browser
-build before the first user gesture).
+snapshot runs with SDL_AUDIODRIVER=dummy).
+
+Browser (Pyodide/emscripten) note: the Web Audio context requires a user
+gesture before it can open. We skip init at module load and retry lazily
+on the first flap (guaranteed user gesture). `play_flap` calls `lazy_init`
+before playing; all other sounds benefit once the mixer is open.
 
 We emit the 44-byte PCM-WAV header by hand rather than importing `wave`,
 because pygbag's Pyodide build strips the `wave` module from the stdlib.
@@ -30,15 +34,9 @@ _BLOCK_ALIGN = _CHANNELS * _SAMPLE_WIDTH
 _mixer_ok = False
 
 
-def _safe_init_mixer() -> bool:
-    """Open the audio device. Swallow *any* failure so headless tests
-    and the browser (Pyodide) keep running. In the browser we also
-    skip the call entirely because pygame.mixer.init can block until
-    the first user gesture, which would freeze the main loop."""
+def _open_mixer() -> bool:
+    """Attempt to open the audio device. Returns True on success."""
     if os.environ.get("SDL_AUDIODRIVER") == "dummy":
-        return False
-    if sys.platform == "emscripten":
-        # Browser build: mixer must init lazily after a click; skip now.
         return False
     try:
         pygame.mixer.init(frequency=SAMPLE_RATE, size=-16, channels=1, buffer=512)
@@ -130,17 +128,14 @@ def _synth_sequence(steps: list[tuple[float, float, float, str, float]]) -> byte
     return _wav_bytes(samples)
 
 
-# ── Public API ───────────────────────────────────────────────────────────────
+# ── Sound loading ─────────────────────────────────────────────────────────────
 
 _sounds: dict[str, pygame.mixer.Sound] = {}
 
 
-def init() -> None:
-    """Open the mixer and generate every sound. Safe to call once at startup."""
+def _load_sounds() -> None:
+    """Synthesize and cache all sounds. Called once after mixer is open."""
     global _mixer_ok
-    _mixer_ok = _safe_init_mixer()
-    if not _mixer_ok:
-        return
     try:
         _sounds["flap"] = pygame.mixer.Sound(
             buffer=_synth(0.07, 260, 520, "square", 0.25, 0.004, 0.05))
@@ -160,20 +155,17 @@ def init() -> None:
                 (0.08, 659, 659, "triangle", 0.42),
                 (0.14, 784, 988, "triangle", 0.50),
             ]))
-        # Magnet: low→high swept sine, slightly buzzier tail
         _sounds["magnet"] = pygame.mixer.Sound(
             buffer=_synth_sequence([
                 (0.10, 220, 660, "triangle", 0.40),
                 (0.12, 660, 990, "sine", 0.42),
             ]))
-        # Slow-mo: descending warbling tone
         _sounds["slowmo"] = pygame.mixer.Sound(
             buffer=_synth_sequence([
                 (0.10, 880, 660, "triangle", 0.38),
                 (0.10, 660, 440, "triangle", 0.40),
                 (0.18, 440, 220, "sine", 0.45),
             ]))
-        # Thunder rumble for night lightning
         _sounds["thunder"] = pygame.mixer.Sound(
             buffer=_synth_sequence([
                 (0.20, 80,  60, "triangle", 0.38),
@@ -190,9 +182,39 @@ def init() -> None:
                 (0.18, 262, 262, "triangle", 0.42),
             ]))
     except pygame.error:
-        # Mixer opened but sound loading failed — disable.
         _sounds.clear()
         _mixer_ok = False
+
+
+# ── Public API ────────────────────────────────────────────────────────────────
+
+def init() -> None:
+    """Open the mixer and generate every sound. Safe to call once at startup.
+
+    On emscripten the Web Audio context is blocked until a user gesture, so
+    we skip the attempt here and rely on `lazy_init()` being called from the
+    first flap instead.
+    """
+    global _mixer_ok
+    if sys.platform == "emscripten":
+        return  # deferred to lazy_init() after first tap
+    _mixer_ok = _open_mixer()
+    if _mixer_ok:
+        _load_sounds()
+
+
+def lazy_init() -> None:
+    """Try to open the mixer now that we have a user gesture.
+
+    Idempotent — safe to call on every flap; does nothing once the mixer is
+    already open or if it has permanently failed.
+    """
+    global _mixer_ok
+    if _mixer_ok or _sounds:
+        return
+    _mixer_ok = _open_mixer()
+    if _mixer_ok:
+        _load_sounds()
 
 
 def _play(name: str, volume: float = 1.0) -> None:
@@ -206,7 +228,10 @@ def _play(name: str, volume: float = 1.0) -> None:
         ch.set_volume(volume)
 
 
-def play_flap() -> None:          _play("flap", 0.55)
+def play_flap() -> None:
+    lazy_init()          # first tap opens the audio context in the browser
+    _play("flap", 0.55)
+
 def play_coin() -> None:          _play("coin", 0.75)
 def play_coin_combo() -> None:    _play("coin_combo", 0.80)
 def play_coin_triple() -> None:   _play("coin_triple", 0.85)
