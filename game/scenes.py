@@ -164,9 +164,29 @@ class App:
     def _draw_background(self, surf):
         phase = self.world.biome_phase
         palette = self.world.biome_palette
-        bucket = _biome.phase_bucket(phase)
-        sky = get_sky_surface_biome(W, H, GROUND_Y, palette, bucket)
-        surf.blit(sky, (0, 0))
+
+        # The sky gradient is cached per phase bucket (see biome.PHASE_BUCKETS).
+        # Blending the current bucket with the next one, weighted by how far
+        # into the bucket we are, turns the otherwise ~10-second snap into a
+        # continuous fade.
+        buckets = _biome.PHASE_BUCKETS
+        bucket_f = (phase % 1.0) * buckets
+        a = int(bucket_f) % buckets
+        b = (a + 1) % buckets
+        t = bucket_f - int(bucket_f)
+
+        pal_a = _biome.palette_for_phase(a / buckets)
+        pal_b = _biome.palette_for_phase(b / buckets)
+        sky_a = get_sky_surface_biome(W, H, GROUND_Y, pal_a, a)
+        sky_b = get_sky_surface_biome(W, H, GROUND_Y, pal_b, b)
+
+        sky_a.set_alpha(None)
+        surf.blit(sky_a, (0, 0))
+        if t > 0:
+            sky_b.set_alpha(int(t * 255))
+            surf.blit(sky_b, (0, 0))
+            sky_b.set_alpha(None)
+
         scroll = self.world.bg_scroll
         for i, (bx, by, sc, variant) in enumerate((
                 (20, 90, 0.9, 0), (180, 140, 1.1, 2),

@@ -163,11 +163,13 @@ def get_sky_surface_biome(w, h, ground_y, palette, phase_bucket):
     ]
     surf = make_gradient_surface(w, ground_y, stops)
 
-    # Sprinkle stars on dark skies. Deterministic via phase bucket.
+    # Sprinkle stars on dark skies. Positions are seeded by `w` only (not
+    # `phase_bucket`) so all buckets share the same star layout — that lets
+    # the scene fade between adjacent buckets without stars visibly jumping.
     sa = int(palette.get('star_alpha', 0))
     if sa > 0:
         import random as _r
-        rng = _r.Random(phase_bucket * 7919 + w)
+        rng = _r.Random(w * 7919)
         star_band = int(ground_y * 0.72)
         n = 60 if sa > 180 else 30
         for _ in range(n):
