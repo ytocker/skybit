@@ -35,19 +35,63 @@ _IS_BROWSER = sys.platform == "emscripten"
 # ── Browser backend (Web Audio via platform.window.skyPlay) ──────────────────
 
 if _IS_BROWSER:
-    # platform is pygbag's bridge to the JS `window` object.
-    import platform as _pgb  # noqa: E402
+    # pygbag exposes the JS window as `platform.window`; Pyodide also exposes
+    # it as the `js` module. We prefer `js` because that's the standard Pyodide
+    # pattern and works regardless of pygbag internal wrapping.
+    _skyPlay = None      # cached reference to the JS function
+    _logged_once = False
+
+    def _resolve() -> None:
+        """Locate window.skyPlay via js.* first, then platform.window.*."""
+        global _skyPlay
+        if _skyPlay is not None:
+            return
+        try:
+            import js  # type: ignore
+            if hasattr(js, "skyPlay"):
+                _skyPlay = js.skyPlay
+                _jlog("audio.py: _skyPlay resolved via js.skyPlay")
+                return
+        except Exception as e:
+            _jlog("audio.py: js import failed: " + repr(e))
+        try:
+            import platform as _pgb  # pygbag platform module
+            if hasattr(_pgb, "window") and hasattr(_pgb.window, "skyPlay"):
+                _skyPlay = _pgb.window.skyPlay
+                _jlog("audio.py: _skyPlay resolved via platform.window.skyPlay")
+                return
+        except Exception as e:
+            _jlog("audio.py: platform import failed: " + repr(e))
+        _jlog("audio.py: skyPlay NOT found — sounds will be silent")
+
+    def _jlog(msg: str) -> None:
+        """Log to browser console so we can see what's happening."""
+        try:
+            import js  # type: ignore
+            js.console.log(msg)
+        except Exception:
+            try:
+                import platform as _p
+                _p.window.console.log(msg)
+            except Exception:
+                print(msg)
 
     def init() -> None:
         """No-op — JS (web.tmpl) sets up the AudioContext on first user gesture."""
-        return
+        _resolve()
 
     def _play(name: str, volume: float) -> None:
+        global _logged_once
+        if _skyPlay is None:
+            _resolve()
+        if _skyPlay is None:
+            return
         try:
-            _pgb.window.skyPlay(name, volume)
-        except Exception:
-            # JS helper missing or AudioContext not yet ready — drop silently.
-            pass
+            _skyPlay(name, volume)
+        except Exception as e:
+            if not _logged_once:
+                _logged_once = True
+                _jlog("audio.py: skyPlay(" + name + ") raised: " + repr(e))
 
     def play_flap() -> None:          _play("flap", 0.55)
     def play_coin() -> None:          _play("coin", 0.75)
