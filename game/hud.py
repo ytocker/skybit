@@ -4,9 +4,9 @@ import pygame
 
 from game.config import W, H, TRIPLE_DURATION
 from game.draw import (
-    rounded_rect, rounded_rect_grad, blit_glow,
+    rounded_rect, rounded_rect_grad,
     UI_SCORE, UI_GOLD, UI_ORANGE, UI_SHADOW, UI_CREAM, UI_RED,
-    COIN_GOLD, COIN_LIGHT, COIN_DARK,
+    COIN_GOLD, COIN_DARK,
     WHITE, NEAR_BLACK,
 )
 
@@ -36,10 +36,16 @@ def _text(surf, txt, center, size=36, color=WHITE, shadow=True):
 
 
 def _coin_icon(surf, cx, cy, r=10):
-    blit_glow(surf, cx, cy, r + 4, COIN_GOLD, 120)
+    # Match in-world Coin.draw: dark rim + gold body + embossed parrot.
+    # No halo, no pale highlight.
     pygame.draw.circle(surf, COIN_DARK, (cx, cy), r + 1)
     pygame.draw.circle(surf, COIN_GOLD, (cx, cy), r)
-    pygame.draw.ellipse(surf, COIN_LIGHT, (cx - r + 2, cy - r + 2, r - 1, r - 4))
+    emboss = (140, 85, 0)
+    pygame.draw.ellipse(surf, emboss, (cx - 2, cy - 1, 7, 5))
+    pygame.draw.circle(surf, emboss, (cx - 1, cy - 3), 3)
+    pygame.draw.polygon(surf, emboss,
+                        [(cx - 3, cy - 3), (cx - 6, cy - 2), (cx - 3, cy - 1)])
+    pygame.draw.circle(surf, COIN_GOLD, (cx, cy - 4), 1)
 
 
 class PauseButton:
