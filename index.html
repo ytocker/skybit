@@ -156,7 +156,7 @@ config = {
     cdn : "https://pygame-web.github.io/cdn/0.9.3/",
     autorun : 1,
     PYBUILD : "3.12",
-    fb_ar   :  1.77,
+    fb_ar   :  0.5625,
     fb_width : "360",
     fb_height : "640"
 }
@@ -288,43 +288,26 @@ function show_infobox() {
 
 
 <style>
-/* Hide the xterm terminal panel so the canvas gets full width */
-#terminal, .xterm, #overlay, #gui { display: none !important; }
+#transfer, #pyconsole, #terminal, .xterm, #infobox {
+  display: none !important;
+}
 html, body {
-  width: 100%; height: 100%;
-  margin: 0; padding: 0;
-  overflow: hidden;
-  background: #000;
+  width: 100% !important; height: 100% !important;
+  margin: 0 !important; padding: 0 !important;
+  overflow: hidden !important;
+  background: #000 !important;
 }
 canvas#canvas {
-  display: block;
-  position: fixed;
-  top: 0; left: 0;
-  /* actual pixel size set by SDL; JS below will scale it */
-  image-rendering: pixelated;
-  image-rendering: crisp-edges;
+  position: fixed !important;
+  left: 50% !important;
+  top: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  width: min(100vw, calc(100vh * 9 / 16)) !important;
+  height: min(100vh, calc(100vw * 16 / 9)) !important;
+  image-rendering: pixelated !important;
+  image-rendering: crisp-edges !important;
 }
 </style>
-<script>
-// Scale the pygame canvas to fill the viewport, preserving aspect ratio.
-(function() {
-  function scaleCanvas() {
-    var c = document.getElementById('canvas');
-    if (!c) return;
-    var cw = c.width  || 360;
-    var ch = c.height || 640;
-    var sw = window.innerWidth;
-    var sh = window.innerHeight;
-    var scale = Math.min(sw / cw, sh / ch);
-    var tx = (sw - cw * scale) / 2;
-    var ty = (sh - ch * scale) / 2;
-    c.style.transformOrigin = '0 0';
-    c.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
-  }
-  window.addEventListener('load', scaleCanvas);
-  window.addEventListener('resize', scaleCanvas);
-})();
-</script>
 </head>
 
 <body>
