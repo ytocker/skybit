@@ -371,11 +371,6 @@ class Coin:
         cx = int(self.x)
         cy = int(self.y + math.sin(self.float_t * 2.2) * 2)
 
-        # Pulsing outer + inner glow for collect appeal
-        pulse = 0.5 + 0.5 * math.sin(self.shimmer_t * 3.0)
-        blit_glow(surf, cx, cy, COIN_R + 14, COIN_GOLD, int(150 + 50 * pulse))
-        blit_glow(surf, cx, cy, COIN_R + 4,  COIN_LIGHT, int(110 + 30 * pulse))
-
         cos_s = math.cos(self.spin)
         ry = COIN_R
 
