@@ -77,76 +77,61 @@ jobs:
               sys.exit("FATAL: no 'autorun: 0' or 'autorun: 1' in generated HTML")
           PY
 
-      - name: Force pygbag debug terminal ON
-        # pygbag hides the xterm console by default (gui_debug=2). That
-        # means Python stdout/stderr is invisible when something goes
-        # wrong — we end up staring at a gray canvas with no clue why.
-        # Force debug mode on in the rendered HTML so errors surface.
-        run: |
-          python - <<'PY'
-          import pathlib, re
-          p = pathlib.Path("build/web/index.html")
-          html = p.read_text(encoding="utf-8")
-          # 1. Flip debug:false → debug:true inside the config object.
-          new, n1 = re.subn(r'(debug\s*:\s*)false', r'\g<1>true', html, count=1)
-          # 2. Append a tiny bootstrap that calls debug() after onload.
-          #    The template defines debug() which unhides the terminal
-          #    via custom_onload(false).
-          bootstrap = (
-              "\n<script>window.addEventListener('load',"
-              "()=>{try{debug();}catch(e){console.error('debug() failed',e);}});"
-              "</script>\n"
-          )
-          new = new.replace("</body>", bootstrap + "</body>")
-          p.write_text(new, encoding="utf-8")
-          print(f"post-build: debug flipped ({n1}) + auto-debug() bootstrap injected")
-          PY
-
       - name: Patch canvas CSS for full-viewport mobile display
-        # pygbag renders the canvas at a fixed 360×640 px; on mobile that
-        # leaves the rest of the viewport gray. Override with CSS that scales
-        # the canvas to fill the screen while keeping the aspect ratio, and
-        # remove the hard-coded width/height attributes so CSS can take over.
+        # pygbag renders the game in a fixed-size canvas (360×640).  The
+        # xterm debug terminal sits beside it, which pushes the canvas to
+        # the right — giving the "upper-right quarter" symptom on mobile.
+        # Fix: hide the terminal container, then use a JS scale-transform
+        # to fill the viewport (CSS object-fit does not apply to <canvas>).
         run: |
           python - <<'PY'
           import pathlib, re
           p = pathlib.Path("build/web/index.html")
           html = p.read_text(encoding="utf-8")
 
-          # 1. Inject a <style> block just before </head> that makes the
-          #    canvas fill the viewport with letterboxing.
-          css = """
+          css_and_js = """
           <style>
+          /* Hide the xterm terminal panel so the canvas gets full width */
+          #terminal, .xterm, #overlay, #gui { display: none !important; }
           html, body {
             width: 100%; height: 100%;
             margin: 0; padding: 0;
             overflow: hidden;
             background: #000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
           }
-          canvas {
+          canvas#canvas {
             display: block;
-            width: 100% !important;
-            height: 100% !important;
-            max-width: 100vw;
-            max-height: 100vh;
-            object-fit: contain;
+            position: fixed;
+            top: 0; left: 0;
+            /* actual pixel size set by SDL; JS below will scale it */
             image-rendering: pixelated;
+            image-rendering: crisp-edges;
           }
           </style>
+          <script>
+          // Scale the pygame canvas to fill the viewport, preserving aspect ratio.
+          (function() {
+            function scaleCanvas() {
+              var c = document.getElementById('canvas');
+              if (!c) return;
+              var cw = c.width  || 360;
+              var ch = c.height || 640;
+              var sw = window.innerWidth;
+              var sh = window.innerHeight;
+              var scale = Math.min(sw / cw, sh / ch);
+              var tx = (sw - cw * scale) / 2;
+              var ty = (sh - ch * scale) / 2;
+              c.style.transformOrigin = '0 0';
+              c.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
+            }
+            window.addEventListener('load', scaleCanvas);
+            window.addEventListener('resize', scaleCanvas);
+          })();
+          </script>
           """
-          html = html.replace("</head>", css + "</head>", 1)
-
-          # 2. Remove any hard-coded width/height attributes on <canvas> so
-          #    CSS dimensions are not overridden by inline attrs.
-          # (pygbag may set width="360" height="640" as HTML attributes;
-          #  keep them as the *buffer* size but remove inline style attrs.)
-          html = re.sub(r'(<canvas\b[^>]*)\s+style="[^"]*"', r'\1', html)
-
+          html = html.replace("</head>", css_and_js + "</head>", 1)
           p.write_text(html, encoding="utf-8")
-          print("canvas CSS injected")
+          print("canvas scale JS + terminal-hide CSS injected")
           PY
 
       - name: Verify final HTML has autorun=1
