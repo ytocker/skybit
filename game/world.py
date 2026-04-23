@@ -70,7 +70,9 @@ class World:
     # ── difficulty ───────────────────────────────────────────────────────────
 
     def _diff_t(self):
-        return max(0.0, min(1.0, self.score / 40.0))
+        # Ramp on raw coins collected, not score — so the mushroom's 3×
+        # multiplier buffs score only and does not accelerate difficulty.
+        return max(0.0, min(1.0, self.coin_count / 40.0))
 
     # ── biome ────────────────────────────────────────────────────────────────
 
@@ -340,8 +342,6 @@ class World:
                 random.randint(2, 4),
                 col, gravity=300,
             ))
-        # "+3" during the buff is bigger and offset further from the bird
-        # so the 3X aura doesn't swallow it (see REVIEW.md finding).
         if value == 3:
             label = "+3"
             color = UI_ORANGE

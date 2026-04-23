@@ -8,7 +8,7 @@ import pygame
 from game.config import W, H, FPS, TITLE, GROUND_Y
 from game.draw import (
     get_sky_surface_biome, draw_mountains, draw_cloud, draw_ground,
-    blit_glow, UI_RED,
+    UI_RED,
 )
 from game import biome as _biome
 from game.world import World
@@ -192,11 +192,6 @@ class App:
             c.draw(self.screen)
         for m in self.world.mushrooms:
             m.draw(self.screen)
-
-        if self.world.triple_timer > 0 and self.world.bird.alive:
-            pulse = 10 + int(math.sin(pygame.time.get_ticks() * 0.01) * 3)
-            blit_glow(self.screen, int(self.world.bird.x + sx), int(self.world.bird.y + sy),
-                      28 + pulse, (255, 170, 60), 160)
 
         self.world.bird.draw(self.screen, sx, sy)
 
