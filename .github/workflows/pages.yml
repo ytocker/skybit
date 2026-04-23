@@ -46,11 +46,13 @@ jobs:
           PY
 
       - name: Build web bundle
-        # --ume_block 0: skip the User Media Engagement gate so the
-        #   runtime starts without needing an extra click overlay.
-        # --can_close 1: let the runtime clean up on page unload
-        #   (recommended by pygbag alongside --ume_block 0).
-        run: pygbag --build --ume_block 0 --can_close 1 .
+        # --ume_block 0:  skip the User Media Engagement gate so the
+        #                 runtime starts without needing an overlay click.
+        # --can_close 1:  let the runtime clean up on page unload.
+        # --width/height: match the game's 360×640 portrait canvas so
+        #                 pygbag configures the framebuffer correctly
+        #                 instead of defaulting to 1280×720 landscape.
+        run: pygbag --build --ume_block 0 --can_close 1 --width 360 --height 640 .
 
       - name: Force autorun=1 in generated index.html (post-build, braces)
         # If the pre-build source patch didn't take (different pygbag
@@ -73,6 +75,31 @@ jobs:
               print("=== FULL index.html ===")
               print(html)
               sys.exit("FATAL: no 'autorun: 0' or 'autorun: 1' in generated HTML")
+          PY
+
+      - name: Force pygbag debug terminal ON
+        # pygbag hides the xterm console by default (gui_debug=2). That
+        # means Python stdout/stderr is invisible when something goes
+        # wrong — we end up staring at a gray canvas with no clue why.
+        # Force debug mode on in the rendered HTML so errors surface.
+        run: |
+          python - <<'PY'
+          import pathlib, re
+          p = pathlib.Path("build/web/index.html")
+          html = p.read_text(encoding="utf-8")
+          # 1. Flip debug:false → debug:true inside the config object.
+          new, n1 = re.subn(r'(debug\s*:\s*)false', r'\g<1>true', html, count=1)
+          # 2. Append a tiny bootstrap that calls debug() after onload.
+          #    The template defines debug() which unhides the terminal
+          #    via custom_onload(false).
+          bootstrap = (
+              "\n<script>window.addEventListener('load',"
+              "()=>{try{debug();}catch(e){console.error('debug() failed',e);}});"
+              "</script>\n"
+          )
+          new = new.replace("</body>", bootstrap + "</body>")
+          p.write_text(new, encoding="utf-8")
+          print(f"post-build: debug flipped ({n1}) + auto-debug() bootstrap injected")
           PY
 
       - name: Verify final HTML has autorun=1
