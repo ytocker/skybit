@@ -339,15 +339,13 @@ def snap_powerups():
     for t in (0.0, 0.25, 0.5, 0.75, 1.0):
         ang = -math.pi * 0.35 + math.pi * 0.7 * t
         app.world.coins.append(Coin(180 + math.sin(ang) * 40, 320 + math.cos(ang) * 44 - 10))
-    # Lay out all four variants across the screen for the gallery shot.
+    # Lay out all three variants across the screen for the gallery shot.
     app.world.powerups.extend((
-        PowerUp(60, 160, kind="triple"),
-        PowerUp(135, 160, kind="shield"),
-        PowerUp(215, 160, kind="magnet"),
-        PowerUp(295, 160, kind="slowmo"),
+        PowerUp(90, 160, kind="triple"),
+        PowerUp(180, 160, kind="magnet"),
+        PowerUp(270, 160, kind="slowmo"),
     ))
     # Activate buffs so the HUD strip and in-world overlays are visible.
-    app.world.shield_armed = True
     app.world.magnet_timer = 3.2
     app.world.slowmo_timer = 2.0
     app.world.triple_timer = 5.5
@@ -379,7 +377,7 @@ def snap_stats():
     app.world.pillars_passed = 28
     app.world.near_misses = 9
     app.world.time_alive = 82.4
-    app.world.powerups_picked = {"triple": 2, "shield": 1, "magnet": 0, "slowmo": 1}
+    app.world.powerups_picked = {"triple": 2, "magnet": 1, "slowmo": 1}
     app.prev_best_at_death = 50
     app.world._die()
     app._on_death()

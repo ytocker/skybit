@@ -131,19 +131,6 @@ def init() -> None:
                 (0.08, 659, 659, "triangle", 0.42),
                 (0.14, 784, 988, "triangle", 0.50),
             ]))
-        # Shield pickup: rising chord
-        _sounds["shield"] = pygame.mixer.Sound(
-            buffer=_synth_sequence([
-                (0.07, 440, 440, "sine", 0.35),
-                (0.07, 587, 587, "sine", 0.38),
-                (0.14, 784, 880, "sine", 0.42),
-            ]))
-        # Shield break: two fast crunchy descending chirps
-        _sounds["shield_break"] = pygame.mixer.Sound(
-            buffer=_synth_sequence([
-                (0.08, 900, 420, "square", 0.38),
-                (0.10, 600, 220, "square", 0.42),
-            ]))
         # Magnet: low→high swept sine, slightly buzzier tail
         _sounds["magnet"] = pygame.mixer.Sound(
             buffer=_synth_sequence([
@@ -195,8 +182,6 @@ def play_coin() -> None:          _play("coin", 0.75)
 def play_coin_combo() -> None:    _play("coin_combo", 0.80)
 def play_coin_triple() -> None:   _play("coin_triple", 0.85)
 def play_mushroom() -> None:      _play("mushroom", 0.85)
-def play_shield() -> None:        _play("shield", 0.80)
-def play_shield_break() -> None:  _play("shield_break", 0.80)
 def play_magnet() -> None:        _play("magnet", 0.75)
 def play_slowmo() -> None:        _play("slowmo", 0.75)
 def play_thunder() -> None:       _play("thunder", 0.85)

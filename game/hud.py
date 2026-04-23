@@ -60,12 +60,6 @@ def _draw_buff_icon(surf, rect, kind):
                             (cx - 8, cy - 5, 16, 8))
         pygame.draw.circle(surf, WHITE, (cx - 3, cy - 3), 1)
         pygame.draw.circle(surf, WHITE, (cx + 3, cy - 2), 1)
-    elif kind == "shield":
-        pygame.draw.circle(surf, (10, 30, 80), (cx, cy), 9)
-        pygame.draw.circle(surf, (60, 130, 230), (cx, cy), 8)
-        pygame.draw.circle(surf, (110, 180, 255), (cx, cy), 6)
-        pygame.draw.rect(surf, WHITE, (cx - 1, cy - 5, 2, 10))
-        pygame.draw.rect(surf, WHITE, (cx - 5, cy - 1, 10, 2))
     elif kind == "magnet":
         # Horseshoe U
         pygame.draw.arc(surf, (220, 30, 40),
@@ -249,11 +243,9 @@ class HUD:
                                  border_radius=8, width=2)
                 surf.blit(ring, (bx - 5, by - 3))
 
-        # Active-buff strip (shield + magnet + slowmo badges). Triple has its
-        # own bigger timer bar above, so we don't duplicate it here.
+        # Active-buff strip (magnet + slowmo badges). Triple has its own
+        # bigger timer bar above, so we don't duplicate it here.
         active = []
-        if world.shield_armed:
-            active.append(("shield", None, None))
         if world.magnet_timer > 0:
             active.append(("magnet", world.magnet_timer, MAGNET_DURATION))
         if world.slowmo_timer > 0:

@@ -263,23 +263,6 @@ class App:
 
         self.world.bird.draw(self.screen, sx, sy)
 
-        # Shield bubble around the bird when armed
-        if self.world.shield_armed:
-            import math as _math
-            pulse = 0.5 + 0.5 * _math.sin(self._cloud_phase * 4.0)
-            bubble_r = 24 + int(pulse * 2)
-            bubble = pygame.Surface((bubble_r * 2 + 4, bubble_r * 2 + 4),
-                                    pygame.SRCALPHA)
-            # Outer glow
-            pygame.draw.circle(bubble, (80, 160, 255, 60),
-                               (bubble_r + 2, bubble_r + 2), bubble_r)
-            # Inner ring
-            pygame.draw.circle(bubble, (180, 225, 255, 160),
-                               (bubble_r + 2, bubble_r + 2), bubble_r, 2)
-            self.screen.blit(bubble,
-                             (self.world.bird.x + sx - bubble_r - 2,
-                              self.world.bird.y + sy - bubble_r - 2))
-
         for p in self.world.particles:
             p.draw(self.screen)
 

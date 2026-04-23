@@ -306,7 +306,6 @@ class Coin:
 class PowerUp:
     """A collectible buff. `kind` selects visuals and pickup effect:
        triple  — red mushroom, 3x coin value for TRIPLE_DURATION
-       shield  — blue badge, absorbs next fatal collision
        magnet  — red horseshoe, pulls coins in for MAGNET_DURATION
        slowmo  — purple hourglass, 0.5x world scroll for SLOWMO_DURATION
     """
@@ -323,8 +322,6 @@ class PowerUp:
     def draw(self, surf):
         if self.kind == "triple":
             self._draw_mushroom(surf)
-        elif self.kind == "shield":
-            self._draw_shield(surf)
         elif self.kind == "magnet":
             self._draw_magnet(surf)
         elif self.kind == "slowmo":
@@ -369,28 +366,6 @@ class PowerUp:
                            (cx - 3, cy + 2, 2)):
             pygame.draw.circle(surf, (220, 190, 200), (sx, sy), sr + 1)
             pygame.draw.circle(surf, MUSH_SPOT,       (sx, sy), sr)
-
-    def _draw_shield(self, surf):
-        cx = int(self.x)
-        cy = int(self.y)
-        # Soft blue aura behind
-        aura = pygame.Surface((MUSHROOM_R * 3, MUSHROOM_R * 3), pygame.SRCALPHA)
-        pygame.draw.circle(aura, (80, 160, 255, 70),
-                           (aura.get_width() // 2, aura.get_height() // 2),
-                           MUSHROOM_R + 4)
-        surf.blit(aura, (cx - aura.get_width() // 2, cy - aura.get_height() // 2),
-                  special_flags=pygame.BLEND_ADD)
-        # Disc with metallic frame
-        pygame.draw.circle(surf, (10, 30, 80), (cx, cy), MUSHROOM_R + 2)
-        pygame.draw.circle(surf, (60, 130, 230), (cx, cy), MUSHROOM_R + 1)
-        pygame.draw.circle(surf, (110, 180, 255), (cx, cy), MUSHROOM_R - 1)
-        pygame.draw.circle(surf, (180, 225, 255), (cx - 3, cy - 4), 3)
-        # White cross
-        pygame.draw.rect(surf, WHITE, (cx - 2, cy - 8, 4, 16), border_radius=1)
-        pygame.draw.rect(surf, WHITE, (cx - 8, cy - 2, 16, 4), border_radius=1)
-        # Outline the cross so it pops
-        pygame.draw.rect(surf, (20, 40, 90), (cx - 2, cy - 8, 4, 16), 1)
-        pygame.draw.rect(surf, (20, 40, 90), (cx - 8, cy - 2, 16, 4), 1)
 
     def _draw_magnet(self, surf):
         cx = int(self.x)

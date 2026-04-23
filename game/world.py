@@ -55,7 +55,6 @@ class World:
         self.triple_timer = 0.0
         self.magnet_timer = 0.0
         self.slowmo_timer = 0.0
-        self.shield_armed = False
         self.mushroom_cooldown = 0.0
 
         # Coin-rush counter: increments each spawn; every Nth pipe is a rush.
@@ -66,7 +65,7 @@ class World:
         self.pillars_passed = 0
         self.time_alive = 0.0
         self.near_misses = 0
-        self.powerups_picked = {"triple": 0, "shield": 0, "magnet": 0, "slowmo": 0}
+        self.powerups_picked = {"triple": 0, "magnet": 0, "slowmo": 0}
         # Transient flag so near-miss detection fires once per pillar.
         self._near_miss_flags: dict[int, bool] = {}
 
@@ -395,36 +394,8 @@ class World:
             return
         for p in self.pipes:
             if p.collides_circle(bx, by, BIRD_R - 2):
-                if self.shield_armed:
-                    self._break_shield(p)
-                    return
                 self._die()
                 return
-
-    def _break_shield(self, pipe):
-        """Consume the shield: spawn a blue shimmer + a safety nudge."""
-        self.shield_armed = False
-        self.shake_mag = max(self.shake_mag, 4.0)
-        self.shake_t = max(self.shake_t, 0.25)
-        # Nudge the bird upward out of the pillar so it isn't still overlapping.
-        self.bird.vy = -240
-        audio.play_shield_break()
-        bx, by = self.bird.x, self.bird.y
-        for _ in range(24):
-            ang = random.uniform(0, math.tau)
-            spd = random.uniform(140, 320)
-            col = random.choice(((120, 200, 255), (80, 160, 255), WHITE))
-            self.particles.append(Particle(
-                bx, by,
-                math.cos(ang) * spd, math.sin(ang) * spd,
-                random.uniform(0.4, 0.9),
-                random.randint(2, 4),
-                col, gravity=80,
-            ))
-        self.float_texts.append(FloatText(
-            "SHIELD!", bx, by - 24, (120, 200, 255),
-            size=22, life=1.1, vy=-40,
-        ))
 
     def _die(self):
         if self.game_over:
@@ -541,8 +512,6 @@ class World:
         self.powerups_picked[m.kind] = self.powerups_picked.get(m.kind, 0) + 1
         if m.kind == "triple":
             self._activate_triple(m)
-        elif m.kind == "shield":
-            self._activate_shield(m)
         elif m.kind == "magnet":
             self._activate_magnet(m)
         elif m.kind == "slowmo":
@@ -569,16 +538,6 @@ class World:
         self._pickup_burst(m, (UI_ORANGE, UI_GOLD, BIRD_RED, UI_CREAM))
         self.float_texts.append(FloatText(
             "3X POWER!", m.x, m.y - 22, UI_ORANGE, size=26, life=1.4, vy=-30,
-        ))
-
-    def _activate_shield(self, m):
-        self.shield_armed = True
-        self.shake_mag = max(self.shake_mag, 2.5)
-        self.shake_t = max(self.shake_t, 0.25)
-        audio.play_shield()
-        self._pickup_burst(m, ((120, 200, 255), (80, 160, 255), WHITE, (180, 225, 255)))
-        self.float_texts.append(FloatText(
-            "SHIELD UP!", m.x, m.y - 22, (120, 200, 255), size=24, life=1.3, vy=-30,
         ))
 
     def _activate_magnet(self, m):

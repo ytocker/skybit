@@ -37,13 +37,12 @@ SLOWMO_DURATION    = 3.0
 SLOWMO_SCALE       = 0.5
 COMBO_WINDOW       = 1.6
 
-# Spawn weights for the four power-up kinds. Must sum to anything — they're
+# Spawn weights for the three power-up kinds. Must sum to anything — they're
 # normalized at pick time.
 POWERUP_WEIGHTS    = (
-    ("triple", 50),
-    ("shield", 22),
-    ("slowmo", 18),
-    ("magnet", 10),
+    ("triple", 60),
+    ("slowmo", 25),
+    ("magnet", 15),
 )
 
 SAVE_FILE = "skybit_save.json"
