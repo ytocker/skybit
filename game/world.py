@@ -148,13 +148,6 @@ class World:
                 self.ready_t = 0.0
             self.bird.flap()
             audio.play_flap()
-            # small puff
-            for _ in range(3):
-                self.particles.append(Particle(
-                    self.bird.x - 12, self.bird.y + 6,
-                    random.uniform(-60, -20), random.uniform(-30, 30),
-                    0.35, random.randint(2, 4), (220, 220, 255), gravity=200,
-                ))
 
     # ── update ──────────────────────────────────────────────────────────────
 

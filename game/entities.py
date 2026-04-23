@@ -50,7 +50,6 @@ class Bird:
         self.alive = True
         self.frame_t = 0.0
         self.flap_boost = 0.0
-        self.trail: list[tuple[float, float]] = []
 
     @property
     def tilt_deg(self):
@@ -67,10 +66,6 @@ class Bird:
     def update(self, dt):
         self.vy = min(self.vy + GRAVITY * dt, MAX_FALL)
         self.y += self.vy * dt
-        if len(self.trail) == 0 or (self.x - self.trail[-1][0]) ** 2 + (self.y - self.trail[-1][1]) ** 2 > 16:
-            self.trail.append((self.x, self.y))
-            if len(self.trail) > 8:
-                self.trail.pop(0)
 
         base_hz = 9.0 + self.flap_boost * 20.0
         if self.vy < -100:
@@ -81,14 +76,6 @@ class Bird:
         self.flap_boost = max(0.0, self.flap_boost - dt * 1.8)
 
     def draw(self, surf, shake_x=0, shake_y=0):
-        for i, (tx, ty) in enumerate(self.trail[:-1]):
-            a = int(40 * (i + 1) / len(self.trail))
-            if a <= 0:
-                continue
-            s = pygame.Surface((26, 26), pygame.SRCALPHA)
-            pygame.draw.circle(s, (255, 90, 90, a), (13, 13), 11)
-            surf.blit(s, (tx - 13 + shake_x, ty - 13 + shake_y), special_flags=pygame.BLEND_ADD)
-
         frame_idx = int(self.frame_t) % len(parrot.FRAMES)
         img = parrot.get_parrot(frame_idx, self.tilt_deg)
         r = img.get_rect(center=(self.x + shake_x, self.y + shake_y))
@@ -301,14 +288,6 @@ class Coin:
                              (rx + 1) * 2, (r + 1) * 2))
         pygame.draw.ellipse(surf, COIN_GOLD,
                             (cx - rx, cy - r, rx * 2, r * 2))
-
-        # Scalloped bumps ride the outer rim at the squeezed-ellipse radius.
-        for i in range(10):
-            ang = i * math.tau / 10
-            bx = cx + math.cos(ang) * (rx + 1)
-            by = cy + math.sin(ang) * (r + 1)
-            pygame.draw.circle(surf, COIN_DARK, (int(bx), int(by)), 2)
-            pygame.draw.circle(surf, COIN_GOLD, (int(bx), int(by)), 1)
 
         # Embossed parrot silhouette — only when mostly face-on so it
         # doesn't smear across a squeezed ellipse.
