@@ -78,60 +78,63 @@ jobs:
           PY
 
       - name: Patch canvas CSS for full-viewport mobile display
-        # pygbag renders the game in a fixed-size canvas (360×640).  The
-        # xterm debug terminal sits beside it, which pushes the canvas to
-        # the right — giving the "upper-right quarter" symptom on mobile.
-        # Fix: hide the terminal container, then use a JS scale-transform
-        # to fill the viewport (CSS object-fit does not apply to <canvas>).
+        # Root causes identified from the pygbag 0.9 template:
+        #
+        # 1. fb_ar is hardcoded as 1.77 (landscape 16:9) in the template.
+        #    pythons.js uses this ratio when calling window_resize() to size
+        #    the canvas via inline style — ignoring our portrait 360×640 game.
+        #    Fix: patch fb_ar to 0.5625 (portrait 9:16 = 360/640).
+        #
+        # 2. window_resize() sets canvas.style.width/height/transform as
+        #    inline styles which override normal CSS rules.
+        #    Fix: use CSS !important, which beats non-!important inline styles.
+        #
+        # 3. Previous JS transform ran at window.load when canvas.width==1,
+        #    producing a garbage scale value. Dropped entirely.
         run: |
           python - <<'PY'
           import pathlib, re
           p = pathlib.Path("build/web/index.html")
           html = p.read_text(encoding="utf-8")
 
-          css_and_js = """
+          # Fix 1 — correct the hardcoded landscape aspect ratio.
+          before = html
+          html = re.sub(r'fb_ar\s*:\s*1\.77', 'fb_ar   :  0.5625', html)
+          if html == before:
+              print("WARNING: fb_ar:1.77 not found — template may have changed")
+          else:
+              print("patched fb_ar 1.77 → 0.5625 (portrait 9:16)")
+
+          # Fix 2 — CSS !important beats SDL inline styles from window_resize().
+          # Portrait 9:16 sizing: width=min(100vw, 100vh*9/16),
+          #                       height=min(100vh, 100vw*16/9)
+          # Centered with translate(-50%,-50%) from 50%/50% anchor.
+          css = """
           <style>
-          /* Hide the xterm terminal panel so the canvas gets full width */
-          #terminal, .xterm, #overlay, #gui { display: none !important; }
+          #transfer, #pyconsole, #terminal, .xterm, #infobox {
+            display: none !important;
+          }
           html, body {
-            width: 100%; height: 100%;
-            margin: 0; padding: 0;
-            overflow: hidden;
-            background: #000;
+            width: 100% !important; height: 100% !important;
+            margin: 0 !important; padding: 0 !important;
+            overflow: hidden !important;
+            background: #000 !important;
           }
           canvas#canvas {
-            display: block;
-            position: fixed;
-            top: 0; left: 0;
-            /* actual pixel size set by SDL; JS below will scale it */
-            image-rendering: pixelated;
-            image-rendering: crisp-edges;
+            position: fixed !important;
+            left: 50% !important;
+            top: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            width: min(100vw, calc(100vh * 9 / 16)) !important;
+            height: min(100vh, calc(100vw * 16 / 9)) !important;
+            image-rendering: pixelated !important;
+            image-rendering: crisp-edges !important;
           }
           </style>
-          <script>
-          // Scale the pygame canvas to fill the viewport, preserving aspect ratio.
-          (function() {
-            function scaleCanvas() {
-              var c = document.getElementById('canvas');
-              if (!c) return;
-              var cw = c.width  || 360;
-              var ch = c.height || 640;
-              var sw = window.innerWidth;
-              var sh = window.innerHeight;
-              var scale = Math.min(sw / cw, sh / ch);
-              var tx = (sw - cw * scale) / 2;
-              var ty = (sh - ch * scale) / 2;
-              c.style.transformOrigin = '0 0';
-              c.style.transform = 'translate(' + tx + 'px,' + ty + 'px) scale(' + scale + ')';
-            }
-            window.addEventListener('load', scaleCanvas);
-            window.addEventListener('resize', scaleCanvas);
-          })();
-          </script>
           """
-          html = html.replace("</head>", css_and_js + "</head>", 1)
+          html = html.replace("</head>", css + "</head>", 1)
           p.write_text(html, encoding="utf-8")
-          print("canvas scale JS + terminal-hide CSS injected")
+          print("portrait fullscreen CSS injected")
           PY
 
       - name: Verify final HTML has autorun=1
