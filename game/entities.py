@@ -19,10 +19,10 @@ from game.draw import (
     silhouette_blit, silhouette_top_spire, silhouette_bottom_spire,
     draw_wuling_pine, draw_moss_strand, draw_side_shrub, draw_pillar_mist,
     rounded_rect, lerp_color,
-    COIN_GOLD, COIN_LIGHT, COIN_DARK,
+    COIN_GOLD, COIN_DARK,
     MUSH_CAP, MUSH_CAP2, MUSH_SPOT, MUSH_STEM,
     PARTICLE_GOLD, PARTICLE_ORNG, PARTICLE_WHT, PARTICLE_CRIM,
-    WHITE, NEAR_BLACK,
+    NEAR_BLACK,
 )
 from game import parrot
 
@@ -257,101 +257,16 @@ class Pipe:
 
 # ── Coin ─────────────────────────────────────────────────────────────────────
 
-def _build_star(r, color):
-    """Pre-render a 5-pointed star into an SRCALPHA surface."""
-    size = r * 2 + 2
-    s = pygame.Surface((size, size), pygame.SRCALPHA)
-    cx = cy = r + 1
-    pts = []
-    for i in range(10):
-        ang = -math.pi / 2 + i * math.pi / 5
-        radius = r if i % 2 == 0 else r * 0.45
-        pts.append((cx + math.cos(ang) * radius, cy + math.sin(ang) * radius))
-    pygame.draw.polygon(s, color, pts)
-    return s
-
-
-_STAR_CACHE: dict = {}
-
-
-def _get_star(r, color):
-    key = (r, color)
-    s = _STAR_CACHE.get(key)
-    if s is None:
-        s = _build_star(r, color)
-        _STAR_CACHE[key] = s
-    return s
-
-
-_MEDALLION_FACE_CACHE: dict = {}
-
-
-def _build_medallion_face(r: int) -> pygame.Surface:
-    """Pre-render a gold parrot-medallion face at radius r.
-
-    Scalloped rim + tri-tone gold disc + tiny embossed parrot silhouette.
-    Cached because the face is identical every frame — spin is handled by
-    horizontal scale at blit time.
-    """
-    pad = 4
-    size = (r + pad) * 2
-    s = pygame.Surface((size, size), pygame.SRCALPHA)
-    cx = cy = size // 2
-
-    # Scalloped outer bumps — part of the silhouette
-    scallops = 10
-    for i in range(scallops):
-        ang = i * math.tau / scallops
-        bx = cx + math.cos(ang) * (r + 0.5)
-        by = cy + math.sin(ang) * (r + 0.5)
-        pygame.draw.circle(s, COIN_DARK, (int(bx), int(by)), 2)
-        pygame.draw.circle(s, COIN_GOLD, (int(bx), int(by)), 1)
-
-    # Tri-tone gold disc: dark rim → mid face → bright inner field
-    pygame.draw.circle(s, COIN_DARK,  (cx, cy), r)
-    pygame.draw.circle(s, COIN_GOLD,  (cx, cy), r - 2)
-    pygame.draw.circle(s, COIN_LIGHT, (cx, cy), r - 4)
-
-    # Embossed parrot silhouette (head + beak + small body) in darker gold
-    emboss = (150, 95, 5)
-    # Body — tucked below/behind the head
-    pygame.draw.ellipse(s, emboss, pygame.Rect(cx - 2, cy - 1, 7, 5))
-    # Head
-    pygame.draw.circle(s, emboss, (cx - 1, cy - 3), 3)
-    # Hooked beak pointing left
-    pygame.draw.polygon(s, emboss,
-                        [(cx - 3, cy - 4), (cx - 6, cy - 2), (cx - 3, cy - 1)])
-    # Tiny eye highlight
-    pygame.draw.circle(s, COIN_LIGHT, (cx, cy - 4), 1)
-
-    # Top-left specular arc for metallic sheen
-    pygame.draw.arc(s, COIN_LIGHT,
-                    pygame.Rect(cx - r + 1, cy - r + 1,
-                                (r - 1) * 2, (r - 1) * 2),
-                    math.radians(130), math.radians(210), 2)
-
-    return s
-
-
-def _get_medallion_face(r: int) -> pygame.Surface:
-    face = _MEDALLION_FACE_CACHE.get(r)
-    if face is None:
-        face = _build_medallion_face(r)
-        _MEDALLION_FACE_CACHE[r] = face
-    return face
-
-
 class Coin:
-    """Slow-rotating gold parrot medallion.
+    """Slow-rotating gold parrot medallion, drawn with no halo or glow.
 
-    The coin shows its full scalloped face (with an embossed parrot) for
-    most of its rotation and only briefly narrows to an edge-on sliver, so
-    the collectable always reads as a coin. COIN_R governs both the face
-    radius and the collision radius so what you see is what you collect.
+    Every frame the coin is drawn directly onto the target surface as an
+    ellipse squeezed horizontally by |cos(spin)|. No cached face, no
+    smoothscale blur, no radial aura — the silhouette you see is the
+    silhouette you collect (COIN_R governs both).
     """
 
-    # ≈ 5.7 seconds per full rotation.
-    SPIN_RATE = 1.1
+    SPIN_RATE = 1.1  # ≈ 5.7 seconds per full rotation
 
     def __init__(self, x, y):
         self.x = x
@@ -359,53 +274,51 @@ class Coin:
         self.spin = random.uniform(0, math.tau)
         self.collected = False
         self.float_t = random.uniform(0, math.tau)
-        # Independent sweep phase for the animated rim glint
-        self.shimmer_t = random.uniform(0, math.tau)
 
     def update(self, dt):
         self.spin = (self.spin + dt * self.SPIN_RATE) % math.tau
         self.float_t += dt
-        self.shimmer_t += dt
 
     def draw(self, surf):
         cx = int(self.x)
         cy = int(self.y + math.sin(self.float_t * 2.2) * 2)
-
         cos_s = math.cos(self.spin)
-        ry = COIN_R
+        r = COIN_R
+        rx = max(1, int(abs(cos_s) * r))
 
-        if abs(cos_s) > 0.35:
-            # ── Face-on: blit the cached medallion, squeezed for spin ───────
-            face = _get_medallion_face(COIN_R)
-            fw, fh = face.get_size()
-            target_w = max(4, int(fw * abs(cos_s)))
-            if target_w != fw:
-                scaled = pygame.transform.smoothscale(face, (target_w, fh))
-            else:
-                scaled = face
-            rect = scaled.get_rect(center=(cx, cy))
-            surf.blit(scaled, rect.topleft)
+        if abs(cos_s) <= 0.35:
+            # Edge-on sliver — a thin gold bar with dark rim, no detail.
+            pygame.draw.ellipse(surf, COIN_DARK,
+                                (cx - rx - 1, cy - r, (rx + 1) * 2, r * 2))
+            pygame.draw.ellipse(surf, COIN_GOLD,
+                                (cx - rx, cy - r, rx * 2, r * 2))
+            return
 
-            # Animated rim glint sweeping around the visible face
-            rx_i = max(2, int(COIN_R * abs(cos_s)))
-            ang = self.shimmer_t * 1.3
-            gx = cx + int(math.cos(ang) * (rx_i - 2))
-            gy = cy + int(math.sin(ang) * (ry - 2))
-            pygame.draw.circle(surf, WHITE, (gx, gy), 2)
-            pygame.draw.circle(surf, (255, 255, 255, 180), (gx, gy), 1)
-        else:
-            # ── Near edge-on: a slim gold bar (the coin's thickness) ────────
-            rx_i = max(2, int(abs(cos_s) * COIN_R))
-            pygame.draw.ellipse(surf, NEAR_BLACK, (cx - rx_i - 1, cy - ry,
-                                                   (rx_i + 1) * 2, ry * 2))
-            pygame.draw.ellipse(surf, COIN_GOLD, (cx - rx_i, cy - ry,
-                                                  rx_i * 2, ry * 2))
-            pygame.draw.line(surf, COIN_LIGHT,
-                             (cx, cy - ry + 2), (cx, cy + ry - 2), 1)
-            pygame.draw.line(surf, COIN_DARK,
-                             (cx - rx_i, cy - ry + 1), (cx + rx_i, cy - ry + 1), 1)
-            pygame.draw.line(surf, COIN_DARK,
-                             (cx - rx_i, cy + ry - 1), (cx + rx_i, cy + ry - 1), 1)
+        # Face-on: dark rim → gold body. Both are ellipses that share the
+        # same horizontal squeeze, so the coin shape IS its silhouette.
+        pygame.draw.ellipse(surf, COIN_DARK,
+                            (cx - rx - 1, cy - r - 1,
+                             (rx + 1) * 2, (r + 1) * 2))
+        pygame.draw.ellipse(surf, COIN_GOLD,
+                            (cx - rx, cy - r, rx * 2, r * 2))
+
+        # Scalloped bumps ride the outer rim at the squeezed-ellipse radius.
+        for i in range(10):
+            ang = i * math.tau / 10
+            bx = cx + math.cos(ang) * (rx + 1)
+            by = cy + math.sin(ang) * (r + 1)
+            pygame.draw.circle(surf, COIN_DARK, (int(bx), int(by)), 2)
+            pygame.draw.circle(surf, COIN_GOLD, (int(bx), int(by)), 1)
+
+        # Embossed parrot silhouette — only when mostly face-on so it
+        # doesn't smear across a squeezed ellipse.
+        if abs(cos_s) > 0.75:
+            emboss = (140, 85, 0)
+            pygame.draw.ellipse(surf, emboss, (cx - 2, cy - 1, 7, 5))     # body
+            pygame.draw.circle(surf, emboss, (cx - 1, cy - 3), 3)         # head
+            pygame.draw.polygon(surf, emboss,                              # hooked beak
+                                [(cx - 3, cy - 3), (cx - 6, cy - 2), (cx - 3, cy - 1)])
+            pygame.draw.circle(surf, COIN_GOLD, (cx, cy - 4), 1)          # eye
 
 
 # ── Mushroom ─────────────────────────────────────────────────────────────────
