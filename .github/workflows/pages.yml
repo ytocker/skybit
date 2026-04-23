@@ -32,21 +32,25 @@ jobs:
       - name: Install pygbag
         run: pip install pygbag
 
+      - name: Force pygbag autorun=1 at source
+        run: |
+          python3 - <<'PY'
+          import pathlib, pygbag.app
+          p = pathlib.Path(pygbag.app.__file__)
+          txt = p.read_text(encoding="utf-8")
+          needle = '"autorun": "0"'
+          if needle not in txt:
+              print("ERROR: could not find", needle, "in", p)
+              raise SystemExit(1)
+          p.write_text(txt.replace(needle, '"autorun": "1"'), encoding="utf-8")
+          print("patched", p, "→ autorun=1")
+          PY
+
       - name: Build web bundle
         run: pygbag --build --ume_block 0 --can_close 1 .
 
-      - name: Flip autorun=1 in generated index.html
-        run: |
-          python3 - <<'PY'
-          import re, pathlib
-          p = pathlib.Path("build/web/index.html")
-          html = p.read_text(encoding="utf-8")
-          new = re.sub(r'("autorun"\s*:\s*)("?)0("?)', r'\g<1>\g<2>1\g<3>', html)
-          if new == html:
-              print("WARNING: autorun pattern not matched in index.html — dumping head for debug")
-              print(html[:4000])
-          p.write_text(new, encoding="utf-8")
-          PY
+      - name: Dump head of generated index.html for debug
+        run: head -c 4000 build/web/index.html || true
 
       - uses: actions/upload-pages-artifact@v3
         with:
