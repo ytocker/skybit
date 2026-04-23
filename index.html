@@ -308,6 +308,24 @@ canvas#canvas {
   image-rendering: crisp-edges !important;
 }
 </style>
+<script>
+// Resume SDL's WebAudio context on every click/touch so it is in
+// 'running' state by the time Python's pygame.mixer.init() runs.
+// We keep the listener permanently (not once:true) because SDL may
+// create its AudioContext lazily on first mixer open.
+(function() {
+  function resumeSDLAudio() {
+    // Emscripten SDL2 stores the context on window.SDL2 or Module.SDL2
+    var sdl = window.SDL2 || (window.Module && window.Module.SDL2);
+    if (sdl && sdl.audioContext && sdl.audioContext.state !== 'running') {
+      sdl.audioContext.resume();
+    }
+  }
+  ['click', 'touchstart', 'keydown'].forEach(function(t) {
+    document.addEventListener(t, resumeSDLAudio, {capture: true, passive: true});
+  });
+})();
+</script>
 </head>
 
 <body>
