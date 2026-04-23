@@ -23,25 +23,26 @@ jobs:
       - name: Install pygbag
         run: pip install pygbag
 
-      - name: Patch pygbag autorun 0 → 1
-        # pygbag hard-codes "autorun": "0" in its HTML template (see
-        # pygbag/app.py) with no CLI/INI override. Without this patch the
-        # deployed page sits at a gray canvas forever waiting on a user-
-        # media-engagement gesture that doesn't surface. Fail loudly if
-        # the template literal ever moves so we notice instead of
-        # silently shipping a broken page.
+      - name: Show pygbag version
+        run: python -c "import pygbag; print('pygbag', pygbag.__version__ if hasattr(pygbag, '__version__') else '(unknown)'); import pathlib; print(pathlib.Path(pygbag.__file__).parent / 'app.py')"
+
+      - name: Patch pygbag CC["autorun"] → "1" (pre-build, belt)
+        # pygbag hard-codes the autorun field at build time via a dict
+        # literal in pygbag/app.py. No CLI flag, no ini option. The
+        # .replace() below tolerates both spaced and unspaced forms.
+        # This is the belt; the sed-after-build step below is the braces.
         run: |
           python - <<'PY'
-          import pathlib, sys, pygbag
+          import pathlib, re, sys, pygbag
           p = pathlib.Path(pygbag.__file__).parent / "app.py"
           src = p.read_text()
-          if '"autorun": "0"' not in src and '"autorun":"0"' not in src:
-              sys.exit("pygbag template changed — 'autorun' literal not found in " + str(p))
-          new = (src
-                 .replace('"autorun": "0"', '"autorun": "1"')
-                 .replace('"autorun":"0"',  '"autorun":"1"'))
+          # Accept any whitespace between the key and the value.
+          pat = re.compile(r'("autorun"\s*:\s*)"0"')
+          if not pat.search(src):
+              sys.exit("pygbag CC['autorun']='0' literal not found — template changed")
+          new, n = pat.subn(r'\g<1>"1"', src)
           p.write_text(new)
-          print("patched autorun → 1 in", p)
+          print(f"patched autorun → 1 ({n} occurrence) in {p}")
           PY
 
       - name: Build web bundle
@@ -51,9 +52,37 @@ jobs:
         #   (recommended by pygbag alongside --ume_block 0).
         run: pygbag --build --ume_block 0 --can_close 1 .
 
+      - name: Force autorun=1 in generated index.html (post-build, braces)
+        # If the pre-build source patch didn't take (different pygbag
+        # version, surprising whitespace, etc.), rewrite the rendered
+        # HTML's config block directly. Fail the job if neither form
+        # is found, so we never silently ship autorun=0 again.
+        run: |
+          python - <<'PY'
+          import pathlib, re, sys
+          p = pathlib.Path("build/web/index.html")
+          html = p.read_text(encoding="utf-8")
+          pat = re.compile(r'(autorun\s*:\s*)0\b')
+          if pat.search(html):
+              html, n = pat.subn(r'\g<1>1', html)
+              p.write_text(html, encoding="utf-8")
+              print(f"post-build: flipped autorun:0 → autorun:1 ({n} occurrence)")
+          elif re.search(r'autorun\s*:\s*1\b', html):
+              print("post-build: autorun already 1 (source patch worked)")
+          else:
+              print("=== FULL index.html ===")
+              print(html)
+              sys.exit("FATAL: no 'autorun: 0' or 'autorun: 1' in generated HTML")
+          PY
+
+      - name: Verify final HTML has autorun=1
+        run: |
+          grep -E 'autorun\s*:\s*1' build/web/index.html
+          echo "OK — autorun is 1"
+
       - name: Log generated index.html head
-        # Keeps the first few KB of the generated HTML in the action log
-        # so debugging post-build issues doesn't need a fresh CI run.
+        # First 4 KB in the action log so post-deploy debugging doesn't
+        # need another full CI run.
         run: head -c 4000 build/web/index.html || true
 
       - name: Deploy to gh-pages
