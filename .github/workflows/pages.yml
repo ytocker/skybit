@@ -109,7 +109,16 @@ jobs:
           # Portrait 9:16 sizing: width=min(100vw, 100vh*9/16),
           #                       height=min(100vh, 100vw*16/9)
           # Centered with translate(-50%,-50%) from 50%/50% anchor.
-          css = """
+          #
+          # Fix 3 — Web Audio unlock.
+          # pygame.mixer.init() maps to SDL_OpenAudio which creates a
+          # WebAudioContext in suspended state (browser autoplay policy).
+          # Python sees the tap ~2 asyncio ticks after the JS click handler
+          # fires, so the gesture context may have expired by then.
+          # Solution: resume SDL's AudioContext synchronously in the JS
+          # click handler — before the event reaches Python — so that
+          # pygame.mixer.init() in lazy_init() finds the context running.
+          css_and_js = """
           <style>
           #transfer, #pyconsole, #terminal, .xterm, #infobox {
             display: none !important;
@@ -131,10 +140,28 @@ jobs:
             image-rendering: crisp-edges !important;
           }
           </style>
+          <script>
+          // Resume SDL's WebAudio context on every click/touch so it is in
+          // 'running' state by the time Python's pygame.mixer.init() runs.
+          // We keep the listener permanently (not once:true) because SDL may
+          // create its AudioContext lazily on first mixer open.
+          (function() {
+            function resumeSDLAudio() {
+              // Emscripten SDL2 stores the context on window.SDL2 or Module.SDL2
+              var sdl = window.SDL2 || (window.Module && window.Module.SDL2);
+              if (sdl && sdl.audioContext && sdl.audioContext.state !== 'running') {
+                sdl.audioContext.resume();
+              }
+            }
+            ['click', 'touchstart', 'keydown'].forEach(function(t) {
+              document.addEventListener(t, resumeSDLAudio, {capture: true, passive: true});
+            });
+          })();
+          </script>
           """
-          html = html.replace("</head>", css + "</head>", 1)
+          html = html.replace("</head>", css_and_js + "</head>", 1)
           p.write_text(html, encoding="utf-8")
-          print("portrait fullscreen CSS injected")
+          print("portrait fullscreen CSS + audio-unlock JS injected")
           PY
 
       - name: Verify final HTML has autorun=1

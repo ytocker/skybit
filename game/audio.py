@@ -32,6 +32,7 @@ _BYTE_RATE = SAMPLE_RATE * _CHANNELS * _SAMPLE_WIDTH
 _BLOCK_ALIGN = _CHANNELS * _SAMPLE_WIDTH
 
 _mixer_ok = False
+_mixer_attempted = False  # True once lazy_init has run (prevents pointless retries)
 
 
 def _open_mixer() -> bool:
@@ -206,12 +207,18 @@ def init() -> None:
 def lazy_init() -> None:
     """Try to open the mixer now that we have a user gesture.
 
-    Idempotent — safe to call on every flap; does nothing once the mixer is
-    already open or if it has permanently failed.
+    Called from play_flap() on every tap. The JavaScript audio-unlock snippet
+    in index.html resumes SDL's WebAudio context synchronously in the browser's
+    click handler; by the time this runs the context is already in 'running'
+    state, so pygame.mixer.init() succeeds.
+
+    Idempotent — after the first attempt (success or failure) we never retry,
+    so the overhead per flap is a single bool check.
     """
-    global _mixer_ok
-    if _mixer_ok or _sounds:
+    global _mixer_ok, _mixer_attempted
+    if _mixer_attempted:
         return
+    _mixer_attempted = True
     _mixer_ok = _open_mixer()
     if _mixer_ok:
         _load_sounds()
