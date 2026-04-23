@@ -70,9 +70,9 @@ class World:
     # ── difficulty ───────────────────────────────────────────────────────────
 
     def _diff_t(self):
-        # Ramp on raw coins collected, not score — so the mushroom's 3×
-        # multiplier buffs score only and does not accelerate difficulty.
-        return max(0.0, min(1.0, self.coin_count / 40.0))
+        # Constant difficulty — coins do not speed up the scroll or shrink
+        # the pipe gap. The game stays at SCROLL_BASE / GAP_START always.
+        return 0.0
 
     # ── biome ────────────────────────────────────────────────────────────────
 
