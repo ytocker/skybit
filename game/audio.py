@@ -1,25 +1,31 @@
 """
 Procedural audio for Skybit.
 
-Every sound effect is synthesized on import using Python's stdlib (`wave`,
-`struct`, `io`, `math`) — no external asset files, no numpy. Falls back to
+Every sound effect is synthesized on import using Python's stdlib
+(`struct`, `math`) — no external asset files, no numpy. Falls back to
 no-op when `pygame.mixer.init()` can't open an audio device (e.g. headless
 snapshot runs with SDL_AUDIODRIVER=dummy, or the Emscripten/Pyodide browser
 build before the first user gesture).
 
+We emit the 44-byte PCM-WAV header by hand rather than importing `wave`,
+because pygbag's Pyodide build strips the `wave` module from the stdlib.
+
 Call the module-level `play_*` helpers; they guard against a missing mixer.
 """
-import io
 import math
 import os
 import struct
 import sys
-import wave
 
 import pygame
 
 
 SAMPLE_RATE = 22050
+_CHANNELS = 1
+_SAMPLE_WIDTH = 2            # 16-bit PCM
+_BITS_PER_SAMPLE = 8 * _SAMPLE_WIDTH
+_BYTE_RATE = SAMPLE_RATE * _CHANNELS * _SAMPLE_WIDTH
+_BLOCK_ALIGN = _CHANNELS * _SAMPLE_WIDTH
 
 _mixer_ok = False
 
@@ -42,14 +48,29 @@ def _safe_init_mixer() -> bool:
 
 
 def _wav_bytes(samples: list[int]) -> bytes:
-    """Pack 16-bit mono PCM samples into an in-memory WAV blob."""
-    buf = io.BytesIO()
-    with wave.open(buf, "wb") as w:
-        w.setnchannels(1)
-        w.setsampwidth(2)
-        w.setframerate(SAMPLE_RATE)
-        w.writeframes(b"".join(struct.pack("<h", s) for s in samples))
-    return buf.getvalue()
+    """Pack 16-bit mono PCM samples into an in-memory WAV blob.
+    Header built by hand — `wave` isn't present in pygbag's Pyodide."""
+    data = b"".join(struct.pack("<h", s) for s in samples)
+    data_size = len(data)
+    # RIFF chunk (12) + fmt sub-chunk (24) + data sub-chunk header (8) + data
+    # RIFF "file size" field = total size - 8 = 4 + 24 + 8 + data_size
+    riff_size = 4 + 24 + 8 + data_size
+    return b"".join((
+        b"RIFF",
+        struct.pack("<I", riff_size),
+        b"WAVE",
+        b"fmt ",
+        struct.pack("<I", 16),              # PCM fmt sub-chunk size
+        struct.pack("<H", 1),               # format = PCM
+        struct.pack("<H", _CHANNELS),
+        struct.pack("<I", SAMPLE_RATE),
+        struct.pack("<I", _BYTE_RATE),
+        struct.pack("<H", _BLOCK_ALIGN),
+        struct.pack("<H", _BITS_PER_SAMPLE),
+        b"data",
+        struct.pack("<I", data_size),
+        data,
+    ))
 
 
 def _shape(shape: str, phase: float) -> float:
