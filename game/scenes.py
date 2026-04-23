@@ -78,6 +78,11 @@ class App:
     # ── run loop ────────────────────────────────────────────────────────────
 
     def run(self):
+        import asyncio
+        asyncio.run(self.async_run())
+
+    async def async_run(self):
+        import asyncio
         self._cooldown_t = 0.0
         while self._running:
             dt = min(self.clock.tick(FPS) / 1000.0, 1 / 20.0)
@@ -86,6 +91,7 @@ class App:
             self._update(dt)
             self._render()
             pygame.display.flip()
+            await asyncio.sleep(0)
         pygame.quit()
 
     def _handle_event(self, e):

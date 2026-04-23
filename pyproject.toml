@@ -1,0 +1,11 @@
+[project]
+name = "skybit"
+version = "1.0.0"
+description = "Skybit – retro parrot arcade game"
+requires-python = ">=3.11"
+dependencies = ["pygame>=2.0"]
+
+[tool.pygbag]
+title = "Skybit"
+version = "1.0.0"
+optimize = 1

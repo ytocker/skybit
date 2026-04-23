@@ -7,6 +7,7 @@ re-tinted by the active biome palette. Coins are slow-rotating metallic gold
 discs with embossed detail.
 """
 import math
+import os
 import random
 import pygame
 
@@ -405,6 +406,7 @@ class Particle:
 
 # ── FloatText ────────────────────────────────────────────────────────────────
 
+_ASSETS = os.path.join(os.path.dirname(__file__), "assets")
 _float_font_cache: dict = {}
 
 
@@ -412,7 +414,8 @@ def _get_float_font(size, bold=True):
     key = (size, bold)
     f = _float_font_cache.get(key)
     if f is None:
-        f = pygame.font.SysFont("arial", size, bold=bold)
+        name = "LiberationSans-Bold.ttf" if bold else "LiberationSans-Regular.ttf"
+        f = pygame.font.Font(os.path.join(_ASSETS, name), size)
         _float_font_cache[key] = f
     return f
 
