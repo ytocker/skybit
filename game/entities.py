@@ -22,7 +22,7 @@ from game.draw import (
     COIN_GOLD, COIN_DARK,
     MUSH_CAP, MUSH_CAP2, MUSH_SPOT, MUSH_STEM,
     PARTICLE_GOLD, PARTICLE_ORNG, PARTICLE_WHT, PARTICLE_CRIM,
-    NEAR_BLACK,
+    NEAR_BLACK, WHITE,
 )
 from game import parrot
 
@@ -110,6 +110,7 @@ class Pipe:
         self.gap_y = gap_y
         self.gap_h = gap_h
         self.scored = False
+        self.is_rush = False
         # Per-instance random seed for stable vegetation choices
         self.seed = random.randint(0, 0xFFFFFF)
 
@@ -300,12 +301,19 @@ class Coin:
             pygame.draw.circle(surf, COIN_GOLD, (cx, cy - 4), 1)          # eye
 
 
-# ── Mushroom ─────────────────────────────────────────────────────────────────
+# ── PowerUp ──────────────────────────────────────────────────────────────────
 
-class Mushroom:
-    def __init__(self, x, y):
+class PowerUp:
+    """A collectible buff. `kind` selects visuals and pickup effect:
+       triple  — red mushroom, 3x coin value for TRIPLE_DURATION
+       shield  — blue badge, absorbs next fatal collision
+       magnet  — red horseshoe, pulls coins in for MAGNET_DURATION
+       slowmo  — purple hourglass, 0.5x world scroll for SLOWMO_DURATION
+    """
+    def __init__(self, x, y, kind="triple"):
         self.x = x
         self.y = y
+        self.kind = kind
         self.collected = False
         self.pulse = 0.0
 
@@ -313,6 +321,17 @@ class Mushroom:
         self.pulse += dt * 3.5
 
     def draw(self, surf):
+        if self.kind == "triple":
+            self._draw_mushroom(surf)
+        elif self.kind == "shield":
+            self._draw_shield(surf)
+        elif self.kind == "magnet":
+            self._draw_magnet(surf)
+        elif self.kind == "slowmo":
+            self._draw_slowmo(surf)
+
+    # ── sprite variants ─────────────────────────────────────────────────────
+    def _draw_mushroom(self, surf):
         cx = int(self.x)
         cy = int(self.y)
 
@@ -350,6 +369,96 @@ class Mushroom:
                            (cx - 3, cy + 2, 2)):
             pygame.draw.circle(surf, (220, 190, 200), (sx, sy), sr + 1)
             pygame.draw.circle(surf, MUSH_SPOT,       (sx, sy), sr)
+
+    def _draw_shield(self, surf):
+        cx = int(self.x)
+        cy = int(self.y)
+        # Soft blue aura behind
+        aura = pygame.Surface((MUSHROOM_R * 3, MUSHROOM_R * 3), pygame.SRCALPHA)
+        pygame.draw.circle(aura, (80, 160, 255, 70),
+                           (aura.get_width() // 2, aura.get_height() // 2),
+                           MUSHROOM_R + 4)
+        surf.blit(aura, (cx - aura.get_width() // 2, cy - aura.get_height() // 2),
+                  special_flags=pygame.BLEND_ADD)
+        # Disc with metallic frame
+        pygame.draw.circle(surf, (10, 30, 80), (cx, cy), MUSHROOM_R + 2)
+        pygame.draw.circle(surf, (60, 130, 230), (cx, cy), MUSHROOM_R + 1)
+        pygame.draw.circle(surf, (110, 180, 255), (cx, cy), MUSHROOM_R - 1)
+        pygame.draw.circle(surf, (180, 225, 255), (cx - 3, cy - 4), 3)
+        # White cross
+        pygame.draw.rect(surf, WHITE, (cx - 2, cy - 8, 4, 16), border_radius=1)
+        pygame.draw.rect(surf, WHITE, (cx - 8, cy - 2, 16, 4), border_radius=1)
+        # Outline the cross so it pops
+        pygame.draw.rect(surf, (20, 40, 90), (cx - 2, cy - 8, 4, 16), 1)
+        pygame.draw.rect(surf, (20, 40, 90), (cx - 8, cy - 2, 16, 4), 1)
+
+    def _draw_magnet(self, surf):
+        cx = int(self.x)
+        cy = int(self.y)
+        # Backing shadow
+        sh = pygame.Surface((MUSHROOM_R * 3, 10), pygame.SRCALPHA)
+        pygame.draw.ellipse(sh, (0, 0, 0, 130), sh.get_rect())
+        surf.blit(sh, (cx - sh.get_width() // 2, cy + MUSHROOM_R - 2))
+        # Horseshoe U — draw an outer red arc, inner cutout, then two silver tips
+        # Outer red body: two overlapping thick arcs forming a U.
+        body_rect = pygame.Rect(cx - MUSHROOM_R, cy - MUSHROOM_R + 2,
+                                MUSHROOM_R * 2, MUSHROOM_R * 2)
+        # Red outer
+        pygame.draw.arc(surf, (160, 10, 20), body_rect.inflate(2, 2),
+                        math.pi, 2 * math.pi, MUSHROOM_R)
+        pygame.draw.arc(surf, (220, 30, 40), body_rect,
+                        math.pi, 2 * math.pi, MUSHROOM_R - 2)
+        # Inner white stripe
+        inner = body_rect.inflate(-10, -10)
+        pygame.draw.arc(surf, WHITE, inner,
+                        math.pi, 2 * math.pi, 3)
+        # Close off the two legs with short red rectangles so it reads as a U
+        leg_y = cy + 2
+        pygame.draw.rect(surf, (220, 30, 40), (cx - MUSHROOM_R + 1, leg_y, 5, 10))
+        pygame.draw.rect(surf, (220, 30, 40), (cx + MUSHROOM_R - 6, leg_y, 5, 10))
+        # Silver tips on each leg end
+        pygame.draw.rect(surf, (220, 220, 235), (cx - MUSHROOM_R + 1, leg_y + 6, 5, 5))
+        pygame.draw.rect(surf, (220, 220, 235), (cx + MUSHROOM_R - 6, leg_y + 6, 5, 5))
+        # Dark rim on silver tips
+        pygame.draw.rect(surf, (80, 80, 100), (cx - MUSHROOM_R + 1, leg_y + 6, 5, 5), 1)
+        pygame.draw.rect(surf, (80, 80, 100), (cx + MUSHROOM_R - 6, leg_y + 6, 5, 5), 1)
+
+    def _draw_slowmo(self, surf):
+        cx = int(self.x)
+        cy = int(self.y)
+        # Purple aura
+        aura = pygame.Surface((MUSHROOM_R * 3, MUSHROOM_R * 3), pygame.SRCALPHA)
+        pygame.draw.circle(aura, (180, 100, 255, 70),
+                           (aura.get_width() // 2, aura.get_height() // 2),
+                           MUSHROOM_R + 4)
+        surf.blit(aura, (cx - aura.get_width() // 2, cy - aura.get_height() // 2),
+                  special_flags=pygame.BLEND_ADD)
+        # Hourglass body: two triangles joined at a pinch
+        top = [(cx - MUSHROOM_R + 2, cy - MUSHROOM_R + 1),
+               (cx + MUSHROOM_R - 2, cy - MUSHROOM_R + 1),
+               (cx, cy)]
+        bot = [(cx - MUSHROOM_R + 2, cy + MUSHROOM_R - 1),
+               (cx + MUSHROOM_R - 2, cy + MUSHROOM_R - 1),
+               (cx, cy)]
+        pygame.draw.polygon(surf, (60, 20, 90), [(p[0] - 1, p[1] - 1) for p in top] + [top[2]])
+        pygame.draw.polygon(surf, (140, 70, 210), top)
+        pygame.draw.polygon(surf, (60, 20, 90), [(p[0] - 1, p[1] + 1) for p in bot] + [bot[2]])
+        pygame.draw.polygon(surf, (140, 70, 210), bot)
+        # Sand — light falling stream in the middle
+        pygame.draw.line(surf, (255, 230, 150), (cx, cy - MUSHROOM_R + 4), (cx, cy - 1), 2)
+        pygame.draw.line(surf, (255, 230, 150), (cx, cy + 1), (cx, cy + MUSHROOM_R - 4), 2)
+        # Wooden end caps
+        pygame.draw.rect(surf, (120, 60, 30), (cx - MUSHROOM_R, cy - MUSHROOM_R - 2,
+                                                MUSHROOM_R * 2, 4))
+        pygame.draw.rect(surf, (120, 60, 30), (cx - MUSHROOM_R, cy + MUSHROOM_R - 2,
+                                                MUSHROOM_R * 2, 4))
+        pygame.draw.rect(surf, (180, 110, 60), (cx - MUSHROOM_R + 1,
+                                                 cy - MUSHROOM_R - 1,
+                                                 MUSHROOM_R * 2 - 2, 2))
+
+
+# Back-compat alias — some callers (e.g. snapshot/playtest scripts) still say Mushroom.
+Mushroom = PowerUp
 
 
 # ── Particle ─────────────────────────────────────────────────────────────────

@@ -2,9 +2,9 @@
 import math
 import pygame
 
-from game.config import W, H, TRIPLE_DURATION
+from game.config import W, H, TRIPLE_DURATION, MAGNET_DURATION, SLOWMO_DURATION
 from game.draw import (
-    rounded_rect, rounded_rect_grad,
+    rounded_rect, rounded_rect_grad, lerp_color,
     UI_SCORE, UI_GOLD, UI_ORANGE, UI_SHADOW, UI_CREAM, UI_RED,
     COIN_GOLD, COIN_DARK,
     WHITE, NEAR_BLACK,
@@ -48,6 +48,43 @@ def _coin_icon(surf, cx, cy, r=10):
     pygame.draw.circle(surf, COIN_GOLD, (cx, cy - 4), 1)
 
 
+def _draw_buff_icon(surf, rect, kind):
+    """Tiny 20x20-ish icon for an active buff. Matches in-world sprites."""
+    cx, cy = rect.center
+    if kind == "triple":
+        # Red mushroom cap + stem
+        pygame.draw.rect(surf, (245, 225, 195), (cx - 3, cy + 1, 6, 7), border_radius=1)
+        pygame.draw.ellipse(surf, (130, 10, 20),
+                            (cx - 9, cy - 6, 18, 10))
+        pygame.draw.ellipse(surf, (220, 30, 30),
+                            (cx - 8, cy - 5, 16, 8))
+        pygame.draw.circle(surf, WHITE, (cx - 3, cy - 3), 1)
+        pygame.draw.circle(surf, WHITE, (cx + 3, cy - 2), 1)
+    elif kind == "shield":
+        pygame.draw.circle(surf, (10, 30, 80), (cx, cy), 9)
+        pygame.draw.circle(surf, (60, 130, 230), (cx, cy), 8)
+        pygame.draw.circle(surf, (110, 180, 255), (cx, cy), 6)
+        pygame.draw.rect(surf, WHITE, (cx - 1, cy - 5, 2, 10))
+        pygame.draw.rect(surf, WHITE, (cx - 5, cy - 1, 10, 2))
+    elif kind == "magnet":
+        # Horseshoe U
+        pygame.draw.arc(surf, (220, 30, 40),
+                        (cx - 8, cy - 7, 16, 14),
+                        math.pi, 2 * math.pi, 4)
+        pygame.draw.rect(surf, (220, 30, 40), (cx - 8, cy, 3, 7))
+        pygame.draw.rect(surf, (220, 30, 40), (cx + 5, cy, 3, 7))
+        pygame.draw.rect(surf, (220, 220, 235), (cx - 8, cy + 4, 3, 3))
+        pygame.draw.rect(surf, (220, 220, 235), (cx + 5, cy + 4, 3, 3))
+    elif kind == "slowmo":
+        top = [(cx - 6, cy - 7), (cx + 6, cy - 7), (cx, cy)]
+        bot = [(cx - 6, cy + 7), (cx + 6, cy + 7), (cx, cy)]
+        pygame.draw.polygon(surf, (140, 70, 210), top)
+        pygame.draw.polygon(surf, (140, 70, 210), bot)
+        pygame.draw.line(surf, (255, 230, 150), (cx, cy - 4), (cx, cy + 4), 2)
+        pygame.draw.rect(surf, (120, 60, 30), (cx - 7, cy - 9, 14, 2))
+        pygame.draw.rect(surf, (120, 60, 30), (cx - 7, cy + 7, 14, 2))
+
+
 class PauseButton:
     def __init__(self):
         self.rect = pygame.Rect(W - 56, 12, 44, 44)
@@ -77,7 +114,31 @@ class HUD:
         self.pause_btn = PauseButton()
         self.title_t = 0.0
 
-    def draw_play(self, surf, world, best: int):
+    def draw_pause_overlay(self, surf):
+        self.title_t += 1 / 60
+        dim = pygame.Surface((W, H), pygame.SRCALPHA)
+        dim.fill((0, 0, 20, 150))
+        surf.blit(dim, (0, 0))
+        pulse = 1.0 + math.sin(self.title_t * 2.6) * 0.04
+        f = _font(int(56 * pulse), True)
+        title = "PAUSED"
+        img = f.render(title, True, UI_GOLD)
+        shadow = f.render(title, True, NEAR_BLACK)
+        outline = f.render(title, True, UI_RED)
+        r = img.get_rect(center=(W // 2, H // 2 - 30))
+        for ox, oy in ((-3, 0), (3, 0), (0, -3), (0, 3)):
+            surf.blit(outline, (r.x + ox, r.y + oy))
+        surf.blit(shadow, (r.x + 3, r.y + 5))
+        surf.blit(img, r.topleft)
+        alpha = int(160 + math.sin(self.title_t * 3.6) * 90)
+        f2 = _font(20, True)
+        prompt = f2.render("TAP  ·  P  ·  ESC", True, WHITE)
+        prompt.set_alpha(alpha)
+        pr = prompt.get_rect(center=(W // 2, H // 2 + 24))
+        surf.blit(prompt, pr.topleft)
+        _text(surf, "to resume", (W // 2, H // 2 + 52), size=16, color=UI_CREAM)
+
+    def draw_play(self, surf, world, best: int, paused: bool = False):
         # ── Score: centered, with a soft dark backdrop so the digits stay
         # legible against any sky/pillar/cloud behind them.
         score_txt = str(world.score)
@@ -133,7 +194,7 @@ class HUD:
         surf.blit(cc_pill, (W - 156, 14))
 
         # Pause button
-        self.pause_btn.draw(surf, paused=False)
+        self.pause_btn.draw(surf, paused=paused)
 
         # "Get ready" prompt while the pre-start freeze is active.
         if world.ready_t > 0:
@@ -151,17 +212,71 @@ class HUD:
                               lr.y - 9))
             surf.blit(label, lr.topleft)
 
-        # Mushroom timer bar under score
+        # Mushroom (3x-coin) timer bar — depletes gold → orange → red so the
+        # urgency is obvious at a glance. Pulses in the last two seconds.
         if world.triple_timer > 0:
             frac = world.triple_timer / TRIPLE_DURATION
-            bw = 180
+            bw = 168
             bx = (W - bw) // 2
-            by = 160
-            _text(surf, "3X POWER", (W // 2, by - 10), size=14, color=UI_ORANGE, shadow=True)
-            rounded_rect(surf, pygame.Rect(bx - 2, by, bw + 4, 16), 8, (30, 30, 60), 200)
-            fill = pygame.Rect(bx, by + 2, int(bw * frac), 12)
+            by = 128
+            # Label above the track
+            label_col = UI_RED if frac < 0.25 else UI_ORANGE
+            _text(surf, f"3X POWER  {world.triple_timer:.1f}s",
+                  (W // 2, by - 10), size=13, color=label_col, shadow=True)
+            # Track
+            track_rect = pygame.Rect(bx - 2, by, bw + 4, 12)
+            rounded_rect(surf, track_rect, 6, (20, 25, 50), 200)
+            # Fill — color lerps with remaining time, pulses when critical
+            if frac > 0.5:
+                fill_lo = UI_ORANGE
+                fill_hi = UI_GOLD
+            elif frac > 0.25:
+                t = (frac - 0.25) / 0.25
+                fill_lo = lerp_color(UI_RED, UI_ORANGE, t)
+                fill_hi = lerp_color(UI_ORANGE, UI_GOLD, t)
+            else:
+                fill_lo = (180, 20, 20)
+                fill_hi = UI_RED
+            fill = pygame.Rect(bx, by + 2, int(bw * frac), 8)
             if fill.width > 0:
-                rounded_rect_grad(surf, fill, 6, UI_ORANGE, UI_GOLD)
+                rounded_rect_grad(surf, fill, 4, fill_hi, fill_lo)
+            # Low-time pulse ring
+            if frac < 0.25:
+                pulse = 0.5 + 0.5 * math.sin(self.title_t * 14)
+                ring_a = int(140 * pulse)
+                ring = pygame.Surface((bw + 10, 18), pygame.SRCALPHA)
+                pygame.draw.rect(ring, (*UI_RED, ring_a), ring.get_rect(),
+                                 border_radius=8, width=2)
+                surf.blit(ring, (bx - 5, by - 3))
+
+        # Active-buff strip (shield + magnet + slowmo badges). Triple has its
+        # own bigger timer bar above, so we don't duplicate it here.
+        active = []
+        if world.shield_armed:
+            active.append(("shield", None, None))
+        if world.magnet_timer > 0:
+            active.append(("magnet", world.magnet_timer, MAGNET_DURATION))
+        if world.slowmo_timer > 0:
+            active.append(("slowmo", world.slowmo_timer, SLOWMO_DURATION))
+        if active:
+            slot_w, slot_h = 28, 32
+            gap = 6
+            strip_w = len(active) * slot_w + (len(active) - 1) * gap
+            sx = (W - strip_w) // 2
+            sy = H - 108
+            for i, (kind, remain, total) in enumerate(active):
+                r = pygame.Rect(sx + i * (slot_w + gap), sy, slot_w, slot_h)
+                rounded_rect(surf, r, 6, (15, 25, 60), 190)
+                _draw_buff_icon(surf, r.inflate(-6, -14).move(0, -2), kind)
+                if remain is not None and total:
+                    frac = max(0.0, min(1.0, remain / total))
+                    bar_rect = pygame.Rect(r.x + 3, r.bottom - 6, r.width - 6, 3)
+                    pygame.draw.rect(surf, (25, 25, 50), bar_rect, border_radius=1)
+                    fw = int(bar_rect.width * frac)
+                    if fw > 0:
+                        pygame.draw.rect(surf, UI_GOLD,
+                                         (bar_rect.x, bar_rect.y, fw, bar_rect.height),
+                                         border_radius=1)
 
         # Combo badge bottom-center
         if world.combo >= 3 and world.combo_timer > 0:
@@ -217,6 +332,67 @@ class HUD:
         rounded_rect(surf, hi_rect, 12, (15, 25, 60), 180)
         _text(surf, "BEST", (hi_rect.centerx, hi_rect.y + 12), size=14, color=UI_CREAM, shadow=False)
         _text(surf, str(best), (hi_rect.centerx, hi_rect.y + 28), size=18, color=UI_GOLD, shadow=False)
+
+    def draw_stats(self, surf, world, dt, elapsed):
+        """Post-run summary: score + coins + combo + pillars + time + near-misses
+        + power-up counters. Taps (after a short lockout) advance to the
+        leaderboard/name-entry; auto-advances after ~4.5 s."""
+        self.title_t += dt
+        dim = pygame.Surface((W, H), pygame.SRCALPHA)
+        dim.fill((0, 0, 20, 180))
+        surf.blit(dim, (0, 0))
+
+        # Slide-in animation from below
+        slide_t = max(0.0, min(1.0, elapsed / 0.35))
+        e = slide_t * slide_t * (3 - 2 * slide_t)
+        card_y = int(60 + (1.0 - e) * 60)
+
+        _text(surf, "RUN SUMMARY", (W // 2, card_y), size=22, color=UI_GOLD)
+
+        # Score headline
+        _text(surf, str(world.score), (W // 2, card_y + 50), size=48, color=UI_GOLD)
+        _text(surf, "SCORE", (W // 2, card_y + 82), size=12, color=UI_CREAM, shadow=False)
+
+        # Stats card
+        mins = int(world.time_alive) // 60
+        secs = int(world.time_alive) % 60
+        time_str = f"{mins}:{secs:02d}" if mins else f"{secs}s"
+
+        rows = [
+            ("Coins", str(world.coin_count)),
+            ("Max combo", f"x{world.max_combo}" if world.max_combo > 1 else "—"),
+            ("Pillars cleared", str(world.pillars_passed)),
+            ("Near misses", str(world.near_misses)),
+            ("Time alive", time_str),
+        ]
+        total_pu = sum(world.powerups_picked.values())
+        if total_pu > 0:
+            rows.append(("Power-ups", str(total_pu)))
+
+        card_rect = pygame.Rect(22, card_y + 104, W - 44, len(rows) * 30 + 24)
+        rounded_rect(surf, card_rect, 14, (15, 25, 60), 220)
+
+        f_key = _font(16, True)
+        f_val = _font(18, True)
+        ry = card_rect.y + 16
+        for label, value in rows:
+            k_img = f_key.render(label.upper(), True, UI_CREAM)
+            v_img = f_val.render(value, True, UI_GOLD)
+            surf.blit(k_img, (card_rect.x + 18, ry))
+            vr = v_img.get_rect()
+            vr.topright = (card_rect.right - 18, ry - 2)
+            surf.blit(v_img, vr.topleft)
+            ry += 30
+
+        # Continue prompt (fades in after short lockout)
+        if elapsed >= 0.6:
+            alpha = int(120 + math.sin(self.title_t * 4) * 90)
+            alpha = max(60, min(220, alpha))
+            f = _font(18, True)
+            t = f.render("TAP TO CONTINUE", True, WHITE)
+            t.set_alpha(alpha)
+            pr = t.get_rect(center=(W // 2, H - 56))
+            surf.blit(t, pr.topleft)
 
     def draw_gameover(self, surf, dt, score: int, scores: list, new_best: bool, highlight_rank=-1):
         self.title_t += dt

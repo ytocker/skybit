@@ -131,6 +131,39 @@ def init() -> None:
                 (0.08, 659, 659, "triangle", 0.42),
                 (0.14, 784, 988, "triangle", 0.50),
             ]))
+        # Shield pickup: rising chord
+        _sounds["shield"] = pygame.mixer.Sound(
+            buffer=_synth_sequence([
+                (0.07, 440, 440, "sine", 0.35),
+                (0.07, 587, 587, "sine", 0.38),
+                (0.14, 784, 880, "sine", 0.42),
+            ]))
+        # Shield break: two fast crunchy descending chirps
+        _sounds["shield_break"] = pygame.mixer.Sound(
+            buffer=_synth_sequence([
+                (0.08, 900, 420, "square", 0.38),
+                (0.10, 600, 220, "square", 0.42),
+            ]))
+        # Magnet: low→high swept sine, slightly buzzier tail
+        _sounds["magnet"] = pygame.mixer.Sound(
+            buffer=_synth_sequence([
+                (0.10, 220, 660, "triangle", 0.40),
+                (0.12, 660, 990, "sine", 0.42),
+            ]))
+        # Slow-mo: descending warbling tone
+        _sounds["slowmo"] = pygame.mixer.Sound(
+            buffer=_synth_sequence([
+                (0.10, 880, 660, "triangle", 0.38),
+                (0.10, 660, 440, "triangle", 0.40),
+                (0.18, 440, 220, "sine", 0.45),
+            ]))
+        # Thunder rumble for night lightning
+        _sounds["thunder"] = pygame.mixer.Sound(
+            buffer=_synth_sequence([
+                (0.20, 80,  60, "triangle", 0.38),
+                (0.20, 60,  50, "triangle", 0.35),
+                (0.40, 50,  40, "sine",     0.32),
+            ]))
         _sounds["death"] = pygame.mixer.Sound(
             buffer=_synth(0.32, 330, 90, "square", 0.45, 0.005, 0.18))
         _sounds["gameover"] = pygame.mixer.Sound(
@@ -157,10 +190,15 @@ def _play(name: str, volume: float = 1.0) -> None:
         ch.set_volume(volume)
 
 
-def play_flap() -> None:         _play("flap", 0.55)
-def play_coin() -> None:         _play("coin", 0.75)
-def play_coin_combo() -> None:   _play("coin_combo", 0.80)
-def play_coin_triple() -> None:  _play("coin_triple", 0.85)
-def play_mushroom() -> None:     _play("mushroom", 0.85)
-def play_death() -> None:        _play("death", 0.75)
-def play_gameover() -> None:     _play("gameover", 0.70)
+def play_flap() -> None:          _play("flap", 0.55)
+def play_coin() -> None:          _play("coin", 0.75)
+def play_coin_combo() -> None:    _play("coin_combo", 0.80)
+def play_coin_triple() -> None:   _play("coin_triple", 0.85)
+def play_mushroom() -> None:      _play("mushroom", 0.85)
+def play_shield() -> None:        _play("shield", 0.80)
+def play_shield_break() -> None:  _play("shield_break", 0.80)
+def play_magnet() -> None:        _play("magnet", 0.75)
+def play_slowmo() -> None:        _play("slowmo", 0.75)
+def play_thunder() -> None:       _play("thunder", 0.85)
+def play_death() -> None:         _play("death", 0.75)
+def play_gameover() -> None:      _play("gameover", 0.70)
