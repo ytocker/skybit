@@ -64,8 +64,6 @@ class World:
         self.ready_t = 1.0
 
         self.game_over = False
-        self.time_scale = 1.0    # supports mushroom-pickup slow-mo
-        self.time_scale_t = 0.0
 
         self._seed_first_pipes()
 
@@ -152,13 +150,8 @@ class World:
     # ── update ──────────────────────────────────────────────────────────────
 
     def update(self, dt):
-        # Advance the biome cycle with real time, not slow-mo time.
         self.biome_time += dt
-
-        if self.time_scale_t > 0:
-            self.time_scale_t -= dt
-            self.time_scale = 0.35 if self.time_scale_t > 0 else 1.0
-        sdt = dt * self.time_scale
+        sdt = dt
 
         # While the "get ready" prompt is up, hold everything still except
         # a tiny idle animation on the bird.
@@ -378,8 +371,6 @@ class World:
         self.triple_timer = TRIPLE_DURATION
         self.shake_mag = max(self.shake_mag, 3.0)
         self.shake_t = max(self.shake_t, 0.25)
-        self.time_scale = 0.35
-        self.time_scale_t = 0.25
         audio.play_mushroom()
         for _ in range(30):
             ang = random.uniform(0, math.tau)

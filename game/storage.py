@@ -1,7 +1,7 @@
 """High-score persistence: top-10 leaderboard + back-compat best score.
 
 File format (JSON):
-  { "scores": [ {"name": "YAN", "score": 42 }, ... ] }
+  { "scores": [ {"name": "YANIV", "score": 42 }, ... ] }
 
 All writes silently no-op on failure so a missing/locked file never crashes the game.
 """
@@ -11,11 +11,14 @@ import os
 from game import config as _cfg
 
 TOP_N = 10
+NAME_MAX = 10
 
 
 def _normalize_name(name: str) -> str:
-    n = "".join(c for c in (name or "").upper() if c.isalnum())
-    return (n + "???")[:3]
+    n = "".join(c for c in (name or "").upper() if c.isalnum() or c == " ").strip()
+    if not n:
+        return "???"
+    return n[:NAME_MAX]
 
 
 def load_scores() -> list[dict]:

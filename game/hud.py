@@ -1,6 +1,5 @@
 """HUD: score, hi-score, coin count, mushroom timer bar, combo, pause button."""
 import math
-import os
 import pygame
 
 from game.config import W, H, TRIPLE_DURATION
@@ -12,7 +11,6 @@ from game.draw import (
 )
 
 
-_ASSETS = os.path.join(os.path.dirname(__file__), "assets")
 _fonts: dict = {}
 
 
@@ -20,8 +18,7 @@ def _font(size, bold=True):
     k = (size, bold)
     f = _fonts.get(k)
     if f is None:
-        name = "LiberationSans-Bold.ttf" if bold else "LiberationSans-Regular.ttf"
-        f = pygame.font.Font(os.path.join(_ASSETS, name), size)
+        f = pygame.font.SysFont("arial", size, bold=bold)
         _fonts[k] = f
     return f
 

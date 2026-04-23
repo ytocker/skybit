@@ -23,15 +23,13 @@ _mixer_ok = False
 
 
 def _safe_init_mixer() -> bool:
-    """Open the audio device. Swallow failures so headless tests and the
-    pygbag browser runtime (which may reject unusual mixer configs) keep
-    running silently instead of killing the whole game."""
+    """Open the audio device. Swallow failures so headless tests keep running."""
     if os.environ.get("SDL_AUDIODRIVER") == "dummy":
         return False
     try:
         pygame.mixer.init(frequency=SAMPLE_RATE, size=-16, channels=1, buffer=512)
         return True
-    except Exception:
+    except pygame.error:
         return False
 
 
@@ -142,9 +140,8 @@ def init() -> None:
                 (0.14, 349, 349, "triangle", 0.38),
                 (0.18, 262, 262, "triangle", 0.42),
             ]))
-    except Exception:
-        # Mixer opened but sound loading failed (including pygbag-specific
-        # buffer-format rejections) — disable audio and carry on.
+    except pygame.error:
+        # Mixer opened but sound loading failed — disable.
         _sounds.clear()
         _mixer_ok = False
 

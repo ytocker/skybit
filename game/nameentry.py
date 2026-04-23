@@ -1,5 +1,5 @@
 """
-Arcade-style 3-letter-initials name entry with an on-screen keyboard.
+Arcade-style name entry (up to 10 characters) with an on-screen keyboard.
 Works on mobile (tap), desktop mouse (click), and physical keyboard
 (A-Z, Backspace, Enter).
 """
@@ -17,6 +17,11 @@ LETTERS = [
     "VWXYZ_?",
 ]
 
+NAME_MAX = 10
+SLOT_W = 30
+SLOT_H = 60
+SLOT_GAP = 3
+
 KEY_W = 40
 KEY_H = 40
 KEY_GAP = 4
@@ -28,8 +33,9 @@ class NameEntry:
     def __init__(self, score: int, rank: int):
         self.score = score
         self.rank = rank
-        self.chars = ["A", " ", " "]
-        self.pos = 0  # which slot is active
+        self.chars = [" "] * NAME_MAX
+        self.chars[0] = "A"
+        self.pos = 0
         self.done = False
         self.submitted_name: str | None = None
         self.t = 0.0
@@ -40,7 +46,7 @@ class NameEntry:
         cols = len(LETTERS[0])
         board_w = cols * KEY_W + (cols - 1) * KEY_GAP
         x0 = (W - board_w) // 2
-        y0 = 380
+        y0 = 370
         for r, row in enumerate(LETTERS):
             for c, ch in enumerate(row):
                 rect = pygame.Rect(
@@ -65,7 +71,7 @@ class NameEntry:
         if ch == "?":
             ch = "."
         self.chars[self.pos] = ch
-        if self.pos < 2:
+        if self.pos < NAME_MAX - 1:
             self.pos += 1
 
     def backspace(self):
@@ -76,10 +82,10 @@ class NameEntry:
             self.chars[self.pos] = " "
 
     def submit(self):
-        name = "".join(self.chars).strip().replace(" ", "")
+        name = "".join(self.chars).strip()
         if not name:
             name = "???"
-        self.submitted_name = name[:3].upper()
+        self.submitted_name = name[:NAME_MAX].upper()
         self.done = True
 
     def handle_tap(self, pos):
@@ -93,8 +99,8 @@ class NameEntry:
         if self.ok_rect.collidepoint(pos):
             self.submit()
             return True
-        # tap on one of the three letter slots to select it
-        for i in range(3):
+        # tap on one of the letter slots to select it
+        for i in range(NAME_MAX):
             r = self._slot_rect(i)
             if r.collidepoint(pos):
                 self.pos = i
@@ -109,20 +115,18 @@ class NameEntry:
         elif ev.key == pygame.K_LEFT:
             self.pos = max(0, self.pos - 1)
         elif ev.key == pygame.K_RIGHT:
-            self.pos = min(2, self.pos + 1)
+            self.pos = min(NAME_MAX - 1, self.pos + 1)
         else:
             u = ev.unicode
-            if u and (u.isalnum()):
+            if u and (u.isalnum() or u == " "):
                 self.press_char(u)
 
     # ── drawing ──────────────────────────────────────────────────────────────
 
     def _slot_rect(self, i):
-        slot_w = 60
-        gap = 10
-        total = 3 * slot_w + 2 * gap
+        total = NAME_MAX * SLOT_W + (NAME_MAX - 1) * SLOT_GAP
         x0 = (W - total) // 2
-        return pygame.Rect(x0 + i * (slot_w + gap), 240, slot_w, 80)
+        return pygame.Rect(x0 + i * (SLOT_W + SLOT_GAP), 240, SLOT_W, SLOT_H)
 
     def update(self, dt):
         self.t += dt
@@ -148,24 +152,23 @@ class NameEntry:
 
         # Instructions
         f_small = font_factory(13, False)
-        info = f_small.render("Enter your initials (tap keys or type)", True, WHITE)
+        info = f_small.render("Enter your name (up to 10 chars)", True, WHITE)
         surf.blit(info, info.get_rect(center=(W // 2, 204)))
 
-        # 3 letter slots
-        f_slot = font_factory(46, True)
-        for i in range(3):
+        # Letter slots
+        f_slot = font_factory(26, True)
+        for i in range(NAME_MAX):
             rect = self._slot_rect(i)
             bg = (30, 40, 80) if i != self.pos else (60, 80, 140)
-            rounded_rect(surf, rect, 12, bg, 230)
+            rounded_rect(surf, rect, 6, bg, 230)
             border = UI_GOLD if i == self.pos else (80, 100, 170)
-            pygame.draw.rect(surf, border, rect, 3, border_radius=12)
+            pygame.draw.rect(surf, border, rect, 2, border_radius=6)
             ch = self.chars[i]
             if ch == " ":
-                # blinking underline
                 if int(self.t * 2) % 2 == 0 and i == self.pos:
                     pygame.draw.line(surf, UI_GOLD,
-                                     (rect.x + 12, rect.bottom - 14),
-                                     (rect.right - 12, rect.bottom - 14), 3)
+                                     (rect.x + 6, rect.bottom - 10),
+                                     (rect.right - 6, rect.bottom - 10), 2)
             else:
                 img = f_slot.render(ch, True, WHITE)
                 surf.blit(img, img.get_rect(center=rect.center))

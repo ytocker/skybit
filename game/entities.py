@@ -7,7 +7,6 @@ re-tinted by the active biome palette. Coins are slow-rotating metallic gold
 discs with embossed detail.
 """
 import math
-import os
 import random
 import pygame
 
@@ -316,23 +315,6 @@ class Mushroom:
     def draw(self, surf):
         cx = int(self.x)
         cy = int(self.y)
-        # Layered soft-aura halo — three wide, horizontally-stretched ellipses
-        # blended additively. Reads as "this mushroom is radiating warmth",
-        # not as a speech bubble. REVIEW.md fix: the old single opaque white
-        # disc felt like a call-out container.
-        pulse = math.sin(self.pulse) * 0.5 + 0.5
-        layers = [
-            (38, 22, (255, 210, 120), 55),
-            (28, 18, (255, 140,  80), 70),
-            (18, 14, (255, 240, 200), 90),
-        ]
-        for rw, rh, col, a in layers:
-            rw2 = rw + int(pulse * 4)
-            rh2 = rh + int(pulse * 2)
-            aura = pygame.Surface((rw2 * 2 + 4, rh2 * 2 + 4), pygame.SRCALPHA)
-            pygame.draw.ellipse(aura, (*col, a), aura.get_rect())
-            surf.blit(aura, (cx - rw2 - 2, cy - rh2 - 6),
-                      special_flags=pygame.BLEND_ADD)
 
         # Stem with vivid highlight
         stem = pygame.Rect(cx - 7, cy, 14, 13)
@@ -406,7 +388,6 @@ class Particle:
 
 # ── FloatText ────────────────────────────────────────────────────────────────
 
-_ASSETS = os.path.join(os.path.dirname(__file__), "assets")
 _float_font_cache: dict = {}
 
 
@@ -414,8 +395,7 @@ def _get_float_font(size, bold=True):
     key = (size, bold)
     f = _float_font_cache.get(key)
     if f is None:
-        name = "LiberationSans-Bold.ttf" if bold else "LiberationSans-Regular.ttf"
-        f = pygame.font.Font(os.path.join(_ASSETS, name), size)
+        f = pygame.font.SysFont("arial", size, bold=bold)
         _float_font_cache[key] = f
     return f
 
