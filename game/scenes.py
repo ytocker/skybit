@@ -35,6 +35,7 @@ class App:
         self.screen = pygame.display.set_mode((W, H))
         self.clock = pygame.time.Clock()
         audio.init()
+        audio.start_music()
         self.world = World()
         self.hud = HUD()
         self.scores: list[dict] = load_scores()
@@ -78,18 +79,22 @@ class App:
     def _toggle_pause(self):
         if self.state == STATE_PLAY:
             self.state = STATE_PAUSE
+            audio.pause_music()
         elif self.state == STATE_PAUSE:
             self.state = STATE_PLAY
+            audio.resume_music()
 
     def _start_play(self):
         self.world = World()
         self.state = STATE_PLAY
         self.highlight_rank = -1
+        audio.start_music()
 
     def _restart(self):
         self.world = World()
         self.state = STATE_PLAY
         self.highlight_rank = -1
+        audio.start_music()
 
     # ── run loop ────────────────────────────────────────────────────────────
 
@@ -178,6 +183,7 @@ class App:
     def _on_death(self):
         score = self.world.score
         self.prev_best_at_death = self.best
+        audio.stop_music(fadeout_ms=800)
         audio.play_gameover()
         # Decide what comes *after* the stats screen. Compute the preview
         # leaderboard rank now so the stats screen can show it, too.
