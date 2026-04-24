@@ -25,59 +25,63 @@ FOLIAGE = dict(foliage_top=(140, 220, 110), foliage_mid=(70, 170, 75),
 STONE_L, STONE_M, STONE_D, STONE_A = (225, 195, 155), (175, 140, 105), (95, 70, 55), (255, 220, 170)
 PALETTE = dict(FOLIAGE, stone_light=STONE_L, stone_mid=STONE_M, stone_dark=STONE_D, stone_accent=STONE_A)
 
-def sil_stout_neck(w, h):
-    # fat body with a clear narrow "neck" (shimenawa would wrap around it)
-    return [(0, 0), (w, 0), (w, int(h * 0.28)), (int(w * 0.74), int(h * 0.44)),
-            (int(w * 0.74), int(h * 0.58)), (w, int(h * 0.72)),
+def sil_bot_stout(w, h):
+    # realistic stout column: subtle taper only, natural pillar proportions
+    return [(0, 0), (w, 0), (int(w * 0.94), int(h * 0.20)),
+            (int(w * 0.90), int(h * 0.50)), (int(w * 0.86), int(h * 0.80)),
             (int(w * 0.80), h), (int(w * 0.20), h),
-            (0, int(h * 0.72)), (int(w * 0.26), int(h * 0.58)),
-            (int(w * 0.26), int(h * 0.44)), (0, int(h * 0.28))]
+            (int(w * 0.14), int(h * 0.80)), (int(w * 0.10), int(h * 0.50)),
+            (int(w * 0.06), int(h * 0.20))]
 
 
-def sil_stepped(w, h):
-    # 3 stepped terraces (bottom pillar form — wider steps cascading up)
-    return [(0, 0), (w, 0), (w, int(h * 0.28)),
-            (int(w * 0.84), int(h * 0.30)), (int(w * 0.84), int(h * 0.52)),
-            (int(w * 0.70), int(h * 0.54)), (int(w * 0.70), int(h * 0.78)),
-            (int(w * 0.56), int(h * 0.80)), (int(w * 0.52), h),
-            (int(w * 0.48), int(h * 0.80)), (int(w * 0.30), int(h * 0.78)),
-            (int(w * 0.30), int(h * 0.54)), (int(w * 0.16), int(h * 0.52)),
-            (int(w * 0.16), int(h * 0.30)), (0, int(h * 0.28))]
+def sil_bot_slender(w, h):
+    # realistic slender spire: stronger taper, natural pointed-ish top
+    return [(0, 0), (w, 0), (int(w * 0.80), int(h * 0.25)),
+            (int(w * 0.74), int(h * 0.60)), (int(w * 0.66), int(h * 0.85)),
+            (int(w * 0.60), h), (int(w * 0.40), h),
+            (int(w * 0.34), int(h * 0.85)), (int(w * 0.26), int(h * 0.60)),
+            (int(w * 0.20), int(h * 0.25))]
 
 
-def sil_leaning(w, h):
-    # slender spire with slight rightward tilt
-    return [(0, 0), (w, 0), (int(w * 0.72), int(h * 0.50)),
-            (int(w * 0.68), int(h * 0.78)), (int(w * 0.60), h),
-            (int(w * 0.48), int(h * 0.78)), (int(w * 0.36), int(h * 0.50))]
+def sil_bot_lean(w, h):
+    # realistic column with slight 6-degree lean (natural weathering drift)
+    lean = int(w * 0.06)
+    return [(lean, 0), (w, 0), (int(w * 0.92), int(h * 0.25)),
+            (int(w * 0.88), int(h * 0.55)), (int(w * 0.82), int(h * 0.82)),
+            (int(w * 0.78), h), (int(w * 0.22), h),
+            (int(w * 0.12) - lean, int(h * 0.82)), (int(w * 0.06) - lean, int(h * 0.55)),
+            (int(w * 0.00), int(h * 0.25))]
 
 
-def sil_waisted(w, h):
-    # stout column with a subtle waist bulge below a narrower mid
-    return [(0, 0), (w, 0), (int(w * 0.92), int(h * 0.24)),
-            (int(w * 0.78), int(h * 0.50)), (int(w * 0.88), int(h * 0.74)),
+def sil_bot_eroded(w, h):
+    # realistic weathered column: subtle asymmetric bulges + a shelf break
+    return [(0, 0), (w, 0), (int(w * 0.96), int(h * 0.18)),
+            (int(w * 0.88), int(h * 0.40)), (w, int(h * 0.55)),
+            (int(w * 0.92), int(h * 0.68)), (int(w * 0.84), int(h * 0.82)),
+            (int(w * 0.78), h), (int(w * 0.22), h),
+            (int(w * 0.14), int(h * 0.82)), (int(w * 0.08), int(h * 0.68)),
+            (0, int(h * 0.55)), (int(w * 0.10), int(h * 0.40)),
+            (int(w * 0.04), int(h * 0.18))]
+
+
+def sil_bot_blunt(w, h):
+    # realistic stout column with broader flat-ish top (menhir-ish but natural)
+    return [(0, 0), (w, 0), (w, int(h * 0.18)),
+            (int(w * 0.94), int(h * 0.45)), (int(w * 0.90), int(h * 0.75)),
+            (int(w * 0.82), h), (int(w * 0.18), h),
+            (int(w * 0.10), int(h * 0.75)), (int(w * 0.06), int(h * 0.45)),
+            (0, int(h * 0.18))]
+
+
+def sil_bot_shelf(w, h):
+    # realistic column with a small lower shelf (one natural break, not a staircase)
+    return [(0, 0), (w, 0), (int(w * 0.92), int(h * 0.22)),
+            (int(w * 0.86), int(h * 0.50)), (int(w * 0.82), int(h * 0.62)),
+            (int(w * 0.96), int(h * 0.66)), (int(w * 0.88), int(h * 0.85)),
             (int(w * 0.80), h), (int(w * 0.20), h),
-            (int(w * 0.12), int(h * 0.74)), (int(w * 0.22), int(h * 0.50)),
-            (int(w * 0.08), int(h * 0.24))]
-
-
-def sil_eroded(w, h):
-    # wider column with soft erosion bulges — temple-ruin shape
-    return [(0, 0), (w, 0), (int(w * 0.98), int(h * 0.20)),
-            (int(w * 0.84), int(h * 0.44)), (w, int(h * 0.64)),
-            (int(w * 0.90), int(h * 0.84)), (int(w * 0.74), h),
-            (int(w * 0.26), h), (int(w * 0.10), int(h * 0.84)),
-            (0, int(h * 0.64)), (int(w * 0.16), int(h * 0.44)),
-            (int(w * 0.02), int(h * 0.20))]
-
-
-def sil_bulbous(w, h):
-    # fat bulbous standing-stone / menhir shape, slight tilt
-    return [(0, 0), (w, 0), (w, int(h * 0.46)),
-            (int(w * 0.94), int(h * 0.70)), (int(w * 0.82), int(h * 0.88)),
-            (int(w * 0.60), h), (int(w * 0.34), h),
-            (int(w * 0.14), int(h * 0.88)), (int(w * 0.04), int(h * 0.70)),
-            (0, int(h * 0.46))]
+            (int(w * 0.12), int(h * 0.85)), (int(w * 0.04), int(h * 0.66)),
+            (int(w * 0.18), int(h * 0.62)), (int(w * 0.14), int(h * 0.50)),
+            (int(w * 0.08), int(h * 0.22))]
 
 
 def overlay_flutes(surf, cx, pw):
@@ -91,15 +95,15 @@ def overlay_flutes(surf, cx, pw):
 
 OPTIONS = [
     dict(name="01 Lung-ta Pass"),
-    dict(name="02 Shimenawa Stone", bot_sil=sil_stout_neck),
-    dict(name="03 Darchog Sentinel"),
-    dict(name="04 Babylon Terrace",  bot_sil=sil_stepped),
-    dict(name="05 Monastery Perch",  bot_sil=sil_leaning),
-    dict(name="06 Lantern Festival", bot_sil=sil_waisted),
+    dict(name="02 Shimenawa Stone", bot_sil=sil_bot_stout),
+    dict(name="03 Darchog Sentinel", bot_sil=sil_bot_slender),
+    dict(name="04 Babylon Terrace",  bot_sil=sil_bot_shelf),
+    dict(name="05 Monastery Perch",  bot_sil=sil_bot_lean),
+    dict(name="06 Lantern Festival", bot_sil=sil_bot_stout),
     dict(name="07 Basalt Organ",     overlay=overlay_flutes),
-    dict(name="08 Hermit's Retreat", bot_sil=sil_leaning),
-    dict(name="09 Overgrown Ruin",   bot_sil=sil_eroded),
-    dict(name="10 Menhir Shrine",    bot_sil=sil_bulbous),
+    dict(name="08 Hermit's Retreat", bot_sil=sil_bot_lean),
+    dict(name="09 Overgrown Ruin",   bot_sil=sil_bot_eroded),
+    dict(name="10 Menhir Shrine",    bot_sil=sil_bot_blunt),
 ]
 
 
@@ -409,197 +413,404 @@ def draw_spiral_glow(surf, cx, cy, radius=12):
         pygame.draw.line(surf, (255, 180, 80), pts[i], pts[i + 1], 1)
 
 
+def draw_moss_patch(cell, cx, cy, w, h, palette, seed=0):
+    # irregular moss coverage — layered blobs
+    rng = random.Random(seed)
+    dark, mid, top = palette['foliage_dark'], palette['foliage_mid'], palette['foliage_top']
+    for _ in range(max(6, (w * h) // 50)):
+        dx = rng.randint(-w // 2, w // 2)
+        dy = rng.randint(-h // 2, h // 2)
+        r = rng.randint(3, 6)
+        pygame.draw.circle(cell, dark, (cx + dx, cy + dy), r + 1)
+        pygame.draw.circle(cell, mid, (cx + dx, cy + dy), r)
+        pygame.draw.circle(cell, top, (cx + dx - 1, cy + dy - 1), max(1, r - 2))
+
+
+def draw_fern_cluster(cell, cx, cy, n=6, palette=None, seed=0):
+    rng = random.Random(seed)
+    dark = (30, 110, 50) if palette is None else palette['foliage_dark']
+    mid = (70, 170, 75) if palette is None else palette['foliage_mid']
+    top = (140, 220, 110) if palette is None else palette['foliage_top']
+    for i in range(n):
+        dx = (i - n // 2) * 3 + rng.randint(-1, 1)
+        lean = rng.randint(-3, 3)
+        length = rng.randint(10, 18)
+        stem_bot = (cx + dx, cy)
+        stem_top = (cx + dx + lean, cy - length)
+        pygame.draw.line(cell, dark, stem_bot, stem_top, 2)
+        # pinnae along the stem
+        for j in range(1, 5):
+            t = j / 5
+            px = int(stem_bot[0] + (stem_top[0] - stem_bot[0]) * t)
+            py = int(stem_bot[1] + (stem_top[1] - stem_bot[1]) * t)
+            plen = 4 - j
+            pygame.draw.line(cell, mid, (px, py), (px - plen, py - 1), 1)
+            pygame.draw.line(cell, mid, (px, py), (px + plen, py - 1), 1)
+        pygame.draw.line(cell, top, stem_top, (stem_top[0], stem_top[1] - 2), 2)
+
+
+def draw_pine_trio(cell, peak_x, peak_y, palette, seed=0):
+    rng = random.Random(seed)
+    draw_wuling_pine(cell, peak_x, peak_y + 2, 86, palette, lean=10, layers=6)
+    draw_wuling_pine(cell, peak_x - 20, peak_y + 22, 56, palette, lean=-6, layers=5)
+    draw_wuling_pine(cell, peak_x + 18, peak_y + 36, 42, palette, lean=6, layers=4)
+    # small companion sapling / bushy foliage
+    for dx, dy, sz in [(-34, 44, 12), (28, 60, 10), (-10, 68, 8)]:
+        pygame.draw.ellipse(cell, palette['foliage_dark'], (peak_x + dx - sz, peak_y + dy - sz // 2, sz * 2, sz))
+        pygame.draw.ellipse(cell, palette['foliage_mid'], (peak_x + dx - sz + 2, peak_y + dy - sz // 2 + 1, sz * 2 - 4, sz - 2))
+
+
+def draw_climbing_vine(cell, x, y_top, y_bot, palette, seed=0):
+    rng = random.Random(seed)
+    dark, mid, top = palette['foliage_dark'], palette['foliage_mid'], palette['foliage_top']
+    for i in range(y_bot - y_top):
+        wob = int(math.sin((i + seed) * 0.16) * 3)
+        px = x + wob
+        py = y_top + i
+        pygame.draw.line(cell, dark, (px, py), (px + 1, py), 2)
+        if i % 5 == 0:
+            side = 1 if (i // 5) % 2 == 0 else -1
+            leaf_x = px + side * 3
+            pygame.draw.ellipse(cell, dark, (leaf_x - 3, py - 2, 6, 4))
+            pygame.draw.ellipse(cell, mid, (leaf_x - 2, py - 1, 4, 3))
+            pygame.draw.ellipse(cell, top, (leaf_x - 1, py - 1, 2, 2))
+
+
+def draw_grass_bed(cell, cx, cy, width=60, density=14, palette=None, seed=0):
+    rng = random.Random(seed)
+    mid = (70, 170, 75) if palette is None else palette['foliage_mid']
+    top = (140, 220, 110) if palette is None else palette['foliage_top']
+    for _ in range(density):
+        dx = rng.randint(-width // 2, width // 2)
+        h = rng.randint(4, 9)
+        lean = rng.randint(-2, 2)
+        pygame.draw.line(cell, mid, (cx + dx, cy), (cx + dx + lean, cy - h), 1)
+        pygame.draw.line(cell, top, (cx + dx, cy), (cx + dx + lean, cy - h + 2), 1)
+
+
+def draw_flower_bed(cell, cx, cy, width=50, n=14, seed=0):
+    rng = random.Random(seed)
+    cols = [(255, 230, 100), (250, 250, 240), (255, 180, 200), (200, 120, 230), (255, 140, 80)]
+    for _ in range(n):
+        dx = rng.randint(-width // 2, width // 2)
+        dy = rng.randint(-5, 2)
+        col = rng.choice(cols)
+        pygame.draw.circle(cell, col, (cx + dx, cy + dy), rng.choice([1, 2]))
+
+
+def draw_ground_ferns(cell, cx, cy, width=50, n=5, palette=None, seed=0):
+    rng = random.Random(seed)
+    for i in range(n):
+        dx = rng.randint(-width // 2, width // 2)
+        draw_fern_cluster(cell, cx + dx, cy, n=rng.randint(4, 7), palette=palette, seed=seed + i)
+
+
 def decorate(cell, cx, palette, name, idx):
     peak_x, peak_y = cx + 4, BOT_TOP
     if "Lung-ta" in name:
-        draw_wuling_pine(cell, peak_x, peak_y + 2, 82, palette, lean=12, layers=6)
-        draw_wuling_pine(cell, peak_x - 18, peak_y + 22, 48, palette, lean=-6, layers=4)
-        draw_moss_strand(cell, cx - 18, TOP_H - 14, 18, palette, jitter_seed=idx)
-        draw_moss_strand(cell, cx + 14, TOP_H - 14, 14, palette, jitter_seed=idx + 1)
-        draw_side_shrub(cell, cx + 34, BOT_TOP + 70, palette, scale=1.0)
-        draw_prayer_flags(cell, cx - 38, TOP_H - 56, peak_x + 20, peak_y - 60, n=9)
-        draw_prayer_flags(cell, cx + 38, TOP_H - 42, peak_x - 6, peak_y - 38, n=6)
-        draw_cairn(cell, peak_x - 22, peak_y + 4, n=3, pennant=False)
-        # smoke bowl at base
-        pygame.draw.ellipse(cell, (80, 60, 45), (cx - 8, GROUND_Y - 10, 16, 6))
-        draw_incense_smoke(cell, cx, GROUND_Y - 14, length=40)
+        # dense pine crown with companions
+        draw_pine_trio(cell, peak_x, peak_y, palette, seed=idx)
+        draw_wuling_pine(cell, peak_x - 30, peak_y + 54, 36, palette, lean=-4, layers=4)
+        draw_wuling_pine(cell, peak_x + 26, peak_y + 72, 30, palette, lean=4, layers=3)
+        # heavy moss cascade across the whole underside of top pillar
+        for off in range(-36, 38, 4):
+            draw_moss_strand(cell, cx + off, TOP_H - 12, 14 + abs(off) % 10, palette, jitter_seed=idx + off)
+        draw_moss_patch(cell, cx + 22, TOP_H - 40, 30, 12, palette, seed=idx)
+        # side shrubs on multiple ledges
+        for sy, sc in [(70, 1.0), (120, 0.9), (180, 1.0), (220, 0.8)]:
+            side = 1 if sy % 2 == 0 else -1
+            draw_side_shrub(cell, cx + side * (PILLAR_W // 2 - 14), BOT_TOP + sy, palette, scale=sc)
+        # climbing vine + ground bed
+        draw_climbing_vine(cell, cx - PILLAR_W // 2 + 10, BOT_TOP + 40, GROUND_Y - 20, palette, seed=idx)
+        draw_grass_bed(cell, cx, GROUND_Y - 2, width=80, density=18, palette=palette, seed=idx)
+        draw_flower_bed(cell, cx, GROUND_Y - 3, width=70, n=18, seed=idx)
+        draw_ground_ferns(cell, cx - 40, GROUND_Y - 4, width=20, n=3, palette=palette, seed=idx)
+        # DOUBLED ornaments: 4 flag strings, 2 cairns, 2 incense bowls, extra bells
+        draw_prayer_flags(cell, cx - 40, TOP_H - 60, peak_x + 22, peak_y - 64, n=9)
+        draw_prayer_flags(cell, cx + 40, TOP_H - 46, peak_x - 6, peak_y - 42, n=7)
+        draw_prayer_flags(cell, cx - 30, TOP_H - 80, cx + 32, TOP_H - 88, n=6)
+        draw_prayer_flags(cell, cx - 44, TOP_H - 24, cx + 44, TOP_H - 20, n=5)
+        draw_cairn(cell, peak_x - 26, peak_y + 4, n=4, pennant=False)
+        draw_cairn(cell, cx + PILLAR_W // 2 + 4, GROUND_Y - 4, n=3, pennant=True)
+        for bx in (cx - 18, cx + 14):
+            pygame.draw.ellipse(cell, (80, 60, 45), (bx - 6, GROUND_Y - 10, 12, 6))
+            draw_incense_smoke(cell, bx, GROUND_Y - 14, length=36)
         return
     if "Shimenawa" in name:
-        draw_wuling_pine(cell, peak_x, peak_y + 2, 70, palette, lean=8, layers=5)
-        # rope around top pillar's fang and around bottom pillar's neck
-        draw_shimenawa(cell, cx, TOP_H - 24, width=58)
-        draw_shimenawa(cell, cx, BOT_TOP + 115, width=46)  # at the neck of sil_stout_neck
-        draw_torii(cell, cx, GROUND_Y - 2)
-        draw_side_shrub(cell, cx + 32, BOT_TOP + 70, palette, scale=1.0)
-        draw_moss_strand(cell, cx - 22, TOP_H - 14, 12, palette, jitter_seed=idx)
-        # fern cluster
-        for fx, fy in [(cx - 28, BOT_TOP + 200), (cx + 22, BOT_TOP + 210)]:
-            for k in range(5):
-                pygame.draw.line(cell, (50, 140, 60), (fx + k, fy), (fx + k - 2, fy - 6), 1)
+        # dense pine cluster
+        draw_pine_trio(cell, peak_x, peak_y, palette, seed=idx + 1)
+        # 6 moss strands + moss patches
+        for off in (-28, -16, -4, 8, 20, 32):
+            draw_moss_strand(cell, cx + off, TOP_H - 14, 16 + abs(off) % 8, palette, jitter_seed=idx + off)
+        draw_moss_patch(cell, cx - 16, BOT_TOP + 60, 28, 14, palette, seed=idx)
+        draw_moss_patch(cell, cx + 20, BOT_TOP + 140, 22, 12, palette, seed=idx + 2)
+        # 2 shimenawa ropes + 1 extra on top pillar
+        draw_shimenawa(cell, cx, TOP_H - 30, width=60)
+        draw_shimenawa(cell, cx, BOT_TOP + 30, width=70)
+        draw_shimenawa(cell, cx, BOT_TOP + 170, width=56)
+        # 2 torii + a hanging ema plaque (paper charm)
+        draw_torii(cell, cx - 22, GROUND_Y - 2)
+        draw_torii(cell, cx + 22, GROUND_Y - 2)
+        # paper shide charms hanging from top pillar extras
+        for dx in (-20, 0, 20):
+            pygame.draw.line(cell, (70, 50, 30), (cx + dx, TOP_H - 8), (cx + dx, TOP_H + 6), 1)
+            pygame.draw.line(cell, (250, 250, 250), (cx + dx - 2, TOP_H + 6), (cx + dx + 2, TOP_H + 10), 2)
+        # dense vegetation: 4 side shrubs + climbing vine + fern beds + grass + flowers
+        for sy, sc in [(60, 1.0), (110, 0.9), (160, 1.0), (200, 0.8)]:
+            side = -1 if sy % 2 == 0 else 1
+            draw_side_shrub(cell, cx + side * (PILLAR_W // 2 - 14), BOT_TOP + sy, palette, scale=sc)
+        draw_climbing_vine(cell, cx + PILLAR_W // 2 - 8, BOT_TOP + 30, GROUND_Y - 10, palette, seed=idx + 3)
+        draw_ground_ferns(cell, cx, GROUND_Y - 4, width=80, n=5, palette=palette, seed=idx)
+        draw_grass_bed(cell, cx, GROUND_Y - 2, width=90, density=20, palette=palette, seed=idx)
         return
     if "Darchog" in name:
-        draw_wuling_pine(cell, peak_x, peak_y + 2, 80, palette, lean=10, layers=6)
-        draw_wuling_pine(cell, peak_x - 20, peak_y + 24, 48, palette, lean=-6, layers=5)
-        draw_darchog_pole(cell, peak_x + 14, peak_y - 4, height=90, banner_color=(200, 90, 40))
-        draw_stupa(cell, cx - 10, GROUND_Y - 10)
-        for off in (-22, -8, 8, 20):
-            draw_moss_strand(cell, cx + off, TOP_H - 14, 16, palette, jitter_seed=idx + off)
-        draw_side_shrub(cell, cx - 34, BOT_TOP + 70, palette, scale=1.0)
-        draw_side_shrub(cell, cx + 30, BOT_TOP + 150, palette, scale=0.9)
-        # small butter-lamp on the base ledge
-        pygame.draw.rect(cell, (200, 170, 120), (cx + 22, GROUND_Y - 6, 6, 4))
-        g = pygame.Surface((10, 10), pygame.SRCALPHA)
-        pygame.draw.circle(g, (255, 220, 120, 180), (5, 5), 4)
-        cell.blit(g, (cx + 20, GROUND_Y - 12))
-        for bx, by in [(cx - 100, 60), (cx + 90, 90)]:
+        # dense pine cluster + companions
+        draw_pine_trio(cell, peak_x, peak_y, palette, seed=idx)
+        draw_wuling_pine(cell, peak_x - 28, peak_y + 60, 38, palette, lean=-4, layers=4)
+        # dense moss across the underside
+        for off in range(-32, 34, 5):
+            draw_moss_strand(cell, cx + off, TOP_H - 14, 14 + abs(off) % 8, palette, jitter_seed=idx + off)
+        draw_moss_patch(cell, cx, TOP_H - 40, 40, 14, palette, seed=idx)
+        # 2 darchog poles with different banner colors + 2 stupas
+        draw_darchog_pole(cell, peak_x + 14, peak_y - 4, height=100, banner_color=(200, 90, 40))
+        draw_darchog_pole(cell, peak_x - 20, peak_y + 10, height=80, banner_color=(180, 40, 60))
+        draw_stupa(cell, cx - 22, GROUND_Y - 10)
+        draw_stupa(cell, cx + 22, GROUND_Y - 10)
+        # 2 butter-lamps with glow
+        for bx in (cx - 4, cx + 40):
+            pygame.draw.rect(cell, (200, 170, 120), (bx - 3, GROUND_Y - 6, 6, 4))
+            g = pygame.Surface((12, 12), pygame.SRCALPHA)
+            pygame.draw.circle(g, (255, 220, 120, 180), (6, 6), 5)
+            cell.blit(g, (bx - 6, GROUND_Y - 14))
+        # dense side vegetation: 5 shrubs + climbing vine + grass + flowers + ferns
+        for sy, sc in [(50, 1.1), (100, 0.9), (150, 1.0), (200, 0.9), (240, 0.8)]:
+            side = 1 if sy % 2 == 0 else -1
+            draw_side_shrub(cell, cx + side * (PILLAR_W // 2 - 12), BOT_TOP + sy, palette, scale=sc)
+        draw_climbing_vine(cell, cx - PILLAR_W // 2 + 10, BOT_TOP + 40, GROUND_Y - 20, palette, seed=idx + 1)
+        draw_grass_bed(cell, cx, GROUND_Y - 2, width=80, density=18, palette=palette, seed=idx)
+        draw_flower_bed(cell, cx, GROUND_Y - 3, width=70, n=16, seed=idx)
+        for bx, by in [(cx - 100, 50), (cx + 90, 80), (cx - 80, 110), (cx + 110, 130)]:
             draw_bird_sil(cell, bx, by, size=5)
         return
     if "Babylon" in name:
-        draw_wuling_pine(cell, peak_x, peak_y + 2, 52, palette, lean=6, layers=4)
-        # terrace walls at each step (matching sil_stepped breakpoints roughly)
-        draw_terrace_wall(cell, cx, BOT_TOP + 80, width=60)
-        draw_terrace_wall(cell, cx, BOT_TOP + 160, width=80)
-        draw_terrace_wall(cell, cx, BOT_TOP + 230, width=100)
-        # cascading vines + flowers dripping over terrace edges
-        for vx, vl in [(-22, 50), (0, 46), (20, 54), (-34, 40), (30, 44)]:
-            draw_cascading_vine(cell, cx + vx, BOT_TOP + 86, length=vl, palette=palette)
-        draw_cascading_vine(cell, cx - 18, BOT_TOP + 166, length=60, palette=palette)
-        draw_cascading_vine(cell, cx + 16, BOT_TOP + 166, length=50, palette=palette)
-        # ferns on top ledge
-        for fx in (-24, 0, 20):
-            for k in range(4):
-                pygame.draw.line(cell, (50, 140, 60), (cx + fx + k, BOT_TOP + 78), (cx + fx + k - 2, BOT_TOP + 72), 1)
-        # wooden ladder between two terraces
-        draw_ladder(cell, cx + 18, BOT_TOP + 82, BOT_TOP + 158)
+        # small pine + 2 companion shrubs on peak
+        draw_wuling_pine(cell, peak_x, peak_y + 2, 54, palette, lean=4, layers=4)
+        draw_wuling_pine(cell, peak_x - 16, peak_y + 22, 40, palette, lean=-4, layers=4)
+        # 4 terrace walls at natural shelf heights
+        for ty in (BOT_TOP + 70, BOT_TOP + 140, BOT_TOP + 200, BOT_TOP + 240):
+            draw_terrace_wall(cell, cx, ty, width=70)
+        # MANY cascading vines + flowers spilling over each terrace
+        for base_y in (BOT_TOP + 76, BOT_TOP + 146, BOT_TOP + 206):
+            for vx, vl in [(-30, 44), (-18, 52), (-6, 58), (6, 50), (18, 46), (30, 40)]:
+                draw_cascading_vine(cell, cx + vx, base_y, length=vl, palette=palette)
+        # dense fern banks on each terrace top
+        for ty in (BOT_TOP + 66, BOT_TOP + 136, BOT_TOP + 196):
+            draw_ground_ferns(cell, cx, ty, width=70, n=6, palette=palette, seed=idx + ty)
+        # flower beds on each terrace
+        for ty in (BOT_TOP + 68, BOT_TOP + 138, BOT_TOP + 198):
+            draw_flower_bed(cell, cx, ty, width=60, n=12, seed=idx + ty)
+        # 2 ladders at different levels + a clay pot + a broken column stub (extra ornaments)
+        draw_ladder(cell, cx + 18, BOT_TOP + 82, BOT_TOP + 138)
+        draw_ladder(cell, cx - 28, BOT_TOP + 152, BOT_TOP + 200)
+        pygame.draw.ellipse(cell, (110, 80, 55), (cx + 22, GROUND_Y - 14, 14, 12))
+        pygame.draw.ellipse(cell, (150, 115, 80), (cx + 23, GROUND_Y - 13, 12, 9))
+        pygame.draw.rect(cell, (130, 110, 85), (cx - 34, GROUND_Y - 22, 10, 22))
+        pygame.draw.rect(cell, (160, 140, 110), (cx - 33, GROUND_Y - 21, 8, 20))
+        draw_grass_bed(cell, cx, GROUND_Y - 2, width=90, density=22, palette=palette, seed=idx)
         return
     if "Monastery" in name:
-        # 3 alpine pines staggered on the peak
-        draw_wuling_pine(cell, peak_x, peak_y + 2, 72, palette, lean=10, layers=5)
-        draw_wuling_pine(cell, peak_x - 18, peak_y + 22, 50, palette, lean=-4, layers=4)
-        draw_wuling_pine(cell, peak_x + 14, peak_y + 42, 36, palette, lean=4, layers=4)
-        # monastery building perched on mid-face ledge (bottom pillar)
-        draw_monastery(cell, cx - 22, BOT_TOP + 140)
-        # short prayer-flag line from balcony to pine
-        draw_prayer_flags(cell, cx - 22, BOT_TOP + 140, peak_x + 4, peak_y - 20, n=6)
-        for off in (-24, -8, 6, 18):
-            draw_moss_strand(cell, cx + off, TOP_H - 14, 14, palette, jitter_seed=idx + off)
-        draw_side_shrub(cell, cx + 30, BOT_TOP + 60, palette, scale=1.0)
-        draw_side_shrub(cell, cx + 28, BOT_TOP + 210, palette, scale=0.9)
+        # 5+ alpine pines staggered for a dense mountain-top forest
+        draw_pine_trio(cell, peak_x, peak_y, palette, seed=idx)
+        draw_wuling_pine(cell, peak_x - 32, peak_y + 60, 38, palette, lean=-4, layers=4)
+        draw_wuling_pine(cell, peak_x + 28, peak_y + 72, 34, palette, lean=4, layers=4)
+        # 2 monastery buildings (main + annex) on different ledges
+        draw_monastery(cell, cx - 24, BOT_TOP + 150)
+        draw_monastery(cell, cx + 22, BOT_TOP + 220)
+        # prayer-flag lines from both buildings to pine
+        draw_prayer_flags(cell, cx - 24, BOT_TOP + 150, peak_x + 4, peak_y - 20, n=7)
+        draw_prayer_flags(cell, cx + 22, BOT_TOP + 220, cx - 24, BOT_TOP + 200, n=6)
+        draw_prayer_flags(cell, cx - 24, BOT_TOP + 190, cx + 22, BOT_TOP + 180, n=5)
+        # heavy moss cascade
+        for off in range(-28, 30, 4):
+            draw_moss_strand(cell, cx + off, TOP_H - 14, 12 + abs(off) % 8, palette, jitter_seed=idx + off)
+        draw_moss_patch(cell, cx, TOP_H - 42, 36, 14, palette, seed=idx)
+        # dense shrubs + climbing vine + ground cover
+        for sy, sc in [(50, 1.1), (100, 1.0), (170, 0.9), (240, 0.8)]:
+            side = 1 if sy % 2 == 0 else -1
+            draw_side_shrub(cell, cx + side * (PILLAR_W // 2 - 12), BOT_TOP + sy, palette, scale=sc)
+        draw_climbing_vine(cell, cx + PILLAR_W // 2 - 8, BOT_TOP + 30, GROUND_Y - 30, palette, seed=idx)
+        draw_flower_bed(cell, cx, GROUND_Y - 4, width=70, n=14, seed=idx)
+        draw_grass_bed(cell, cx, GROUND_Y - 2, width=90, density=18, palette=palette, seed=idx)
         return
     if "Lantern" in name:
-        draw_wuling_pine(cell, peak_x, peak_y + 2, 72, palette, lean=8, layers=5)
-        draw_wuling_pine(cell, peak_x - 18, peak_y + 24, 46, palette, lean=-6, layers=4)
-        # hero lantern + lantern string
+        # denser pine cluster
+        draw_pine_trio(cell, peak_x, peak_y, palette, seed=idx)
+        draw_wuling_pine(cell, peak_x - 30, peak_y + 54, 36, palette, lean=-4, layers=4)
+        draw_wuling_pine(cell, peak_x + 26, peak_y + 70, 32, palette, lean=4, layers=3)
+        # hero + many lanterns (DOUBLED): 2 hero, 8 small
         draw_paper_lantern(cell, cx - 14, TOP_H - 4, strand=26, scale=1.4, color='red')
         draw_paper_lantern(cell, cx + 18, TOP_H - 6, strand=34, scale=0.9, color='gold')
-        for i, dx in enumerate((-36, -14, 10, 32)):
-            draw_paper_lantern(cell, cx + dx, TOP_H + 36, strand=6, scale=0.55,
-                               color=['red', 'gold', 'red', 'gold'][i])
-        # gilded calligraphy plaque at base
-        pygame.draw.rect(cell, (160, 125, 55), (cx - 10, GROUND_Y - 20, 20, 20))
-        pygame.draw.rect(cell, (220, 180, 80), (cx - 9, GROUND_Y - 19, 18, 18))
-        for i in range(3):
-            pygame.draw.line(cell, (120, 85, 25), (cx - 6, GROUND_Y - 14 + i * 4), (cx + 6, GROUND_Y - 14 + i * 4), 1)
-        # bamboo + bougainvillea (magenta dots climbing the face)
-        for i in range(10):
-            dy = BOT_TOP + 40 + i * 16
-            dx = (-1) ** i * (PILLAR_W // 2 - 10)
-            pygame.draw.circle(cell, (220, 60, 140), (cx + dx, dy), 2)
-            pygame.draw.circle(cell, (245, 130, 180), (cx + dx + 1, dy - 1), 1)
-        draw_incense_smoke(cell, cx - 20, GROUND_Y - 22, length=22)
-        draw_incense_smoke(cell, cx + 20, GROUND_Y - 22, length=22)
+        for i, (dx, dy, clr) in enumerate([(-40, 36, 'red'), (-18, 48, 'gold'), (8, 36, 'red'), (32, 48, 'gold'),
+                                             (-36, 78, 'gold'), (-8, 82, 'red'), (22, 78, 'red'), (40, 90, 'gold')]):
+            draw_paper_lantern(cell, cx + dx, TOP_H + dy, strand=6, scale=0.55, color=clr)
+        # 2 plaques + garland + incense
+        for pl_y in (GROUND_Y - 22, BOT_TOP + 100):
+            pygame.draw.rect(cell, (160, 125, 55), (cx - 10, pl_y, 20, 18))
+            pygame.draw.rect(cell, (220, 180, 80), (cx - 9, pl_y + 1, 18, 16))
+            for i in range(3):
+                pygame.draw.line(cell, (120, 85, 25), (cx - 6, pl_y + 4 + i * 4), (cx + 6, pl_y + 4 + i * 4), 1)
+        # dense bougainvillea wall along the pillar face
+        for i in range(22):
+            dy = BOT_TOP + 30 + i * 10
+            for dx in (-PILLAR_W // 2 + 8, -PILLAR_W // 2 + 14, PILLAR_W // 2 - 10, PILLAR_W // 2 - 18):
+                pygame.draw.circle(cell, (220, 60, 140), (cx + dx, dy), 2)
+                pygame.draw.circle(cell, (245, 130, 180), (cx + dx + 1, dy - 1), 1)
+        # bamboo cluster + ferns + grass
+        for k in range(7):
+            pygame.draw.line(cell, (90, 140, 70), (cx - 36 + k * 3, GROUND_Y - 4), (cx - 36 + k * 3, GROUND_Y - 24), 2)
+            pygame.draw.ellipse(cell, (120, 180, 90), (cx - 38 + k * 3, GROUND_Y - 26, 6, 4))
+        draw_ground_ferns(cell, cx + 28, GROUND_Y - 4, width=26, n=4, palette=palette, seed=idx)
+        draw_grass_bed(cell, cx, GROUND_Y - 2, width=90, density=16, palette=palette, seed=idx)
+        for smoke_x in (cx - 22, cx + 22, cx - 4):
+            draw_incense_smoke(cell, smoke_x, GROUND_Y - 24, length=22)
         return
     if "Basalt" in name:
-        # single stunted leaning pine on the cap
-        draw_wuling_pine(cell, peak_x, peak_y + 2, 58, palette, lean=14, layers=4)
-        # marker pole with faded orange cloth flag on peak
-        pygame.draw.line(cell, (80, 60, 40), (peak_x - 14, peak_y + 4), (peak_x - 14, peak_y - 28), 2)
-        pygame.draw.polygon(cell, (210, 130, 60), [(peak_x - 14, peak_y - 28), (peak_x + 2, peak_y - 24), (peak_x - 14, peak_y - 20)])
-        draw_cairn(cell, peak_x + 14, peak_y + 6, n=3, pennant=False)
+        # 3 stunted alpine pines clinging to the cap
+        draw_wuling_pine(cell, peak_x, peak_y + 2, 62, palette, lean=14, layers=5)
+        draw_wuling_pine(cell, peak_x - 22, peak_y + 24, 44, palette, lean=-8, layers=4)
+        draw_wuling_pine(cell, peak_x + 18, peak_y + 46, 32, palette, lean=6, layers=3)
+        # 2 marker poles with colored cloths
+        pygame.draw.line(cell, (80, 60, 40), (peak_x - 16, peak_y + 6), (peak_x - 16, peak_y - 32), 2)
+        pygame.draw.polygon(cell, (210, 130, 60), [(peak_x - 16, peak_y - 32), (peak_x + 0, peak_y - 28), (peak_x - 16, peak_y - 24)])
+        pygame.draw.line(cell, (80, 60, 40), (peak_x + 20, peak_y + 8), (peak_x + 20, peak_y - 20), 2)
+        pygame.draw.polygon(cell, (170, 50, 60), [(peak_x + 20, peak_y - 20), (peak_x + 32, peak_y - 16), (peak_x + 20, peak_y - 14)])
+        # 2 cairns (peak + base) + raven + carved rune
+        draw_cairn(cell, peak_x + 6, peak_y + 6, n=4, pennant=False)
+        draw_cairn(cell, cx - 22, GROUND_Y - 4, n=3, pennant=True)
         draw_raven(cell, cx + 2, 22)
-        # lichen patches (greenish-yellow) + tiny cushion flowers
+        draw_raven(cell, peak_x + 6, peak_y - 24)
+        # heavy lichen MATS (not dots) in alpine greens + yellows
         rng = random.Random(idx)
-        for _ in range(12):
+        for _ in range(22):
             dx = rng.randint(-PILLAR_W // 2 + 8, PILLAR_W // 2 - 8)
-            dy = rng.randint(60, BOT_TOP + 220)
-            col = rng.choice([(170, 180, 90), (180, 200, 110), (255, 220, 100)])
-            pygame.draw.circle(cell, col, (cx + dx, dy), 2)
-        # two carved rune notches in the stone
-        for ny in (BOT_TOP + 80, BOT_TOP + 160):
-            pygame.draw.line(cell, (60, 48, 40), (cx - 16, ny), (cx - 10, ny - 4), 2)
-            pygame.draw.line(cell, (60, 48, 40), (cx - 10, ny - 4), (cx - 4, ny), 2)
+            dy = rng.randint(60, BOT_TOP + 240)
+            col = rng.choice([(170, 180, 90), (180, 200, 110), (220, 200, 80)])
+            r = rng.randint(2, 4)
+            pygame.draw.circle(cell, col, (cx + dx, dy), r)
+        # carved runes in 3 spots
+        for ny in (BOT_TOP + 80, BOT_TOP + 160, BOT_TOP + 220):
+            pygame.draw.line(cell, (60, 48, 40), (cx - 18, ny), (cx - 10, ny - 5), 2)
+            pygame.draw.line(cell, (60, 48, 40), (cx - 10, ny - 5), (cx - 2, ny), 2)
+            pygame.draw.circle(cell, (60, 48, 40), (cx + 10, ny - 3), 2)
+        # moss strands on the underside + sparse side shrubs + alpine grass+flowers at base
+        for off in (-20, -8, 4, 16):
+            draw_moss_strand(cell, cx + off, TOP_H - 12, 14, palette, jitter_seed=idx + off)
+        for sy, sc in [(80, 0.8), (180, 0.9), (240, 0.7)]:
+            side = 1 if sy % 2 == 0 else -1
+            draw_side_shrub(cell, cx + side * (PILLAR_W // 2 - 12), BOT_TOP + sy, palette, scale=sc)
+        draw_grass_bed(cell, cx, GROUND_Y - 2, width=80, density=14, palette=palette, seed=idx)
+        draw_flower_bed(cell, cx, GROUND_Y - 3, width=60, n=10, seed=idx)
         return
     if "Hermit" in name:
-        # painterly twisted pines at different angles
-        draw_wuling_pine(cell, peak_x, peak_y + 2, 74, palette, lean=18, layers=5)
-        draw_wuling_pine(cell, peak_x - 22, peak_y + 36, 48, palette, lean=-12, layers=4)
-        draw_wuling_pine(cell, peak_x + 18, peak_y + 80, 34, palette, lean=8, layers=4)
-        # hermit hut on mid-face ledge
+        # dense grove of 6 painterly pines at varied angles
+        draw_wuling_pine(cell, peak_x, peak_y + 2, 80, palette, lean=18, layers=6)
+        draw_wuling_pine(cell, peak_x - 22, peak_y + 36, 54, palette, lean=-14, layers=5)
+        draw_wuling_pine(cell, peak_x + 18, peak_y + 70, 40, palette, lean=8, layers=4)
+        draw_wuling_pine(cell, peak_x - 32, peak_y + 92, 32, palette, lean=-6, layers=3)
+        draw_wuling_pine(cell, peak_x + 26, peak_y + 110, 28, palette, lean=6, layers=3)
+        draw_wuling_pine(cell, peak_x - 8, peak_y + 130, 24, palette, lean=-2, layers=3)
+        # hermit hut + 2nd tiny storage shed
         draw_hermit_hut(cell, cx - 18, BOT_TOP + 170)
-        # rope bridge stub dangling off the right side of bottom pillar
+        pygame.draw.rect(cell, (130, 95, 60), (cx + 20, BOT_TOP + 218, 14, 14))
+        pygame.draw.polygon(cell, (160, 120, 75), [(cx + 18, BOT_TOP + 218), (cx + 36, BOT_TOP + 218), (cx + 32, BOT_TOP + 212), (cx + 22, BOT_TOP + 212)])
+        # rope bridge stub + hanging scroll + walking stick
         draw_rope_bridge_stub(cell, cx + PILLAR_W // 2 - 4, BOT_TOP + 120, dir=1)
-        # bamboo cluster at base
-        for k in range(5):
-            pygame.draw.line(cell, (90, 140, 70), (cx + 18 + k * 3, GROUND_Y), (cx + 18 + k * 3, GROUND_Y - 20), 2)
-            pygame.draw.ellipse(cell, (120, 180, 90), (cx + 16 + k * 3, GROUND_Y - 22, 6, 4))
-        # mist wrap around the column — soft alpha bands
-        for y in (BOT_TOP + 50, BOT_TOP + 130, BOT_TOP + 210):
-            m = pygame.Surface((PILLAR_W + 40, 8), pygame.SRCALPHA)
-            m.fill((255, 255, 255, 60))
-            cell.blit(m, (cx - (PILLAR_W + 40) // 2, y))
-        # walking stick leaning against hut
+        pygame.draw.rect(cell, (240, 230, 200), (cx - 34, BOT_TOP + 80, 8, 30))
+        pygame.draw.rect(cell, (100, 75, 50), (cx - 35, BOT_TOP + 78, 10, 2))
         pygame.draw.line(cell, (100, 70, 40), (cx - 22, BOT_TOP + 170), (cx - 28, BOT_TOP + 200), 2)
+        # mist wrap bands
+        for y in (BOT_TOP + 40, BOT_TOP + 110, BOT_TOP + 190, BOT_TOP + 240):
+            m = pygame.Surface((PILLAR_W + 60, 10), pygame.SRCALPHA)
+            m.fill((255, 255, 255, 70))
+            cell.blit(m, (cx - (PILLAR_W + 60) // 2, y))
+        # 2 bamboo groves + ferns + moss patches + flower bed
+        for gx in (18, -42):
+            for k in range(6):
+                pygame.draw.line(cell, (90, 140, 70), (cx + gx + k * 3, GROUND_Y - 2), (cx + gx + k * 3, GROUND_Y - 26), 2)
+                pygame.draw.ellipse(cell, (120, 180, 90), (cx + gx - 2 + k * 3, GROUND_Y - 30, 7, 5))
+        draw_moss_patch(cell, cx, TOP_H - 30, 40, 16, palette, seed=idx)
+        draw_moss_patch(cell, cx - 14, BOT_TOP + 60, 24, 12, palette, seed=idx + 4)
+        draw_ground_ferns(cell, cx, GROUND_Y - 4, width=60, n=4, palette=palette, seed=idx)
         return
     if "Overgrown" in name:
-        # broadleaf tree instead of pine on peak — wider ellipses for canopy
-        for i, (dx, dy, sz) in enumerate([(0, 0, 40), (-12, 6, 28), (14, 8, 30), (-4, -10, 24)]):
-            pygame.draw.circle(cell, (30, 90, 45), (peak_x + dx, peak_y - 30 + dy), sz // 2 + 2)
-            pygame.draw.circle(cell, (60, 150, 70), (peak_x + dx, peak_y - 30 + dy), sz // 2)
-            pygame.draw.circle(cell, (130, 210, 100), (peak_x + dx - 2, peak_y - 32 + dy), max(4, sz // 2 - 6))
-        pygame.draw.line(cell, (90, 60, 35), (peak_x, peak_y + 2), (peak_x, peak_y - 24), 3)
-        # masonry + stone face + strangler fig
+        # 2 broadleaf trees replacing pines — canopies overlapping
+        for tx, ty in [(peak_x, peak_y), (peak_x - 22, peak_y + 22)]:
+            pygame.draw.line(cell, (90, 60, 35), (tx, ty + 2), (tx, ty - 30), 3)
+            for (dx, dy, sz) in [(0, 0, 40), (-12, 6, 28), (14, 8, 30), (-4, -10, 24)]:
+                pygame.draw.circle(cell, (30, 90, 45), (tx + dx, ty - 34 + dy), sz // 2 + 2)
+                pygame.draw.circle(cell, (60, 150, 70), (tx + dx, ty - 34 + dy), sz // 2)
+                pygame.draw.circle(cell, (130, 210, 100), (tx + dx - 2, ty - 36 + dy), max(4, sz // 2 - 6))
+        # 2 strangler fig root systems + more masonry + 2 stone faces + broken column
+        draw_strangler_fig(cell, cx - PILLAR_W // 2 + 8, BOT_TOP + 30, GROUND_Y - 10)
+        draw_strangler_fig(cell, cx + PILLAR_W // 2 - 20, BOT_TOP + 60, GROUND_Y - 12)
         draw_masonry_blocks(cell, cx, BOT_TOP + 40, GROUND_Y - 10, PILLAR_W)
         draw_stone_face(cell, cx + 16, BOT_TOP + 170)
-        draw_strangler_fig(cell, cx - PILLAR_W // 2 + 8, BOT_TOP + 30, GROUND_Y - 10)
-        # ferns on 3 ledges
-        for fy in (BOT_TOP + 60, BOT_TOP + 130, BOT_TOP + 200):
-            for k in range(6):
-                fx = cx - 18 + k * 6
-                pygame.draw.line(cell, (40, 130, 55), (fx, fy), (fx - 3, fy - 8), 1)
-                pygame.draw.line(cell, (60, 160, 70), (fx + 1, fy), (fx + 3, fy - 7), 1)
-        # orchid spots
-        for ox, oy in [(cx - 28, BOT_TOP + 90), (cx + 26, BOT_TOP + 140), (cx - 20, BOT_TOP + 180)]:
+        draw_stone_face(cell, cx - 18, BOT_TOP + 90)
+        # broken column stub at base
+        pygame.draw.rect(cell, (130, 110, 85), (cx - 36, GROUND_Y - 24, 10, 24))
+        pygame.draw.ellipse(cell, (150, 125, 95), (cx - 38, GROUND_Y - 26, 14, 4))
+        pygame.draw.rect(cell, (160, 140, 110), (cx - 35, GROUND_Y - 23, 8, 22))
+        # dense fern banks on every ledge + orchid clusters + moss patches
+        for fy in (BOT_TOP + 50, BOT_TOP + 110, BOT_TOP + 170, BOT_TOP + 230):
+            draw_fern_cluster(cell, cx - 16, fy, n=8, palette=palette, seed=idx + fy)
+            draw_fern_cluster(cell, cx + 20, fy - 4, n=7, palette=palette, seed=idx + fy + 1)
+        draw_moss_patch(cell, cx, TOP_H - 30, 50, 20, palette, seed=idx)
+        draw_moss_patch(cell, cx - 18, BOT_TOP + 140, 24, 12, palette, seed=idx + 2)
+        for ox, oy in [(cx - 28, BOT_TOP + 90), (cx + 26, BOT_TOP + 140), (cx - 20, BOT_TOP + 180),
+                        (cx + 18, BOT_TOP + 220), (cx - 34, BOT_TOP + 60), (cx + 30, BOT_TOP + 210)]:
             pygame.draw.circle(cell, (220, 150, 200), (ox, oy), 2)
             pygame.draw.circle(cell, (250, 200, 230), (ox + 1, oy - 1), 1)
-        # weathered urn at base
-        pygame.draw.ellipse(cell, (110, 80, 55), (cx - 26, GROUND_Y - 12, 12, 10))
-        pygame.draw.ellipse(cell, (150, 115, 80), (cx - 25, GROUND_Y - 11, 10, 7))
-        # butterfly drifting
+        # 2 urns + butterfly
+        for ux in (-26, 26):
+            pygame.draw.ellipse(cell, (110, 80, 55), (cx + ux - 6, GROUND_Y - 12, 12, 10))
+            pygame.draw.ellipse(cell, (150, 115, 80), (cx + ux - 5, GROUND_Y - 11, 10, 7))
         draw_bird_sil(cell, cx + 40, TOP_H + 50, size=4)
+        draw_ground_ferns(cell, cx, GROUND_Y - 4, width=80, n=6, palette=palette, seed=idx)
+        draw_flower_bed(cell, cx, GROUND_Y - 3, width=80, n=16, seed=idx)
         return
     if "Menhir" in name:
-        # rowan tree on cap (darker red berries instead of pine)
-        pygame.draw.line(cell, (90, 60, 40), (peak_x, peak_y + 2), (peak_x + 2, peak_y - 24), 2)
-        for rx, ry in [(-6, -10), (8, -14), (-2, -22), (12, -8), (-10, -18)]:
-            pygame.draw.circle(cell, (40, 120, 55), (peak_x + rx, peak_y + ry), 6)
-            pygame.draw.circle(cell, (80, 170, 80), (peak_x + rx - 1, peak_y + ry - 1), 4)
-            pygame.draw.circle(cell, (200, 40, 40), (peak_x + rx + 2, peak_y + ry + 1), 1)
-        # spiral glow carvings on bulbous bottom pillar
-        draw_spiral_glow(cell, cx, BOT_TOP + 130, radius=14)
-        draw_spiral_glow(cell, cx - 24, BOT_TOP + 80, radius=8)
-        draw_spiral_glow(cell, cx + 20, BOT_TOP + 210, radius=9)
-        # tied ribbons around the narrowest neck (top of bulb)
-        draw_ribbons_tied(cell, cx, BOT_TOP + 8, n=5, width=30, seed=idx)
-        # offering cairn at base + candle + heather tufts
-        draw_cairn(cell, cx - 22, GROUND_Y - 4, n=3, pennant=False)
-        pygame.draw.rect(cell, (240, 230, 210), (cx + 22, GROUND_Y - 10, 4, 8))
-        g = pygame.Surface((10, 10), pygame.SRCALPHA)
-        pygame.draw.circle(g, (255, 220, 120, 180), (5, 5), 4)
-        cell.blit(g, (cx + 19, GROUND_Y - 16))
-        for hx in (cx - 36, cx + 38, cx + 10, cx - 12):
+        # 3 rowan trees with red berries
+        for tx, ty in [(peak_x, peak_y), (peak_x - 20, peak_y + 20), (peak_x + 18, peak_y + 34)]:
+            pygame.draw.line(cell, (90, 60, 40), (tx, ty + 2), (tx + 2, ty - 26), 2)
+            for rx, ry in [(-6, -12), (8, -16), (-2, -24), (12, -10), (-10, -20), (4, -8)]:
+                pygame.draw.circle(cell, (40, 120, 55), (tx + rx, ty + ry), 6)
+                pygame.draw.circle(cell, (80, 170, 80), (tx + rx - 1, ty + ry - 1), 4)
+                pygame.draw.circle(cell, (200, 40, 40), (tx + rx + 2, ty + ry + 1), 1)
+        # 5 spiral glow carvings
+        for (sx, sy, r) in [(0, 130, 14), (-24, 80, 8), (20, 210, 10), (-14, 180, 9), (24, 140, 8)]:
+            draw_spiral_glow(cell, cx + sx, BOT_TOP + sy, radius=r)
+        # 2 ribbon knots + carved rune pairs
+        draw_ribbons_tied(cell, cx - 10, BOT_TOP + 14, n=5, width=26, seed=idx)
+        draw_ribbons_tied(cell, cx + 12, BOT_TOP + 110, n=5, width=24, seed=idx + 1)
+        # 2 cairns + 2 candles
+        draw_cairn(cell, cx - 24, GROUND_Y - 4, n=4, pennant=False)
+        draw_cairn(cell, cx + 26, GROUND_Y - 4, n=3, pennant=True)
+        for (candle_x, candle_y) in [(cx - 4, GROUND_Y - 10), (cx + 8, GROUND_Y - 10)]:
+            pygame.draw.rect(cell, (240, 230, 210), (candle_x - 2, candle_y, 4, 8))
+            g = pygame.Surface((12, 12), pygame.SRCALPHA)
+            pygame.draw.circle(g, (255, 220, 120, 190), (6, 6), 5)
+            cell.blit(g, (candle_x - 6, candle_y - 6))
+        # dense heather field + moss + ferns + grass at base
+        for hx_base in range(-42, 46, 7):
             for k in range(3):
-                pygame.draw.line(cell, (150, 90, 140), (hx + k, GROUND_Y - 2), (hx + k - 1, GROUND_Y - 8), 1)
+                pygame.draw.line(cell, (150, 90, 140), (cx + hx_base + k, GROUND_Y - 2),
+                                  (cx + hx_base + k - 1, GROUND_Y - 8 - (k % 3)), 1)
+                pygame.draw.circle(cell, (200, 140, 190), (cx + hx_base + k, GROUND_Y - 10), 1)
+        draw_moss_patch(cell, cx, TOP_H - 28, 40, 14, palette, seed=idx)
+        draw_ground_ferns(cell, cx, GROUND_Y - 4, width=80, n=4, palette=palette, seed=idx)
+        draw_grass_bed(cell, cx, GROUND_Y - 2, width=100, density=18, palette=palette, seed=idx)
         draw_raven(cell, cx - 10, 28)
+        draw_raven(cell, cx + 20, 42)
         return
     return
 
