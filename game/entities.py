@@ -15,9 +15,7 @@ from game.config import (
     BIRD_X, BIRD_R, PIPE_W, COIN_R, MUSHROOM_R, GROUND_Y,
 )
 from game.draw import (
-    blit_glow, get_stone_pillar_body,
-    silhouette_blit, silhouette_top_spire, silhouette_bottom_spire,
-    draw_wuling_pine, draw_moss_strand, draw_side_shrub, draw_pillar_mist,
+    blit_glow, draw_pillar_mist,
     rounded_rect, lerp_color,
     COIN_GOLD, COIN_DARK,
     MUSH_CAP, MUSH_CAP2, MUSH_SPOT, MUSH_STEM,
@@ -25,6 +23,7 @@ from game.draw import (
     NEAR_BLACK, WHITE,
 )
 from game import parrot
+from game.pillar_variants import draw_pillar_pair
 
 
 # Default pillar palette (fallback when no biome provided).
@@ -85,25 +84,9 @@ class Bird:
 # ── Pipe (nature pillar) ─────────────────────────────────────────────────────
 
 class Pipe:
-    """'Slender Spire' sandstone pillar. Each instance gets a stable `seed`
-    so its vegetation arrangement is deterministic across frames."""
-
-    # Vegetation pattern walked along the column body, measured in pixels
-    # from the gap-facing tip. Each entry: (offset, side_sign, kind).
-    # side_sign: -1 = anchor near sunlit (left) edge, +1 = shadow (right) edge.
-    _VEG_PATTERN = (
-        (32,   -1, 'pine_med'),
-        (62,   +1, 'moss'),
-        (92,   -1, 'pine_small'),
-        (122,  +1, 'shrub'),
-        (152,  -1, 'moss'),
-        (185,  +1, 'pine_small'),
-        (215,  -1, 'shrub'),
-        (248,  +1, 'moss'),
-        (282,  -1, 'pine_small'),
-        (315,  +1, 'shrub'),
-        (348,  -1, 'moss'),
-    )
+    """Sandstone pillar column. Each instance picks one of 8 visual variants
+    (original + 7 sketched picks) deterministically from its seed, so the
+    vegetation and ornament arrangement is stable across frames."""
 
     def __init__(self, x: float, gap_y: float, gap_h: float):
         self.x = x
@@ -111,7 +94,7 @@ class Pipe:
         self.gap_h = gap_h
         self.scored = False
         self.is_rush = False
-        # Per-instance random seed for stable vegetation choices
+        # Per-instance random seed → chooses variant + stable decoration seed
         self.seed = random.randint(0, 0xFFFFFF)
 
     @property
@@ -130,117 +113,12 @@ class Pipe:
         return self.top_rect.colliderect(pygame.Rect(cx - r, cy - r, r * 2, r * 2)) or \
                self.bot_rect.colliderect(pygame.Rect(cx - r, cy - r, r * 2, r * 2))
 
-    # ── stone body + silhouette ─────────────────────────────────────────────
-
-    def _paint_stone(self, surf, rect, polygon_fn, palette):
-        if rect.height <= 0:
-            return
-        body = get_stone_pillar_body(
-            rect.width, max(1, rect.height),
-            palette['stone_light'], palette['stone_mid'],
-            palette['stone_dark'],  palette['stone_accent'],
-            body_seed=self.seed,
-        )
-        polygon = polygon_fn(rect.width, rect.height)
-        silhouette_blit(surf, body, polygon, rect.topleft, shadow_alpha=110)
-
-    # ── vegetation distributed along the body ───────────────────────────────
-
-    def _veg_anchor(self, side_sign, rect, y, recess=2):
-        """Return (x, y) anchored near the left/right edge of the rect at
-        height y. side_sign=-1 → sunlit left edge, +1 → shadow right edge."""
-        if side_sign < 0:
-            return (rect.x + recess, y)
-        return (rect.x + rect.width - recess, y)
-
-    def _draw_vegetation_along(self, surf, rect, palette, kind):
-        """Walk _VEG_PATTERN from the gap-facing tip downward (bottom pillar)
-        or upward (top pillar) and place pines / moss / shrubs."""
-        rng = random.Random(self.seed)
-        # Tip-relative direction: bottom pillar's tip is at rect.y (top edge),
-        # vegetation marches downward (sign +1). Top pillar's tip is at
-        # rect.bottom, vegetation marches upward (sign -1).
-        if kind == 'bottom':
-            tip_y = rect.y
-            sign = +1
-            grow_dir = 'up'   # pines stand upright
-        else:
-            tip_y = rect.bottom
-            sign = -1
-            grow_dir = 'up'   # side pines on the top pillar still stand up
-            #                   (they cling to ledges sticking out sideways)
-
-        for offset, side, plant_kind in self._VEG_PATTERN:
-            y = tip_y + sign * offset
-            # Skip if outside the body or too close to either end
-            if not (rect.y + 6 < y < rect.bottom - 6):
-                break
-            # Tiny rocky ledge under the plant for "growing on the rock" feel
-            anchor_x, anchor_y = self._veg_anchor(side, rect, y)
-            ledge_w = 12 if plant_kind in ('pine_med', 'shrub') else 9
-            ledge_rect = pygame.Rect(anchor_x - (ledge_w if side > 0 else 0),
-                                     anchor_y - 2,
-                                     ledge_w, 4)
-            pygame.draw.ellipse(surf, palette['stone_dark'], ledge_rect.inflate(2, 1))
-            pygame.draw.ellipse(surf, palette['stone_light'],
-                                ledge_rect.inflate(-2, -1))
-
-            # Variety: bigger wobble + lean jitter so repeating pattern slots
-            # don't read as identical copies of each other.
-            h_wobble    = rng.randint(-6, 8)
-            lean_jitter = rng.randint(-4, 4)
-            if plant_kind == 'pine_med':
-                draw_wuling_pine(surf, anchor_x, anchor_y - 1,
-                                 height=24 + h_wobble, palette=palette,
-                                 lean=side * 5 + lean_jitter,
-                                 direction=grow_dir, layers=4)
-            elif plant_kind == 'pine_small':
-                draw_wuling_pine(surf, anchor_x, anchor_y,
-                                 height=15 + h_wobble // 2, palette=palette,
-                                 lean=side * 3 + lean_jitter,
-                                 direction=grow_dir, layers=3)
-            elif plant_kind == 'shrub':
-                draw_side_shrub(surf, anchor_x, anchor_y - 1, palette,
-                                scale=0.85 + rng.random() * 0.45)
-            elif plant_kind == 'moss':
-                draw_moss_strand(surf, anchor_x, anchor_y,
-                                 length=16 + rng.randint(0, 10),
-                                 palette=palette, jitter_seed=offset + self.seed)
-
-    # ── orchestration ───────────────────────────────────────────────────────
-
-    def _draw_top_pillar(self, surf, palette):
-        rect = self.top_rect
-        self._paint_stone(surf, rect, silhouette_top_spire, palette)
-        # Hanging pine clinging to the downward fang at the tip
-        cx = rect.x + rect.width // 2
-        draw_wuling_pine(surf, cx - 4, rect.bottom - 4,
-                         height=34, palette=palette,
-                         lean=-12, direction='down', layers=4)
-        # Vegetation distributed along the body
-        self._draw_vegetation_along(surf, rect, palette, kind='top')
-
-    def _draw_bottom_pillar(self, surf, palette):
-        rect = self.bot_rect
-        self._paint_stone(surf, rect, silhouette_bottom_spire, palette)
-        cx = rect.x + rect.width // 2
-        # Dramatic Wuling pine on the rocky peak
-        draw_wuling_pine(surf, cx + 2, rect.y + 2,
-                         height=58, palette=palette,
-                         lean=14, direction='up', layers=6)
-        # Smaller secondary pine on a ledge just below the peak (left side)
-        draw_wuling_pine(surf, rect.x + 6, rect.y + 28,
-                         height=26, palette=palette,
-                         lean=-5, direction='up', layers=4)
-        # Vegetation distributed along the body
-        self._draw_vegetation_along(surf, rect, palette, kind='bottom')
-        # Mist halo at the base where it meets the ground
-        draw_pillar_mist(surf, cx, rect.bottom, rect.width, alpha=110)
-
     def draw(self, surf, palette=None):
         palette = palette or _DEFAULT_PILLAR
-        self._draw_top_pillar(surf, palette)
-        self._draw_bottom_pillar(surf, palette)
+        draw_pillar_pair(surf, self.top_rect, self.bot_rect, palette, self.seed)
+        # Mist halo at the base where the bottom pillar meets the ground
+        bot = self.bot_rect
+        draw_pillar_mist(surf, bot.x + bot.width // 2, bot.bottom, bot.width, alpha=110)
 
 
 # ── Coin ─────────────────────────────────────────────────────────────────────
