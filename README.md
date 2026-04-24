@@ -1,6 +1,6 @@
 # Skybit — Pocket Sky Flyer
 
-A colorful Flappy-style casual arcade game. Fly a **vivid scarlet-macaw parrot** through Zhangjiajie-style stone pillars, collect glowing coins, and grab the rare mushroom for a **3× coin multiplier** that lasts 8 seconds. Built in **Python** with Pygame — procedural graphics, smooth gradients, soft glows, no pixel art.
+A colorful Flappy-style casual arcade game. Fly a **vivid scarlet-macaw parrot** through stone pillars, collect glowing coins, and grab the rare mushroom for a **3× coin multiplier** that lasts 8 seconds. Built in **Python** with Pygame — procedural graphics, smooth gradients, soft glows, no pixel art.
 
 ---
 
@@ -59,7 +59,7 @@ Cracking the **top 10** pops up an arcade-style name-entry screen after Game Ove
 
 ### Evolving scenery
 
-The sky and the **Zhangjiajie-style stone pillars** follow a continuous **day → golden hour → sunset → dusk → starry night → predawn → sunrise → day** cycle. One full cycle every **5 minutes of gameplay** (real time, independent of score), interpolated smoothly — long runs cover the whole arc.
+The sky and the **stone pillars** follow a continuous **day → golden hour → sunset → dusk → starry night → predawn → sunrise → day** cycle. One full cycle every **5 minutes of gameplay** (real time, independent of score), interpolated smoothly — long runs cover the whole arc.
 
 | Phase       | Sky tone                | Pillar + canopy                          |
 |-------------|-------------------------|------------------------------------------|

@@ -7,8 +7,8 @@ gameplay seconds** — one full cycle every CYCLE_SECONDS seconds — so the
 visuals evolve with time, not with score. The player sees the full cycle in
 a long run regardless of how fast they score.
 
-Pillar palette keys describe Zhangjiajie-style sandstone columns plus the
-foliage that crowns them:
+Pillar palette keys describe the sandstone columns plus the foliage that
+crowns them:
   stone_light / stone_mid / stone_dark   — body sandstone gradient
   stone_accent                           — warm highlight band on the sunlit side
   foliage_top / foliage_mid / foliage_dark — plants on the cap

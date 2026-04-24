@@ -346,7 +346,7 @@ def draw_ground(surf, ground_y, w, h, scroll, top_color=None, mid_color=None, bo
     pygame.draw.line(surf, edge_col, (0, ground_y), (w - 1, ground_y), 2)
 
 
-# ── Zhangjiajie-style stone pillar drawing ──────────────────────────────────
+# ── Stone pillar drawing ────────────────────────────────────────────────────
 
 def _shade(c, d):
     return (max(0, min(255, c[0] + d)),
@@ -355,7 +355,7 @@ def _shade(c, d):
 
 
 def _make_stone_pillar_body(w, h, light, mid, dark, accent, body_seed=0):
-    """Zhangjiajie quartzite column: vertical striations + erosion fissures,
+    """Quartzite column: vertical striations + erosion fissures,
     warm sunlit side → cool shadow side, no mid-column banding. `body_seed`
     shifts the pseudo-random crack layout so adjacent pillars don't share
     horizontal seam heights (REVIEW.md finding)."""

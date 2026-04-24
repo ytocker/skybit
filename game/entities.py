@@ -2,9 +2,9 @@
 Game entities: Bird, Pipe, Coin, Mushroom, Particle, FloatText.
 All drawing is smooth (gradients, alpha, glows) — no pixel art.
 
-Pipes are Zhangjiajie-style sandstone pillars topped with living vegetation,
-re-tinted by the active biome palette. Coins are slow-rotating metallic gold
-discs with embossed detail.
+Pipes are sandstone pillars topped with living vegetation, re-tinted by the
+active biome palette. Coins are slow-rotating metallic gold discs with
+embossed detail.
 """
 import math
 import random
@@ -85,8 +85,8 @@ class Bird:
 # ── Pipe (nature pillar) ─────────────────────────────────────────────────────
 
 class Pipe:
-    """Zhangjiajie 'Slender Spire' pillar. Each instance gets a stable
-    `seed` so its vegetation arrangement is deterministic across frames."""
+    """'Slender Spire' sandstone pillar. Each instance gets a stable `seed`
+    so its vegetation arrangement is deterministic across frames."""
 
     # Vegetation pattern walked along the column body, measured in pixels
     # from the gap-facing tip. Each entry: (offset, side_sign, kind).
