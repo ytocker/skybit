@@ -1,8 +1,13 @@
 # Pillar Redesign — 10 Options for Approval
 
-**Status:** proposals only — nothing is implemented yet. Pick the ones you want
-and I'll build them against the existing pillar pipeline in `game/draw.py` /
-`game/entities.py`.
+![Preview of the 10 pillar redesign options](pillar_redesign_options.png)
+
+*Rendered by `tools/pillar_redesign_preview.py` — 1500×1640 canvas, 5 columns
+× 2 rows. Row 1 = options 1–5, row 2 = options 6–10.*
+
+**Status:** proposals only — nothing is wired into the game yet. Pick the
+ones you want and I'll build them against the existing pillar pipeline in
+`game/draw.py` / `game/entities.py`.
 
 ## Goals
 
