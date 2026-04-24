@@ -1,5 +1,10 @@
 # Vivid Pillar Looks — 3 Options
 
+![Preview of all three vivid pillar options](vivid_pillars.png)
+
+*Preview rendered by `tools/vivid_pillar_preview.py`. Each column shows a full
+top+bottom pillar pair with halo, rendered against the day-biome sky.*
+
 Three bold reskins of the existing Zhangjiajie pillar. Each one keeps the same
 silhouette shapes and drawing pipeline (`stone_body` + `silhouette_blit` +
 decoration + base halo) and only swaps **colors, accents, and one signature
