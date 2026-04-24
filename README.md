@@ -2,11 +2,6 @@
 
 A colorful Flappy-style casual arcade game. Fly a **vivid scarlet-macaw parrot** through Zhangjiajie-style stone pillars, collect glowing coins, and grab the rare mushroom for a **3× coin multiplier** that lasts 8 seconds. Built in **Python** with Pygame — procedural graphics, smooth gradients, soft glows, no pixel art.
 
-<p align="center">
-  <img src="docs/screenshots/gameplay.png" width="340" alt="Gameplay">
-  <img src="docs/screenshots/mushroom.png"  width="340" alt="3X Power">
-</p>
-
 ---
 
 ## Run
@@ -56,11 +51,6 @@ A red-capped mushroom occasionally spawns in the gap between pillars (roughly 1-
 
 Cracking the **top 10** pops up an arcade-style name-entry screen after Game Over. Click the on-screen keyboard (or type — A–Z, Backspace, Enter) to pick three initials. Your entry is sorted into the list and persisted to `skybit_scores.json` next to the game.
 
-<p align="center">
-  <img src="docs/screenshots/nameentry.png" width="280" alt="Name entry">
-  <img src="docs/screenshots/gameover.png"  width="280" alt="Leaderboard on Game Over">
-</p>
-
 ### Difficulty
 
 - **Score 0–20**: wide gaps, relaxed scroll speed
@@ -77,43 +67,6 @@ The sky and the **Zhangjiajie-style stone pillars** follow a continuous **day �
 | Sunset      | Pink-orange horizon     | Rose-stone pillars, autumn canopy        |
 | Night       | Navy + scattered stars  | Moonlit blue-grey stone, dark teal moss  |
 | Sunrise     | Peach + pink bloom      | Peach stone, fresh-green canopy          |
-
----
-
-## Screenshots
-
-<table>
-<tr>
-  <td align="center">
-    <img src="docs/screenshots/title.png" width="280"><br>
-    <sub>Title — day biome</sub>
-  </td>
-  <td align="center">
-    <img src="docs/screenshots/gameplay.png" width="280"><br>
-    <sub>Gameplay — coin arc, X4 combo</sub>
-  </td>
-</tr>
-<tr>
-  <td align="center">
-    <img src="docs/screenshots/sunset.png" width="280"><br>
-    <sub>Sunset biome</sub>
-  </td>
-  <td align="center">
-    <img src="docs/screenshots/night.png" width="280"><br>
-    <sub>Starry night biome</sub>
-  </td>
-</tr>
-<tr>
-  <td align="center">
-    <img src="docs/screenshots/mushroom.png" width="280"><br>
-    <sub>3X POWER active — timer bar + sparkle</sub>
-  </td>
-  <td align="center">
-    <img src="docs/screenshots/gameover.png" width="280"><br>
-    <sub>Game Over + Top 10</sub>
-  </td>
-</tr>
-</table>
 
 ---
 
@@ -135,19 +88,8 @@ game/
 ├── nameentry.py           Arcade-style 3-letter initials keyboard (top-10)
 ├── scenes.py              Scene state machine (Menu / Play / NameEntry /
 │                          GameOver) + App
-└── storage.py             Top-10 leaderboard persistence (JSON file)
-├── audio.py               Procedural SFX — stdlib wave module, no asset files
-tools/
-├── snapshot.py            Headless screenshot generator (README shots)
-├── playtest_shots.py      21-shot reviewer-grade capture suite → docs/review/
-├── pillar_preview.py      Side-by-side comparison render of pillar templates
-└── autoplay.py            Heuristic AI that plays rounds for gameplay capture
-docs/
-├── screenshots/           README shots (regenerate: python tools/snapshot.py)
-├── review/                REVIEW.md reference frames — 21 scripted moments
-├── critique/              Earlier autoplay-captured frames
-├── REVIEW.md              Seasoned-reviewer playtest write-up
-└── CRITIQUE.md            Earlier focused critique notes
+├── storage.py             Top-10 leaderboard persistence (JSON file)
+└── audio.py               Procedural SFX — stdlib wave module, no asset files
 ```
 
 ---
