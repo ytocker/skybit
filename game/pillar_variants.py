@@ -70,6 +70,85 @@ def sil_bot_blunt(w, h):
             (0, int(h * 0.18))]
 
 
+# Top-pillar silhouette variants (hang-down shape, tip pointing downward).
+# Each mirrors a bottom-pillar shape so a variant is recognisable top AND bottom.
+
+def sil_top_slender(w, h):
+    # narrower top pillar, tapers to sharper fang
+    return [(0, 0), (w, 0),
+            (int(w * 0.80), int(h * 0.25)),
+            (int(w * 0.74), int(h * 0.60)),
+            (int(w * 0.66), int(h * 0.85)),
+            (int(w * 0.60), h), (int(w * 0.40), h),
+            (int(w * 0.34), int(h * 0.85)),
+            (int(w * 0.26), int(h * 0.60)),
+            (int(w * 0.20), int(h * 0.25))]
+
+
+def sil_top_lean(w, h):
+    lean = int(w * 0.06)
+    return [(0, 0), (w, 0),
+            (int(w * 0.92), int(h * 0.25)),
+            (int(w * 0.88), int(h * 0.55)),
+            (int(w * 0.82), int(h * 0.82)),
+            (int(w * 0.78) + lean, h), (int(w * 0.22) + lean, h),
+            (int(w * 0.12), int(h * 0.82)),
+            (int(w * 0.06), int(h * 0.55)),
+            (0, int(h * 0.25))]
+
+
+def sil_top_shelf(w, h):
+    return [(0, 0), (w, 0),
+            (int(w * 0.92), int(h * 0.22)),
+            (int(w * 0.86), int(h * 0.50)),
+            (int(w * 0.82), int(h * 0.62)),
+            (int(w * 0.96), int(h * 0.66)),
+            (int(w * 0.88), int(h * 0.85)),
+            (int(w * 0.80), h), (int(w * 0.20), h),
+            (int(w * 0.12), int(h * 0.85)),
+            (int(w * 0.04), int(h * 0.66)),
+            (int(w * 0.18), int(h * 0.62)),
+            (int(w * 0.14), int(h * 0.50)),
+            (int(w * 0.08), int(h * 0.22))]
+
+
+def sil_top_eroded(w, h):
+    return [(0, 0), (w, 0),
+            (int(w * 0.96), int(h * 0.18)),
+            (int(w * 0.88), int(h * 0.40)),
+            (w, int(h * 0.55)),
+            (int(w * 0.92), int(h * 0.68)),
+            (int(w * 0.84), int(h * 0.82)),
+            (int(w * 0.78), h), (int(w * 0.22), h),
+            (int(w * 0.14), int(h * 0.82)),
+            (int(w * 0.08), int(h * 0.68)),
+            (0, int(h * 0.55)),
+            (int(w * 0.10), int(h * 0.40)),
+            (int(w * 0.04), int(h * 0.18))]
+
+
+def sil_top_blunt(w, h):
+    return [(0, 0), (w, 0),
+            (w, int(h * 0.18)),
+            (int(w * 0.94), int(h * 0.45)),
+            (int(w * 0.90), int(h * 0.75)),
+            (int(w * 0.82), h), (int(w * 0.18), h),
+            (int(w * 0.10), int(h * 0.75)),
+            (int(w * 0.06), int(h * 0.45)),
+            (0, int(h * 0.18))]
+
+
+def sil_top_wide_stout(w, h):
+    return [(0, 0), (w, 0),
+            (int(w * 0.94), int(h * 0.20)),
+            (int(w * 0.90), int(h * 0.50)),
+            (int(w * 0.86), int(h * 0.80)),
+            (int(w * 0.80), h), (int(w * 0.20), h),
+            (int(w * 0.14), int(h * 0.80)),
+            (int(w * 0.10), int(h * 0.50)),
+            (int(w * 0.06), int(h * 0.20))]
+
+
 # ── Density vegetation helpers ──────────────────────────────────────────────
 
 def draw_moss_patch(surf, cx, cy, w, h, palette, seed=0):
@@ -455,8 +534,8 @@ def decorate_lungta(surf, top_rect, bot_rect, palette, seed):
     if top_rect.height > 80:
         draw_prayer_flags(surf, tcx + 28, top_rect.bottom - 32,
                           peak_x - 4, peak_y - 28, n=5)
-    # Peak cairn + base cairn
-    draw_cairn(surf, peak_x - 18, peak_y + 4, n=3, pennant=False)
+    # Peak cairn WITH red pennant — variant signature, always visible
+    draw_cairn(surf, peak_x - 18, peak_y + 4, n=4, pennant=True)
     if bot_rect.height > 80:
         draw_cairn(surf, bcx + bot_rect.width // 2 - 4, bot_rect.bottom - 4,
                    n=3, pennant=True)
@@ -477,10 +556,10 @@ def decorate_darchog(surf, top_rect, bot_rect, palette, seed):
     for off in range(-20, 22, 4):
         draw_moss_strand(surf, tcx + off, top_rect.bottom - 10,
                          12 + abs(off) % 8, palette, jitter_seed=seed + off)
-    # 2 darchog poles on peak (hero + companion)
-    draw_darchog_pole(surf, peak_x + 8, peak_y - 4, height=70, banner_color=(200, 90, 40))
-    if bot_rect.height > 80:
-        draw_darchog_pole(surf, peak_x - 14, peak_y + 8, height=58, banner_color=(180, 40, 60))
+    # HUGE hero darchog pole rising from peak — main signature of variant
+    draw_darchog_pole(surf, peak_x + 4, peak_y - 2, height=96, banner_color=(200, 90, 40))
+    # Companion pole with different-colored banner
+    draw_darchog_pole(surf, peak_x - 16, peak_y + 14, height=70, banner_color=(180, 40, 60))
     # 2 stupas at base
     if bot_rect.height > 110:
         draw_stupa(surf, bcx - 12, bot_rect.bottom - 4)
@@ -543,29 +622,26 @@ def decorate_monastery(surf, top_rect, bot_rect, palette, seed):
     tcx = top_rect.x + top_rect.width // 2
     bcx = bot_rect.x + bot_rect.width // 2
     peak_x, peak_y = bcx + 2, bot_rect.y
-    # Dense pine cluster at peak
-    draw_pine_trio(surf, peak_x, peak_y, palette, seed=seed)
-    # Monastery on a ledge mid-pillar
-    monastery_y = bot_rect.y + max(80, bot_rect.height // 2)
-    if monastery_y < bot_rect.bottom - 30:
-        draw_monastery(surf, bcx - 14, monastery_y)
-        # Prayer flag line from balcony to pine
-        draw_prayer_flags(surf, bcx - 14, monastery_y, peak_x, peak_y - 16, n=6)
-    # Second short flag line at top if room
-    if bot_rect.height > 160:
-        draw_prayer_flags(surf, bcx - 18, monastery_y + 40,
-                          bcx + 18, monastery_y + 30, n=5)
+    # Monastery clings to the peak ledge — always visible, signature element
+    draw_monastery(surf, bcx - 2, peak_y + 2)
+    # Smaller pine tucked beside the monastery
+    draw_wuling_pine(surf, peak_x + 16, peak_y + 12, 34, palette, lean=6, layers=4)
+    # Prayer flag line from monastery to top pillar's fang
+    draw_prayer_flags(surf, bcx - 10, peak_y - 4, tcx, top_rect.bottom - 4, n=6)
+    # Second flag line across mid-gap for extra signature
+    if bot_rect.height > 100:
+        draw_prayer_flags(surf, bcx + 20, peak_y + 16, tcx + 8, top_rect.bottom + 6, n=5)
     # Moss cascade on top pillar
     for off in range(-20, 22, 4):
         draw_moss_strand(surf, tcx + off, top_rect.bottom - 10,
                          12 + abs(off) % 6, palette, jitter_seed=seed + off)
     if top_rect.height > 50:
         draw_moss_patch(surf, tcx, top_rect.bottom - 32, 28, 10, palette, seed=seed)
-    # Side shrubs
+    # Side shrubs (below the peak monastery)
     if bot_rect.height > 110:
         for i, sc in enumerate((1.0, 0.9, 0.9)):
             y = bot_rect.y + 50 + i * 60
-            if y >= bot_rect.bottom - 20 or y >= monastery_y - 10: continue
+            if y >= bot_rect.bottom - 20: continue
             side = 1 if i % 2 == 0 else -1
             sx = bcx + side * (bot_rect.width // 2 - 10)
             draw_side_shrub(surf, sx, y, palette, scale=sc)
@@ -584,16 +660,15 @@ def decorate_lantern(surf, top_rect, bot_rect, palette, seed):
     bcx = bot_rect.x + bot_rect.width // 2
     peak_x, peak_y = bcx + 2, bot_rect.y
     draw_pine_trio(surf, peak_x, peak_y, palette, seed=seed)
-    # Hero + gold lantern from top pillar
-    draw_paper_lantern(surf, tcx - 8, top_rect.bottom - 4, strand=18, scale=1.2, color='red')
-    draw_paper_lantern(surf, tcx + 12, top_rect.bottom - 6, strand=26, scale=0.8, color='gold')
-    # String of small lanterns below top pillar
-    for i, (dx, strand, clr) in enumerate([(-28, 6, 'red'), (-10, 12, 'gold'),
-                                             (8, 6, 'red'), (26, 12, 'gold')]):
-        lx = tcx + dx
-        ly = top_rect.bottom + 18
-        if ly < bot_rect.y - 6:
-            draw_paper_lantern(surf, lx, ly, strand=strand, scale=0.55, color=clr)
+    # HERO RED LANTERN — huge, hangs from top pillar's fang into the gap.
+    # This is the variant's signature, always visible.
+    draw_paper_lantern(surf, tcx, top_rect.bottom - 2, strand=14, scale=1.6, color='red')
+    # Gold companion lantern off to the side
+    draw_paper_lantern(surf, tcx - 16, top_rect.bottom - 4, strand=24, scale=0.9, color='gold')
+    draw_paper_lantern(surf, tcx + 16, top_rect.bottom - 4, strand=24, scale=0.9, color='gold')
+    # Small red lanterns also perched on the peak
+    draw_paper_lantern(surf, peak_x - 14, peak_y + 2, strand=4, scale=0.7, color='red')
+    draw_paper_lantern(surf, peak_x + 14, peak_y + 2, strand=4, scale=0.7, color='red')
     # Moss strands
     for off in range(-18, 20, 4):
         draw_moss_strand(surf, tcx + off, top_rect.bottom - 12,
@@ -626,13 +701,13 @@ def decorate_overgrown(surf, top_rect, bot_rect, palette, seed):
     tcx = top_rect.x + top_rect.width // 2
     bcx = bot_rect.x + bot_rect.width // 2
     peak_x, peak_y = bcx + 2, bot_rect.y
-    # Broadleaf canopy on peak (replaces the pine)
-    pygame.draw.line(surf, (90, 60, 35), (peak_x, peak_y + 2), (peak_x, peak_y - 22), 3)
-    for (dx, dy, sz) in [(0, 0, 34), (-10, 6, 24), (12, 8, 26), (-4, -8, 20)]:
-        pygame.draw.circle(surf, (30, 90, 45), (peak_x + dx, peak_y - 26 + dy), sz // 2 + 2)
-        pygame.draw.circle(surf, (60, 150, 70), (peak_x + dx, peak_y - 26 + dy), sz // 2)
-        pygame.draw.circle(surf, (130, 210, 100), (peak_x + dx - 2, peak_y - 28 + dy),
-                           max(3, sz // 2 - 5))
+    # BIG broadleaf canopy on peak (no pine — replaces it) — signature element
+    pygame.draw.line(surf, (90, 60, 35), (peak_x, peak_y + 2), (peak_x, peak_y - 28), 3)
+    for (dx, dy, sz) in [(0, 0, 46), (-14, 8, 32), (14, 10, 34), (-6, -10, 26), (10, -14, 24)]:
+        pygame.draw.circle(surf, (30, 90, 45), (peak_x + dx, peak_y - 32 + dy), sz // 2 + 2)
+        pygame.draw.circle(surf, (60, 150, 70), (peak_x + dx, peak_y - 32 + dy), sz // 2)
+        pygame.draw.circle(surf, (130, 210, 100), (peak_x + dx - 2, peak_y - 34 + dy),
+                           max(4, sz // 2 - 6))
     # Strangler fig cascading down one side
     if bot_rect.height > 100:
         draw_strangler_fig(surf, bot_rect.x + 4, bot_rect.y + 24, bot_rect.bottom - 8)
@@ -667,12 +742,15 @@ def decorate_menhir(surf, top_rect, bot_rect, palette, seed):
     tcx = top_rect.x + top_rect.width // 2
     bcx = bot_rect.x + bot_rect.width // 2
     peak_x, peak_y = bcx + 2, bot_rect.y
-    # Small rowan tree with red-berry accents on peak
-    pygame.draw.line(surf, (90, 60, 40), (peak_x, peak_y + 2), (peak_x + 2, peak_y - 22), 2)
-    for rx, ry in [(-6, -10), (8, -14), (-2, -20), (10, -8), (-8, -18)]:
-        pygame.draw.circle(surf, (40, 120, 55), (peak_x + rx, peak_y + ry), 5)
-        pygame.draw.circle(surf, (80, 170, 80), (peak_x + rx - 1, peak_y + ry - 1), 4)
-        pygame.draw.circle(surf, (200, 40, 40), (peak_x + rx + 2, peak_y + ry + 1), 1)
+    # Big rowan tree with lots of red berries — variant signature, always at peak
+    pygame.draw.line(surf, (90, 60, 40), (peak_x, peak_y + 2), (peak_x + 3, peak_y - 36), 3)
+    for rx, ry, sz in [(-10, -14, 9), (10, -18, 8), (-3, -28, 7), (14, -10, 7),
+                         (-12, -24, 6), (6, -34, 6), (-6, -6, 5)]:
+        pygame.draw.circle(surf, (40, 120, 55), (peak_x + rx, peak_y + ry), sz)
+        pygame.draw.circle(surf, (80, 170, 80), (peak_x + rx - 1, peak_y + ry - 1), max(2, sz - 2))
+        pygame.draw.circle(surf, (200, 40, 40), (peak_x + rx + 2, peak_y + ry + 1), 2)
+    # Spiral glow carving right at the peak face — always visible
+    draw_spiral_glow(surf, bcx - 10, peak_y + 18, radius=10)
     # Spiral glow carvings scaled to pillar height
     if bot_rect.height > 70:
         centres = [(0, 0.45, 12), (-16, 0.28, 7), (14, 0.70, 9)]
@@ -709,15 +787,15 @@ def decorate_menhir(surf, top_rect, bot_rect, palette, seed):
 # ── Variant registry + dispatcher ───────────────────────────────────────────
 
 _VARIANTS = (
-    # (bottom-pillar silhouette, decorate function)
-    (silhouette_bottom_spire, decorate_original),
-    (silhouette_bottom_spire, decorate_lungta),
-    (sil_bot_slender,         decorate_darchog),
-    (sil_bot_shelf,            decorate_babylon),
-    (sil_bot_lean,             decorate_monastery),
-    (sil_bot_stout,            decorate_lantern),
-    (sil_bot_eroded,           decorate_overgrown),
-    (sil_bot_blunt,            decorate_menhir),
+    # (top silhouette, bottom silhouette, decorate function)
+    (silhouette_top_spire, silhouette_bottom_spire, decorate_original),
+    (silhouette_top_spire, silhouette_bottom_spire, decorate_lungta),
+    (sil_top_slender,      sil_bot_slender,         decorate_darchog),
+    (sil_top_shelf,        sil_bot_shelf,           decorate_babylon),
+    (sil_top_lean,         sil_bot_lean,            decorate_monastery),
+    (sil_top_wide_stout,   sil_bot_stout,           decorate_lantern),
+    (sil_top_eroded,       sil_bot_eroded,          decorate_overgrown),
+    (sil_top_blunt,        sil_bot_blunt,           decorate_menhir),
 )
 
 VARIANT_COUNT = len(_VARIANTS)
@@ -739,8 +817,8 @@ def _paint_stone(surf, rect, polygon_fn, palette, body_seed):
 def draw_pillar_pair(surf, top_rect, bot_rect, palette, seed):
     """Paint both pillar bodies + decorate according to the variant keyed by seed."""
     variant_id = seed % VARIANT_COUNT
-    bot_sil, decorate = _VARIANTS[variant_id]
-    _paint_stone(surf, top_rect, silhouette_top_spire, palette, seed)
+    top_sil, bot_sil, decorate = _VARIANTS[variant_id]
+    _paint_stone(surf, top_rect, top_sil, palette, seed)
     _paint_stone(surf, bot_rect, bot_sil, palette, seed + 1)
     decorate(surf, top_rect, bot_rect, palette, seed)
 
