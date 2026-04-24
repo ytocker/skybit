@@ -333,6 +333,158 @@ function frame_online(u){}
     }
   };
   console.log('[skyAudio] skyPlay installed; sounds:', Object.keys(S).join(','));
+
+  // ── Background music ──────────────────────────────────────────────────────
+  // Instant-Crush-inspired loop, synthesised offline once (fast in JS via
+  // OfflineAudioContext), then looped via AudioBufferSourceNode.
+  var _musicBuffer = null;
+  var _musicSource = null;
+  var _musicGain = null;
+  var _musicRequested = false;
+  var _musicRendering = false;
+
+  var _BPM = 110, _BAR = 60.0 / _BPM * 4, _BEAT = 60.0 / _BPM;
+  var _CHORDS = [ [54,[0,3,7]], [50,[0,4,7]], [57,[0,4,7]], [52,[0,4,7]] ];
+  var _LEAD = [0,3,7,5,3,7,5,2];
+  var _MINOR = [0,2,3,5,7,8,10,12];
+  var _BARS_PER_CHORD = 2;
+
+  function _midiHz(m) { return 440.0 * Math.pow(2, (m - 69) / 12.0); }
+
+  function _schedulePadVoice(octx, tStart, dur, freq, detuneCents, vol) {
+    var o = octx.createOscillator();
+    o.type = 'triangle';
+    o.frequency.value = freq;
+    o.detune.value = detuneCents;
+    var g = octx.createGain();
+    g.gain.setValueAtTime(0.0001, tStart);
+    g.gain.exponentialRampToValueAtTime(vol, tStart + 0.12);
+    g.gain.setValueAtTime(vol, tStart + dur - 0.18);
+    g.gain.exponentialRampToValueAtTime(0.0001, tStart + dur);
+    o.connect(g); g.connect(octx.destination);
+    o.start(tStart); o.stop(tStart + dur + 0.02);
+  }
+  function _scheduleBassNote(octx, tStart, dur, freq, vol) {
+    var o = octx.createOscillator(); o.type = 'square'; o.frequency.value = freq;
+    var g = octx.createGain();
+    g.gain.setValueAtTime(0.0001, tStart);
+    g.gain.exponentialRampToValueAtTime(vol, tStart + 0.005);
+    g.gain.setValueAtTime(vol, tStart + dur - 0.04);
+    g.gain.exponentialRampToValueAtTime(0.0001, tStart + dur);
+    o.connect(g); g.connect(octx.destination);
+    o.start(tStart); o.stop(tStart + dur + 0.02);
+  }
+  function _scheduleLeadNote(octx, tStart, dur, freq, detune, vol) {
+    var o = octx.createOscillator(); o.type = 'sine';
+    o.frequency.value = freq; o.detune.value = detune;
+    var g = octx.createGain();
+    g.gain.setValueAtTime(0.0001, tStart);
+    g.gain.exponentialRampToValueAtTime(vol, tStart + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, tStart + dur);
+    o.connect(g); g.connect(octx.destination);
+    o.start(tStart); o.stop(tStart + dur + 0.02);
+  }
+  function _scheduleKick(octx, tStart, vol) {
+    var o = octx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(60, tStart);
+    o.frequency.exponentialRampToValueAtTime(40, tStart + 0.09);
+    var g = octx.createGain();
+    g.gain.setValueAtTime(vol, tStart);
+    g.gain.exponentialRampToValueAtTime(0.0001, tStart + 0.09);
+    o.connect(g); g.connect(octx.destination);
+    o.start(tStart); o.stop(tStart + 0.1);
+  }
+
+  function _renderMusicBuffer() {
+    if (!ctx) return Promise.reject('no ctx');
+    var totalSec = _BARS_PER_CHORD * _CHORDS.length * _BAR;
+    var sr = ctx.sampleRate;
+    var octx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(
+      1, Math.ceil(totalSec * sr), sr);
+    // Kick on every beat
+    for (var bar = 0; bar < _BARS_PER_CHORD * _CHORDS.length; bar++) {
+      for (var beat = 0; beat < 4; beat++) {
+        _scheduleKick(octx, bar * _BAR + beat * _BEAT, 0.85);
+      }
+    }
+    // Per-chord layers
+    for (var ci = 0; ci < _CHORDS.length; ci++) {
+      var root = _CHORDS[ci][0], triad = _CHORDS[ci][1];
+      var slot = ci * _BARS_PER_CHORD * _BAR;
+      // Pad: triad × 2 detuned triangles held for the whole slot
+      for (var t = 0; t < triad.length; t++) {
+        _schedulePadVoice(octx, slot, _BARS_PER_CHORD * _BAR, _midiHz(root + triad[t]), -3, 0.055);
+        _schedulePadVoice(octx, slot, _BARS_PER_CHORD * _BAR, _midiHz(root + triad[t]), +3, 0.055);
+      }
+      // Bass
+      for (var bar = 0; bar < _BARS_PER_CHORD; bar++) {
+        for (var beat = 0; beat < 4; beat++) {
+          var note = root - 24 + ((beat === 1 || beat === 3) ? 7 : 0);
+          _scheduleBassNote(octx, slot + bar * _BAR + beat * _BEAT, _BEAT * 0.9, _midiHz(note), 0.16);
+        }
+      }
+      // Lead
+      var noteDur = _BEAT * 0.55;
+      for (var rep = 0; rep < _BARS_PER_CHORD; rep++) {
+        for (var i = 0; i < _LEAD.length; i++) {
+          var note = root + 12 + _MINOR[_LEAD[i]];
+          var tn = slot + rep * _BAR + i * (_BAR / _LEAD.length);
+          _scheduleLeadNote(octx, tn, noteDur, _midiHz(note), -6, 0.11);
+          _scheduleLeadNote(octx, tn, noteDur, _midiHz(note), +6, 0.11);
+        }
+      }
+    }
+    return octx.startRendering();
+  }
+
+  function _actuallyStartMusic(vol) {
+    if (!ctx || !_musicBuffer) return;
+    try { if (_musicSource) _musicSource.stop(); } catch (e) {}
+    _musicSource = ctx.createBufferSource();
+    _musicSource.buffer = _musicBuffer;
+    _musicSource.loop = true;
+    _musicGain = ctx.createGain();
+    _musicGain.gain.value = typeof vol === 'number' ? vol : 0.22;
+    _musicSource.connect(_musicGain); _musicGain.connect(ctx.destination);
+    _musicSource.start(ctx.currentTime + 0.05);
+    console.log('[skyAudio] music started, buffer=', _musicBuffer.duration.toFixed(1), 's');
+  }
+
+  window.skyMusicStart = function(volume) {
+    _musicRequested = true;
+    var c = ensureCtx(); if (!c) return;
+    if (c.state !== 'running') { c.resume(); }
+    if (_musicBuffer) { _actuallyStartMusic(volume); return; }
+    if (_musicRendering) return;
+    _musicRendering = true;
+    _renderMusicBuffer().then(function(buf) {
+      _musicBuffer = buf; _musicRendering = false;
+      if (_musicRequested) _actuallyStartMusic(volume);
+    }, function(err) {
+      console.warn('[skyAudio] music render failed:', err);
+      _musicRendering = false;
+    });
+  };
+  window.skyMusicPause = function() {
+    if (ctx && ctx.state === 'running') { ctx.suspend(); }
+  };
+  window.skyMusicResume = function() {
+    if (ctx && ctx.state === 'suspended') { ctx.resume(); }
+  };
+  window.skyMusicStop = function(fadeoutMs) {
+    _musicRequested = false;
+    if (!_musicSource || !_musicGain) return;
+    var src = _musicSource, g = _musicGain;
+    _musicSource = null; _musicGain = null;
+    var fade = (typeof fadeoutMs === 'number' ? fadeoutMs : 800) / 1000;
+    try {
+      var t = ctx.currentTime;
+      g.gain.setValueAtTime(g.gain.value, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + fade);
+      src.stop(t + fade + 0.05);
+    } catch (e) { try { src.stop(); } catch (e2) {} }
+  };
+  console.log('[skyAudio] skyMusic* installed');
 })();
 </script>
 </body>

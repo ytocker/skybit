@@ -104,11 +104,32 @@ if _IS_BROWSER:
     def play_death() -> None:         _play("death", 0.75)
     def play_gameover() -> None:      _play("gameover", 0.70)
 
-    # Music stubs for browser backend (no-op until JS music is added).
-    def start_music() -> None:  pass
-    def pause_music() -> None:  pass
-    def resume_music() -> None: pass
-    def stop_music(fadeout_ms: int = 800) -> None: pass
+    # ── Music bridge (calls skyMusic* defined in web.tmpl) ────────────────
+    def _call_sky(name: str, *args) -> bool:
+        """Call a window.skyMusic* helper. Returns True if dispatched."""
+        try:
+            import js  # type: ignore
+            fn = getattr(js, name, None)
+            if fn is not None:
+                fn(*args)
+                return True
+        except Exception:
+            pass
+        try:
+            import platform as _p
+            fn = getattr(_p.window, name, None)
+            if fn is not None:
+                fn(*args)
+                return True
+        except Exception:
+            pass
+        return False
+
+    def start_music() -> None:        _call_sky("skyMusicStart", 0.22)
+    def pause_music() -> None:        _call_sky("skyMusicPause")
+    def resume_music() -> None:       _call_sky("skyMusicResume")
+    def stop_music(fadeout_ms: int = 800) -> None:
+        _call_sky("skyMusicStop", fadeout_ms)
 
 
 # ── Native backend (pygame.mixer + synthesized WAV) ──────────────────────────
