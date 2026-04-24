@@ -257,73 +257,95 @@ else:
         for i in range(m):
             target[start + i] += source[i]
 
-    # Minor-key 4-chord loop, MIDI roots only. F#m  D  A  E (popular pop cycle,
-    # NOT Instant Crush's progression — original sequence evoking the same vibe).
-    # Each entry = (root_midi, triad_offsets). Two bars per chord.
+    # Warm lo-fi / ambient progression — extended jazz chords (7ths / 9ths).
+    # Cmaj7 → Am9 → Fmaj7 → G7sus4. Each chord = 1 bar; progression cycles
+    # 4× across the 16-bar loop, giving the 4 evolving sections room to grow.
+    # (Reference: lo-fi chord research — Cmaj7 is "warm, slightly wistful,
+    # unresolved"; Am9 sets a lush emotional tone; G7sus4 hangs on a
+    # suspended fourth for a welcoming pull back to C.)
     _MUSIC_CHORDS = (
-        (54, (0, 3, 7)),   # F#m
-        (50, (0, 4, 7)),   # D
-        (57, (0, 4, 7)),   # A
-        (52, (0, 4, 7)),   # E
+        (60, (0, 4, 7, 11),     "Cmaj7"),    # C E G B
+        (57, (0, 3, 7, 10, 14), "Am9"),      # A C E G B
+        (53, (0, 4, 7, 11),     "Fmaj7"),    # F A C E
+        (55, (0, 5, 7, 10),     "G7sus4"),   # G C D F
     )
-    # Short 8-note lead phrase in scale degrees (F# natural minor relative);
-    # original melody, repeats once across the 8-bar half of the loop.
-    _MUSIC_LEAD_DEGREES = (0, 3, 7, 5, 3, 7, 5, 2)
-    _BPM = 110
-    _BAR_SEC = 60.0 / _BPM * 4      # 4 beats per bar
-    _BEAT_SEC = 60.0 / _BPM
+    # 4 sections of 4 bars each. Each boolean flags which layers are on.
+    # A: pad only (gentle intro) → B: +arp (warming up) →
+    # C: +soft kick + lead (full) → D: strip back to pad+arp (breath).
+    _MUSIC_SECTIONS = (
+        dict(sub=True, pad=True, arp=False, kick=False, lead=False),
+        dict(sub=True, pad=True, arp=True,  kick=False, lead=False),
+        dict(sub=True, pad=True, arp=True,  kick=True,  lead=True ),
+        dict(sub=True, pad=True, arp=True,  kick=False, lead=False),
+    )
+    # Arpeggio index-into-chord-offsets pattern, 8 notes per bar (8th notes).
+    # Pattern varies per section so ears get subtle evolution.
+    _MUSIC_ARP_PATTERNS = (
+        (0, 1, 2, 3, 2, 1, 0, 1),   # asc-desc
+        (0, 2, 1, 3, 2, 0, 3, 1),   # zig-zag
+        (0, 2, 3, 2, 1, 3, 2, 0),   # syncopated
+        (0, 2, 1, 3, 0, 2, 1, 3),   # stepwise
+    )
+    _BPM = 78
+    _BEAT_SEC = 60.0 / _BPM          # 0.769 s
+    _BAR_SEC = _BEAT_SEC * 4         # 3.077 s
+    _BARS_TOTAL = 16
+    _BARS_PER_SECTION = 4
 
     _music_sound: "pygame.mixer.Sound | None" = None
 
     def _gen_music_loop() -> "pygame.mixer.Sound":
-        bars_per_chord = 2
-        total_bars = bars_per_chord * len(_MUSIC_CHORDS)
-        total_sec = total_bars * _BAR_SEC
+        total_sec = _BARS_TOTAL * _BAR_SEC
         n = int(total_sec * SAMPLE_RATE)
         mix = [0] * n
-        # Kick — every quarter note across every bar.
-        kick = _render_kick(0.09, volume=0.95)
-        for bar in range(total_bars):
-            for beat in range(4):
-                start = int((bar * _BAR_SEC + beat * _BEAT_SEC) * SAMPLE_RATE)
-                _accumulate(mix, kick, start)
-        # Bass + pad + lead, per chord slot.
-        for ci, (root, triad) in enumerate(_MUSIC_CHORDS):
-            slot_start = ci * bars_per_chord * _BAR_SEC
-            slot_dur = bars_per_chord * _BAR_SEC
-            # Bass: root + fifth alternating each beat, square wave, low octave.
-            for bar in range(bars_per_chord):
-                for beat in range(4):
-                    note = root - 24 + (7 if beat in (1, 3) else 0)
-                    start = int((slot_start + bar * _BAR_SEC + beat * _BEAT_SEC) * SAMPLE_RATE)
-                    v = _render_voice(_BEAT_SEC * 0.92, _midi_hz(note),
-                                      "square", 0.18, attack_s=0.005, release_s=0.04)
-                    _accumulate(mix, v, start)
-            # Pad: triangle + detuned partner, held whole slot, chord triad.
-            for off in triad:
-                note = root + off
-                start = int(slot_start * SAMPLE_RATE)
-                v1 = _render_voice(slot_dur, _midi_hz(note), "triangle", 0.060,
-                                   detune_cents=-3, attack_s=0.12, release_s=0.18)
-                v2 = _render_voice(slot_dur, _midi_hz(note), "triangle", 0.060,
-                                   detune_cents=+3, attack_s=0.12, release_s=0.18)
-                _accumulate(mix, v1, start)
-                _accumulate(mix, v2, start)
-        # Lead: 8-note phrase per 2 bars; two repeats per chord-slot — trills
-        # on top of the pad. Scale degrees are relative to the bar's chord root.
-        for ci, (root, _) in enumerate(_MUSIC_CHORDS):
-            slot_start = ci * bars_per_chord * _BAR_SEC
-            note_dur = _BEAT_SEC * 0.55
-            minor_scale = (0, 2, 3, 5, 7, 8, 10, 12)
-            for rep in range(bars_per_chord):
-                for i, deg in enumerate(_MUSIC_LEAD_DEGREES):
-                    note = root + 12 + minor_scale[deg]
-                    t = slot_start + rep * _BAR_SEC + i * (_BAR_SEC / len(_MUSIC_LEAD_DEGREES))
-                    start = int(t * SAMPLE_RATE)
-                    for det in (-6, +6):
-                        v = _render_voice(note_dur, _midi_hz(note), "sine", 0.12,
-                                          detune_cents=det, attack_s=0.008, release_s=0.10)
-                        _accumulate(mix, v, start)
+        for bar in range(_BARS_TOTAL):
+            section = _MUSIC_SECTIONS[(bar // _BARS_PER_SECTION) % len(_MUSIC_SECTIONS)]
+            root, offsets, _name = _MUSIC_CHORDS[bar % len(_MUSIC_CHORDS)]
+            bar_start = bar * _BAR_SEC
+            bar_i0 = int(bar_start * SAMPLE_RATE)
+            # Sub-bass: deep sine root, slow attack, held whole bar.
+            if section['sub']:
+                v = _render_voice(_BAR_SEC * 0.95, _midi_hz(root - 12), "sine",
+                                  0.19, attack_s=0.35, release_s=0.35)
+                _accumulate(mix, v, bar_i0)
+            # Pad: full extended chord (7ths/9ths), 2 detuned triangle voices each,
+            # slow swell. Spans full bar.
+            if section['pad']:
+                for off in offsets:
+                    for det in (-5, +5):
+                        v = _render_voice(_BAR_SEC * 0.98, _midi_hz(root + off),
+                                          "triangle", 0.045, detune_cents=det,
+                                          attack_s=0.45, release_s=0.55)
+                        _accumulate(mix, v, bar_i0)
+            # Arpeggio: 8 eighth-notes per bar, patterns rotate per section.
+            if section['arp']:
+                pattern = _MUSIC_ARP_PATTERNS[(bar // _BARS_PER_SECTION) % len(_MUSIC_ARP_PATTERNS)]
+                note_dur = _BEAT_SEC * 0.45
+                for i in range(8):
+                    idx = pattern[i] % len(offsets)
+                    note = root + offsets[idx] + 12
+                    t = bar_start + i * (_BEAT_SEC / 2)
+                    v = _render_voice(note_dur, _midi_hz(note), "sine", 0.075,
+                                      attack_s=0.006, release_s=0.12)
+                    _accumulate(mix, v, int(t * SAMPLE_RATE))
+            # Soft kick on beats 1 & 3 only in full section (not dance-y).
+            if section['kick']:
+                soft_kick = _render_kick(0.12, volume=0.45)
+                for beat in (0, 2):
+                    _accumulate(mix, soft_kick,
+                                int((bar_start + beat * _BEAT_SEC) * SAMPLE_RATE))
+            # Lead: 2 long pentatonic-ish notes per bar, detuned pair.
+            if section['lead']:
+                lead_degs = (0, 7, 11, 14, 7, 11, 0, 7)  # up + over the chord
+                base = (bar % 4) * 2
+                for i in range(2):
+                    deg = lead_degs[(base + i) % len(lead_degs)]
+                    t = bar_start + i * (_BAR_SEC / 2)
+                    for det in (-4, +4):
+                        v = _render_voice(_BAR_SEC * 0.48, _midi_hz(root + deg + 12),
+                                          "sine", 0.085, detune_cents=det,
+                                          attack_s=0.06, release_s=0.45)
+                        _accumulate(mix, v, int(t * SAMPLE_RATE))
         # Clip to int16 and build WAV.
         for i in range(n):
             s = mix[i]
