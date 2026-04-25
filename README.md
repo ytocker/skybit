@@ -2,10 +2,16 @@
 
 A colorful Flappy-style casual arcade game. Fly a **vivid scarlet-macaw parrot** through stone pillars, collect glowing coins, and grab the rare mushroom for a **3× coin multiplier** that lasts 8 seconds. Built in **Python** with Pygame — procedural graphics, smooth gradients, soft glows, no pixel art.
 
-<p align="center">
-  <img src="docs/screenshots/biome_day.png"    width="220" alt="Day biome">
-  <img src="docs/screenshots/biome_sunset.png" width="220" alt="Sunset biome">
-</p>
+<table>
+<tr>
+  <td align="center"><img src="docs/screenshots/01_start_between_pillars.png" width="200"><br><sub><b>Start of a run</b><br>day biome, bird approaching the first pillars</sub></td>
+  <td align="center"><img src="docs/screenshots/02_coins_run.png"             width="200"><br><sub><b>Golden hour</b><br>bird about to grab a coin trail</sub></td>
+</tr>
+<tr>
+  <td align="center"><img src="docs/screenshots/03_night_powerup.png"         width="200"><br><sub><b>Starry night</b><br>3× mushroom power-up next to the bird</sub></td>
+  <td align="center"><img src="docs/screenshots/04_glide_sunrise.png"         width="200"><br><sub><b>Sunrise</b><br>bird gliding past a different pillar</sub></td>
+</tr>
+</table>
 
 ---
 
@@ -64,26 +70,7 @@ Cracking the **top 10** pops up an arcade-style name-entry screen after Game Ove
 
 ### Evolving scenery
 
-The sky **and** the stone pillars follow a continuous **day → golden hour → sunset → dusk → starry night → pre-dawn → sunrise → day** cycle. One full cycle every **5 minutes of gameplay** (real time, independent of score), interpolated smoothly — long runs cover the whole arc.
-
-<table>
-<tr>
-  <td align="center"><img src="docs/screenshots/biome_day.png"     width="200"><br><sub><b>Day</b><br>Bright cyan, lush green pines</sub></td>
-  <td align="center"><img src="docs/screenshots/biome_sunset.png"  width="200"><br><sub><b>Sunset</b><br>Pink-orange horizon, rose stone</sub></td>
-</tr>
-<tr>
-  <td align="center"><img src="docs/screenshots/biome_night.png"   width="200"><br><sub><b>Night</b><br>Navy + stars, moonlit grey stone</sub></td>
-  <td align="center"><img src="docs/screenshots/biome_sunrise.png" width="200"><br><sub><b>Sunrise</b><br>Peach stone, fresh-green canopy</sub></td>
-</tr>
-</table>
-
-### Pillar variants
-
-Every pipe spawns one of **8 sandstone-pillar variants**, picked deterministically from its seed so the same column always looks the same on screen. Each variant differs in silhouette and decoration: prayer flags + cairn, banner pole + stupa, terrace + cascading vines, monastery on the cliff, hero red lantern, weathered jungle ruin with strangler fig, menhir with rune carvings, plus the original peacock-pine column.
-
-<p align="center">
-  <img src="docs/pillar_variants_ingame.png" width="100%" alt="The 8 pillar variants side-by-side">
-</p>
+The sky **and** the stone pillars follow a continuous **day → golden hour → sunset → dusk → starry night → pre-dawn → sunrise → day** cycle. One full cycle every **5 minutes of gameplay** (real time, independent of score), interpolated smoothly. Pillars also vary — every pipe spawns one of 8 sandstone-pillar variants picked from its seed, with distinct silhouettes and decorations (prayer flags, banner poles, terraces with cascading vines, monasteries, hero lanterns, jungle-ruin masonry, menhirs).
 
 ---
 
