@@ -46,6 +46,12 @@ class App:
         self._running = True
         self._stats_t = 0.0        # time spent on stats screen (auto-advance)
         self._stats_next_state = STATE_GAMEOVER  # where the stats screen routes to
+        # Touch dedup: SDL emits both FINGERDOWN and a synthetic MOUSEBUTTONDOWN
+        # for one tap on mobile, so naive routing types every key twice. After
+        # any FINGERDOWN, suppress mouse events for a 0.5 s window. On pure
+        # desktop this never fires (no FINGERDOWN ever arrives).
+        self._last_finger_t = -1e9
+        self._finger_dedup_window = 0.5
 
     # ── helpers ─────────────────────────────────────────────────────────────
 
@@ -118,6 +124,14 @@ class App:
         if e.type == pygame.QUIT:
             self._running = False
             return
+        # Note when a real finger event arrives so we can suppress the
+        # synthetic mouse follow-up that SDL fires for the same tap.
+        now = pygame.time.get_ticks() / 1000.0
+        if e.type == pygame.FINGERDOWN:
+            self._last_finger_t = now
+        elif e.type == pygame.MOUSEBUTTONDOWN:
+            if now - self._last_finger_t < self._finger_dedup_window:
+                return  # this MOUSEBUTTONDOWN is a touch echo — ignore
         if self.state == STATE_NAMEENTRY:
             if e.type == pygame.KEYDOWN:
                 if e.key == pygame.K_ESCAPE:

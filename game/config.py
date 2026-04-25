@@ -46,4 +46,24 @@ POWERUP_WEIGHTS    = (
 )
 
 SAVE_FILE = "skybit_save.json"
-SCORES_FILE = "skybit_scores.json"
+SCORES_FILE = "skybit_scores.json"   # local fallback only — see LEADERBOARD_* below
+
+# ── Global leaderboard (shared across all players) ──────────────────────────
+# Paste your JSONBin.io credentials here. Until both URLs and the key are
+# filled in, storage.load_scores() falls back silently to an empty list and
+# storage.save_scores() is a no-op — gameplay is unaffected.
+#   1. Sign up free at https://jsonbin.io
+#   2. Create a bin seeded with: { "scores": [] }
+#   3. Paste the bin id below (URL form is shown).
+#   4. Paste the X-Master-Key.
+LEADERBOARD_BIN_ID = ""                                   # e.g. "65f0a1b9c0e..."
+LEADERBOARD_KEY    = ""                                   # X-Master-Key header value
+LEADERBOARD_GET_URL = (
+    f"https://api.jsonbin.io/v3/b/{LEADERBOARD_BIN_ID}/latest"
+    if LEADERBOARD_BIN_ID else ""
+)
+LEADERBOARD_PUT_URL = (
+    f"https://api.jsonbin.io/v3/b/{LEADERBOARD_BIN_ID}"
+    if LEADERBOARD_BIN_ID else ""
+)
+LEADERBOARD_TIMEOUT_S = 2.0   # don't freeze the title screen on a dead network
