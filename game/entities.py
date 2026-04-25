@@ -96,6 +96,10 @@ class Pipe:
         self.is_rush = False
         # Per-instance random seed → chooses variant + stable decoration seed
         self.seed = random.randint(0, 0xFFFFFF)
+        # Debug log — visible in browser DevTools console as "[skybit]" lines.
+        # Helps diagnose stale browser cache (only one variant shown) vs
+        # genuinely-random spawns.
+        print(f"[skybit] pipe spawn seed={self.seed} variant={self.seed % 8}")
 
     @property
     def top_rect(self):
