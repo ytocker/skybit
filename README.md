@@ -2,6 +2,12 @@
 
 A colorful Flappy-style casual arcade game. Fly a **vivid scarlet-macaw parrot** through stone pillars, collect glowing coins, and grab the rare mushroom for a **3× coin multiplier** that lasts 8 seconds. Built in **Python** with Pygame — procedural graphics, smooth gradients, soft glows, no pixel art.
 
+<p align="center">
+  <img src="docs/screenshots/biome_day.png"    width="200" alt="Day biome">
+  <img src="docs/screenshots/biome_sunset.png" width="200" alt="Sunset biome">
+  <img src="docs/screenshots/biome_night.png"  width="200" alt="Starry-night biome">
+</p>
+
 ---
 
 ## Run
@@ -59,14 +65,30 @@ Cracking the **top 10** pops up an arcade-style name-entry screen after Game Ove
 
 ### Evolving scenery
 
-The sky and the **stone pillars** follow a continuous **day → golden hour → sunset → dusk → starry night → predawn → sunrise → day** cycle. One full cycle every **5 minutes of gameplay** (real time, independent of score), interpolated smoothly — long runs cover the whole arc.
+The sky **and** the stone pillars follow a continuous **day → golden hour → sunset → dusk → starry night → pre-dawn → sunrise → day** cycle. One full cycle every **5 minutes of gameplay** (real time, independent of score), interpolated smoothly — long runs cover the whole arc.
 
-| Phase       | Sky tone                | Pillar + canopy                          |
-|-------------|-------------------------|------------------------------------------|
-| Day         | Bright cyan             | Warm tan sandstone, lush green pines     |
-| Sunset      | Pink-orange horizon     | Rose-stone pillars, autumn canopy        |
-| Night       | Navy + scattered stars  | Moonlit blue-grey stone, dark teal moss  |
-| Sunrise     | Peach + pink bloom      | Peach stone, fresh-green canopy          |
+<table>
+<tr>
+  <td align="center"><img src="docs/screenshots/biome_day.png"         width="170"><br><sub><b>Day</b><br>Bright cyan, lush green pines</sub></td>
+  <td align="center"><img src="docs/screenshots/biome_golden_hour.png" width="170"><br><sub><b>Golden hour</b><br>Amber warmth, autumn canopy</sub></td>
+  <td align="center"><img src="docs/screenshots/biome_sunset.png"      width="170"><br><sub><b>Sunset</b><br>Pink-orange horizon, rose stone</sub></td>
+  <td align="center"><img src="docs/screenshots/biome_dusk.png"        width="170"><br><sub><b>Dusk</b><br>Lavender stone, teal foliage</sub></td>
+</tr>
+<tr>
+  <td align="center"><img src="docs/screenshots/biome_night.png"       width="170"><br><sub><b>Night</b><br>Navy + stars, moonlit grey stone</sub></td>
+  <td align="center"><img src="docs/screenshots/biome_predawn.png"     width="170"><br><sub><b>Pre-dawn</b><br>Cool pink stone, muted canopy</sub></td>
+  <td align="center"><img src="docs/screenshots/biome_sunrise.png"     width="170"><br><sub><b>Sunrise</b><br>Peach stone, fresh-green canopy</sub></td>
+  <td align="center"><sub><i>(loops back to day)</i></sub></td>
+</tr>
+</table>
+
+### Pillar variants
+
+Every pipe spawns one of **8 sandstone-pillar variants**, picked deterministically from its seed so the same column always looks the same on screen. Each variant differs in silhouette and decoration: prayer flags + cairn, banner pole + stupa, terrace + cascading vines, monastery on the cliff, hero red lantern, weathered jungle ruin with strangler fig, menhir with rune carvings, plus the original peacock-pine column.
+
+<p align="center">
+  <img src="docs/pillar_variants_ingame.png" width="100%" alt="The 8 pillar variants side-by-side">
+</p>
 
 ---
 
