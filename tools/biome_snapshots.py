@@ -23,15 +23,13 @@ from game.draw import (
 
 CYCLE = _biome.CYCLE_SECONDS
 
-# (slug, label, target biome phase) — one screenshot per keyframe in biome.py.
+# (slug, label, target biome phase) — 4 representative scenes spanning the
+# full day/night cycle. Picked for maximum visual contrast in the README.
 SCENES = [
-    ("day",         "Day",         0.00),
-    ("golden_hour", "Golden hour", 0.18),
-    ("sunset",      "Sunset",      0.32),
-    ("dusk",        "Dusk",        0.48),
-    ("night",       "Night",       0.62),
-    ("predawn",     "Pre-dawn",    0.78),
-    ("sunrise",     "Sunrise",     0.90),
+    ("day",     "Day",     0.00),
+    ("sunset",  "Sunset",  0.32),
+    ("night",   "Night",   0.62),
+    ("sunrise", "Sunrise", 0.90),
 ]
 
 OUT_DIR = pathlib.Path(__file__).parent.parent / "docs" / "screenshots"
@@ -39,7 +37,7 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def render_scene(phase: float) -> pygame.Surface:
-    # Deterministic pipe variety across all 7 screenshots
+    # Deterministic pipe variety per biome
     random.seed(int(phase * 1000) + 17)
 
     world = World()
@@ -47,13 +45,26 @@ def render_scene(phase: float) -> pygame.Surface:
     # (phase_for_time adds a 0.04 morning offset).
     world.biome_time = ((phase - 0.04) % 1.0) * CYCLE
 
-    # Step the world forward so multiple pipes are on-screen.
+    # Run for ~1.5 s so a few pipes are on-screen, flapping the bird every
+    # ~0.45 s so it stays mid-air the way it would during real play instead
+    # of falling to the ground.
     dt = 1 / 60
-    for _ in range(180):  # 3 seconds
+    for tick in range(90):
+        if tick % 27 == 0:
+            world.bird.flap()
         world.update(dt)
 
-    # Reset biome_time after the simulation so the rendered palette is the
-    # phase we asked for, not the slightly-advanced phase after 180 ticks.
+    # After the sim, snap the bird into the gap of the nearest pipe and give
+    # it a slight upward velocity (slight upward tilt). Also force alive=True
+    # so collisions during the sim don't show a death pose in the screenshot.
+    world.bird.alive = True
+    if world.pipes:
+        nearest = min(world.pipes, key=lambda p: abs(p.x - world.bird.x))
+        world.bird.y = nearest.gap_y
+    world.bird.vy = -120
+
+    # Reset biome_time so the rendered palette is exactly the keyframe we
+    # asked for (not slightly advanced after 90 ticks).
     world.biome_time = ((phase - 0.04) % 1.0) * CYCLE
     palette = world.biome_palette
 
