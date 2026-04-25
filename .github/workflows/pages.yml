@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [claude/retro-pixel-game-gPPYY, main]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
