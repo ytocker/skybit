@@ -1,17 +1,30 @@
 name: Deploy to GitHub Pages
 
+# Builds the pygbag web bundle and serves it via the GitHub-native Pages
+# pipeline (actions/upload-pages-artifact + actions/deploy-pages).
+#
+# Cache-bust: every deploy rewrites the .apk + .tar.gz URLs inside the
+# generated index.html with ?v=<commit-sha>, so the browser always
+# fetches a fresh bundle even if the previous one is cached.
+#
+# One-time repo setting: Settings → Pages → Source = "GitHub Actions".
+
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,22 +36,25 @@ jobs:
       - name: Install pygbag
         run: pip install pygbag
 
-      - name: Build web bundle with custom template
-        # We ship our own web.tmpl (vendored in repo root) so we control every
-        # line of the generated HTML — no fighting the CDN template, no post-
-        # build patches, no emscripten vs. our CSS arms race. The template:
-        #   * uses full-viewport canvas CSS + MutationObserver JS override
-        #     (beats emscripten's inline !important resizes, issue #6353)
-        #   * neutralizes window_resize() to a no-op before pythons.js loads
-        #   * unlocks the SDL AudioContext on first click/touch
-        #   * bakes autorun=1 and fb_ar=0.5625 directly in the config block
-        run: pygbag --build --ume_block 0 --can_close 1 --width 360 --height 640 --template ./web.tmpl .
+      - name: Build web bundle (default pygbag template)
+        run: pygbag --build --ume_block 0 --can_close 1 --width 360 --height 640 .
 
-      - name: Log generated index.html (for debugging post-deploy)
-        run: head -c 6000 build/web/index.html || true
+      - name: Cache-bust .apk and .tar.gz URLs with the commit SHA
+        run: |
+          sha="${{ github.sha }}"
+          sed -i "s|claude_test\.apk|claude_test.apk?v=${sha}|g" build/web/index.html
+          sed -i "s|claude_test\.tar\.gz|claude_test.tar.gz?v=${sha}|g" build/web/index.html
 
-      - name: Deploy to gh-pages
-        uses: peaceiris/actions-gh-pages@v4
+      - uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./build/web
+          path: ./build/web
+
+  deploy:
+    needs: build
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
