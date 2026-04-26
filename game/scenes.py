@@ -35,6 +35,7 @@ class App:
         self.hud = HUD()
         self.session_best = 0
         self._new_best = False
+        self._final_score = 0
         self.state = STATE_MENU
         self._lb_scores: list = []
         self._lb_loading = False
@@ -174,6 +175,7 @@ class App:
 
     def _on_death(self):
         score = self.world.score
+        self._final_score = score  # capture before world keeps ticking
         self._new_best = score > self.session_best
         if self._new_best:
             self.session_best = score
@@ -183,35 +185,45 @@ class App:
 
     def _advance_past_stats(self):
         import sys
-        if self.world.score > 0 and sys.platform == "emscripten":
+        if self._final_score > 0 and sys.platform == "emscripten":
             self.state = STATE_NAMEENTRY
             self._stats_t = 0.0
-            import asyncio
-            asyncio.ensure_future(self._on_name_submitted())
+            try:
+                import asyncio
+                asyncio.ensure_future(self._on_name_submitted())
+            except Exception:
+                # ensure_future failed (e.g. no running loop in this Pyodide build)
+                self.state = STATE_GAMEOVER
+                self._cooldown_t = 0.5
         else:
             self.state = STATE_GAMEOVER
             self._cooldown_t = 0.5
 
     async def _on_name_submitted(self):
-        from game import leaderboard
-        name = await leaderboard.open_name_entry()
-        if name:
-            await leaderboard.submit(name, self.world.score)
-        self._lb_loading = True
-        self._lb_scores = []
-        self._lb_player_rank = -1
-        scores = await leaderboard.fetch_top10()
-        self._lb_scores = scores
-        self._lb_loading = False
-        if scores:
-            self._lb_player_rank = next(
-                (i for i, e in enumerate(scores) if e["score"] == self.world.score),
-                -1,
-            )
-            self.hud.title_t = 0.0  # reset so slide-in starts from scratch
-            self.state = STATE_LEADERBOARD
-            self._cooldown_t = 1.0
-        else:
+        try:
+            from game import leaderboard
+            name = await leaderboard.open_name_entry()
+            if name:
+                await leaderboard.submit(name, self._final_score)
+            self._lb_loading = True
+            self._lb_scores = []
+            self._lb_player_rank = -1
+            scores = await leaderboard.fetch_top10()
+            self._lb_scores = scores
+            self._lb_loading = False
+            if scores:
+                self._lb_player_rank = next(
+                    (i for i, e in enumerate(scores) if e["score"] == self._final_score),
+                    -1,
+                )
+                self.hud.title_t = 0.0
+                self.state = STATE_LEADERBOARD
+                self._cooldown_t = 1.0
+            else:
+                self.state = STATE_GAMEOVER
+                self._cooldown_t = 0.5
+        except Exception:
+            # Any unexpected error → safe fallback to game over
             self.state = STATE_GAMEOVER
             self._cooldown_t = 0.5
 
