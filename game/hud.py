@@ -459,41 +459,6 @@ class HUD:
         for ft in world.float_texts:
             ft.draw(surf)
 
-    def draw_menu(self, surf, dt, best: int):
-        self.title_t += dt
-        # Faded dim layer
-        dim = pygame.Surface((W, H), pygame.SRCALPHA)
-        dim.fill((0, 0, 10, 70))
-        surf.blit(dim, (0, 0))
-        # Title pulsing
-        pulse = 1.0 + math.sin(self.title_t * 2.4) * 0.04
-        f = _font(int(68 * pulse), True)
-        title = "Skybit"
-        img = f.render(title, True, UI_GOLD)
-        shadow = f.render(title, True, NEAR_BLACK)
-        outline = f.render(title, True, UI_RED)
-        r = img.get_rect(center=(W // 2, 180))
-        for ox, oy in ((-3, 0), (3, 0), (0, -3), (0, 3), (2, 2), (-2, 2)):
-            surf.blit(outline, (r.x + ox, r.y + oy))
-        surf.blit(shadow, (r.x + 3, r.y + 5))
-        surf.blit(img, r.topleft)
-        # Subtitle
-        _text(surf, "Pocket Sky Flyer", (W // 2, 228), size=18, color=UI_CREAM)
-        # Tap to start
-        alpha = int(160 + math.sin(self.title_t * 3.6) * 90)
-        f2 = _font(24, True)
-        prompt = f2.render("TAP  ·  SPACE  ·  CLICK", True, WHITE)
-        prompt.set_alpha(alpha)
-        pr = prompt.get_rect(center=(W // 2, H - 170))
-        surf.blit(prompt, pr.topleft)
-        _text(surf, "to flap and start", (W // 2, H - 142), size=16, color=UI_CREAM)
-
-        # Best pill
-        hi_rect = pygame.Rect(W // 2 - 60, H - 100, 120, 40)
-        rounded_rect(surf, hi_rect, 12, (15, 25, 60), 180)
-        _text(surf, "BEST", (hi_rect.centerx, hi_rect.y + 12), size=14, color=UI_CREAM, shadow=False)
-        _text(surf, str(best), (hi_rect.centerx, hi_rect.y + 28), size=18, color=UI_GOLD, shadow=False)
-
     def draw_stats(self, surf, world, dt, elapsed):
         self.title_t += dt
         dim = pygame.Surface((W, H), pygame.SRCALPHA)
@@ -600,7 +565,7 @@ class HUD:
                     ang = (i / 8) * math.pi * 2 + self.title_t * 2
                     r = 28 + 4 * math.sin(self.title_t * 5 + i)
                     dx, dy = math.cos(ang) * r, math.sin(ang) * r
-                    a = int(100 + 120 * math.sin(self.title_t * 4 + i * 0.8))
+                    a = max(0, min(255, int(100 + 120 * math.sin(self.title_t * 4 + i * 0.8))))
                     s = pygame.Surface((4, 4), pygame.SRCALPHA)
                     pygame.draw.circle(s, (*_GOLD_BRIGHT, a), (2, 2), 2)
                     surf.blit(s, (W // 2 + int(dx) - 2, nb_cy + int(dy) - 2))
