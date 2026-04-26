@@ -5,12 +5,13 @@
 [build.environment]
   PYTHON_VERSION = "3.11"
 
-# WASM requires these headers for SharedArrayBuffer (used by pygbag audio).
-# Without them the game loads but produces no sound and may freeze on some browsers.
+# WASM requires cross-origin isolation for SharedArrayBuffer (pygbag audio).
+# "credentialless" (not "require-corp") is needed so pygbag's CDN resources
+# (pygame-web.github.io) can load without a Cross-Origin-Resource-Policy header.
 [[headers]]
   for = "/*"
   [headers.values]
-    Cross-Origin-Embedder-Policy = "require-corp"
+    Cross-Origin-Embedder-Policy = "credentialless"
     Cross-Origin-Opener-Policy   = "same-origin"
 
 [[headers]]
