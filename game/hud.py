@@ -336,8 +336,8 @@ class HUD:
 
     def draw_stats(self, surf, world, dt, elapsed):
         """Post-run summary: score + coins + combo + pillars + time + near-misses
-        + power-up counters. Taps (after a short lockout) advance to the
-        leaderboard/name-entry; auto-advances after ~4.5 s."""
+        + power-up counters. Taps (after a short lockout) advance to game over;
+        auto-advances after ~4.5 s."""
         self.title_t += dt
         dim = pygame.Surface((W, H), pygame.SRCALPHA)
         dim.fill((0, 0, 20, 180))
@@ -395,72 +395,29 @@ class HUD:
             pr = t.get_rect(center=(W // 2, H - 56))
             surf.blit(t, pr.topleft)
 
-    def draw_gameover(self, surf, dt, score: int, scores: list, new_best: bool, highlight_rank=-1):
+    def draw_gameover(self, surf, dt, score: int, new_best: bool):
         self.title_t += dt
         dim = pygame.Surface((W, H), pygame.SRCALPHA)
         dim.fill((0, 0, 20, 170))
         surf.blit(dim, (0, 0))
 
-        # Top band — score + game over label
-        _text(surf, "GAME OVER", (W // 2, 80), size=30, color=UI_RED)
         if score > 0:
-            _text(surf, "SCORE", (W // 2, 118), size=13, color=UI_CREAM, shadow=False)
-            _text(surf, str(score), (W // 2, 148), size=38, color=UI_GOLD)
+            pulse_go = 1 + math.sin(self.title_t * 3) * 0.03
+            _text(surf, "GAME OVER", (W // 2, 190), size=int(34 * pulse_go), color=UI_RED)
+            _text(surf, "SCORE", (W // 2, 270), size=15, color=UI_CREAM, shadow=False)
+            _text(surf, str(score), (W // 2, 310), size=52, color=UI_GOLD)
             if new_best:
                 pulse = 1 + math.sin(self.title_t * 6) * 0.1
-                _text(surf, "NEW BEST!", (W // 2, 182), size=int(17 * pulse), color=UI_ORANGE)
+                _text(surf, "NEW BEST!", (W // 2, 368), size=int(20 * pulse), color=UI_ORANGE)
         else:
             # Dying before the first pipe shouldn't read as a graded result.
             pulse = 1 + math.sin(self.title_t * 4) * 0.05
-            _text(surf, "TRY AGAIN!", (W // 2, 138), size=int(26 * pulse),
+            _text(surf, "TRY AGAIN!", (W // 2, H // 2 - 30), size=int(30 * pulse),
                   color=UI_ORANGE)
-
-        # Leaderboard card
-        self._draw_leaderboard(surf, y_top=200, highlight_rank=highlight_rank, scores=scores)
 
         alpha = int(150 + math.sin(self.title_t * 4) * 90)
         f = _font(20, True)
         t = f.render("TAP TO RETRY", True, WHITE)
         t.set_alpha(alpha)
-        r = t.get_rect(center=(W // 2, H - 48))
+        r = t.get_rect(center=(W // 2, H - 80))
         surf.blit(t, r.topleft)
-
-    def _draw_leaderboard(self, surf, y_top: int, highlight_rank: int, scores: list):
-        card_h = 330
-        card = pygame.Rect(20, y_top, W - 40, card_h)
-        rounded_rect(surf, card, 14, (15, 25, 60), 220)
-        _text(surf, "TOP 10", (card.centerx, card.y + 18), size=16, color=UI_GOLD, shadow=False)
-
-        f_row = _font(15, True)
-        f_small = _font(14, False)
-        row_y = card.y + 46
-        muted = (110, 130, 170)
-        for i in range(10):
-            filled = i < len(scores)
-            if filled:
-                entry = scores[i]
-                name = entry["name"]
-                score = entry["score"]
-            else:
-                name = "---"
-                score = None
-            bg_col = (40, 60, 120) if i == highlight_rank else None
-            if bg_col is not None:
-                rr = pygame.Rect(card.x + 8, row_y - 10, card.width - 16, 24)
-                rounded_rect(surf, rr, 6, bg_col, 200)
-            if filled:
-                rank_color = UI_GOLD if i == 0 else (UI_ORANGE if i == 1 else (UI_CREAM if i == 2 else WHITE))
-                name_color = WHITE
-                score_color = UI_GOLD
-            else:
-                rank_color = name_color = score_color = muted
-            rank_img = f_row.render(f"{i + 1:>2}.", True, rank_color)
-            surf.blit(rank_img, (card.x + 16, row_y - 8))
-            name_img = f_row.render(name, True, name_color)
-            surf.blit(name_img, (card.x + 62, row_y - 8))
-            if score is not None:
-                score_img = f_row.render(str(score), True, score_color)
-                sr = score_img.get_rect()
-                sr.topright = (card.right - 20, row_y - 8)
-                surf.blit(score_img, sr.topleft)
-            row_y += 26

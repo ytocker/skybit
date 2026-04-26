@@ -1,6 +1,5 @@
 """
-Scene state machine (Menu / Play / NameEntry / GameOver) plus the
-top-level App class.
+Scene state machine (Menu / Play / GameOver) plus the top-level App class.
 """
 import math
 import pygame
@@ -13,16 +12,11 @@ from game.draw import (
 from game import biome as _biome
 from game.world import World
 from game.hud import HUD, _font
-from game.storage import (
-    load_scores, save_scores, qualifies_for_top, insert_score, best_score,
-)
-from game.nameentry import NameEntry
 from game import audio
 
 
 STATE_MENU = 0
 STATE_PLAY = 1
-STATE_NAMEENTRY = 2
 STATE_GAMEOVER = 3
 STATE_PAUSE = 4
 STATE_STATS = 5
@@ -37,15 +31,12 @@ class App:
         audio.init()
         self.world = World()
         self.hud = HUD()
-        self.scores: list[dict] = load_scores()
+        self.session_best = 0
+        self._new_best = False
         self.state = STATE_MENU
-        self.name_entry: NameEntry | None = None
-        self.highlight_rank = -1
-        self.prev_best_at_death = 0
         self._cloud_phase = 0.0
         self._running = True
-        self._stats_t = 0.0        # time spent on stats screen (auto-advance)
-        self._stats_next_state = STATE_GAMEOVER  # where the stats screen routes to
+        self._stats_t = 0.0
         # Touch dedup: SDL emits both FINGERDOWN and a synthetic MOUSEBUTTONDOWN
         # for one tap on mobile, so naive routing types every key twice. After
         # any FINGERDOWN, suppress mouse events for a 0.5 s window. On pure
@@ -57,7 +48,7 @@ class App:
 
     @property
     def best(self):
-        return best_score(self.scores)
+        return self.session_best
 
     # ── input ────────────────────────────────────────────────────────────────
 
@@ -74,9 +65,6 @@ class App:
         elif self.state == STATE_STATS:
             if self._stats_t >= 0.6:
                 self._advance_past_stats()
-        elif self.state == STATE_NAMEENTRY:
-            # handled via direct event path
-            pass
         elif self.state == STATE_GAMEOVER:
             if self._cooldown_t <= 0:
                 self._restart()
@@ -90,12 +78,10 @@ class App:
     def _start_play(self):
         self.world = World()
         self.state = STATE_PLAY
-        self.highlight_rank = -1
 
     def _restart(self):
         self.world = World()
         self.state = STATE_PLAY
-        self.highlight_rank = -1
 
     # ── run loop ────────────────────────────────────────────────────────────
 
@@ -132,18 +118,6 @@ class App:
         elif e.type == pygame.MOUSEBUTTONDOWN:
             if now - self._last_finger_t < self._finger_dedup_window:
                 return  # this MOUSEBUTTONDOWN is a touch echo — ignore
-        if self.state == STATE_NAMEENTRY:
-            if e.type == pygame.KEYDOWN:
-                if e.key == pygame.K_ESCAPE:
-                    # quick exit — treat as submit whatever's there
-                    self.name_entry.submit()
-                else:
-                    self.name_entry.handle_key(e)
-            elif e.type == pygame.MOUSEBUTTONDOWN:
-                self.name_entry.handle_tap(e.pos)
-            elif e.type == pygame.FINGERDOWN:
-                self.name_entry.handle_tap((int(e.x * W), int(e.y * H)))
-            return
         # non name-entry states
         if e.type == pygame.KEYDOWN:
             if e.key == pygame.K_p:
@@ -180,49 +154,20 @@ class App:
             self._stats_t += dt
             if self._stats_t >= 4.5:
                 self._advance_past_stats()
-        elif self.state == STATE_NAMEENTRY:
-            self.world.update(dt)  # let particles settle
-            self.name_entry.update(dt)
-            if self.name_entry.done:
-                self._commit_name()
         elif self.state == STATE_GAMEOVER:
             self.world.update(dt)
             self._cooldown_t = max(0.0, self._cooldown_t - dt)
 
     def _on_death(self):
         score = self.world.score
-        self.prev_best_at_death = self.best
+        self._new_best = score > self.session_best
+        if self._new_best:
+            self.session_best = score
         audio.play_gameover()
-        # Decide what comes *after* the stats screen. Compute the preview
-        # leaderboard rank now so the stats screen can show it, too.
-        if qualifies_for_top(score, self.scores):
-            _preview, rank = insert_score(list(self.scores), "???", score)
-            self.highlight_rank = rank
-            self._stats_next_state = STATE_NAMEENTRY
-        else:
-            self.highlight_rank = -1
-            self._stats_next_state = STATE_GAMEOVER
         self.state = STATE_STATS
         self._stats_t = 0.0
 
     def _advance_past_stats(self):
-        if self._stats_next_state == STATE_NAMEENTRY:
-            _preview, rank = insert_score(self.scores, "???", self.world.score)
-            self.highlight_rank = rank
-            self.name_entry = NameEntry(self.world.score, rank)
-            self.state = STATE_NAMEENTRY
-        else:
-            self.state = STATE_GAMEOVER
-            self._cooldown_t = 0.5
-
-    def _commit_name(self):
-        score = self.world.score
-        name = self.name_entry.submitted_name or "???"
-        new_list, rank = insert_score(self.scores, name, score)
-        self.scores = new_list
-        self.highlight_rank = rank
-        save_scores(self.scores)
-        self.name_entry = None
         self.state = STATE_GAMEOVER
         self._cooldown_t = 0.5
 
@@ -325,11 +270,7 @@ class App:
             self.hud.draw_pause_overlay(self.screen)
         elif self.state == STATE_STATS:
             self.hud.draw_stats(self.screen, self.world, 1 / 60, self._stats_t)
-        elif self.state == STATE_NAMEENTRY:
-            self.name_entry.draw(self.screen, _font)
         else:  # GAMEOVER
-            new_best = self.world.score > self.prev_best_at_death and self.highlight_rank == 0
             self.hud.draw_gameover(
-                self.screen, 1 / 60, self.world.score,
-                self.scores, new_best, self.highlight_rank,
+                self.screen, 1 / 60, self.world.score, self._new_best,
             )
