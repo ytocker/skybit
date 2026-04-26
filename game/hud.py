@@ -395,6 +395,90 @@ class HUD:
             pr = t.get_rect(center=(W // 2, H - 56))
             surf.blit(t, pr.topleft)
 
+    def draw_leaderboard(self, surf, dt, scores: list, player_rank: int,
+                         loading: bool, cooldown: float):
+        self.title_t += dt
+        dim = pygame.Surface((W, H), pygame.SRCALPHA)
+        dim.fill((0, 0, 20, 200))
+        surf.blit(dim, (0, 0))
+
+        _text(surf, "GLOBAL TOP 10", (W // 2, 44), size=22, color=UI_GOLD)
+
+        card_x, card_w = 16, W - 32
+        card_y = 68
+        row_h = 47
+
+        if loading:
+            pulse = 0.5 + 0.5 * math.sin(self.title_t * 4)
+            _text(surf, "Loading...", (W // 2, card_y + 60), size=20,
+                  color=(int(180 + 60 * pulse),) * 3, shadow=True)
+        else:
+            # Card background
+            n = len(scores)
+            card_h = n * row_h + 12
+            card_rect = pygame.Rect(card_x, card_y, card_w, card_h)
+            rounded_rect(surf, card_rect, 14, (10, 20, 50), 220)
+
+            SILVER = (192, 200, 210)
+            BRONZE = (190, 130, 60)
+
+            ry = card_y + 6
+            f_rank = _font(15, True)
+            f_name = _font(15, False)
+            f_score = _font(16, True)
+
+            for i, entry in enumerate(scores):
+                rank = i + 1
+                if rank == 1:
+                    rank_col = UI_GOLD
+                elif rank == 2:
+                    rank_col = SILVER
+                elif rank == 3:
+                    rank_col = BRONZE
+                else:
+                    rank_col = UI_CREAM
+
+                # Highlight player's own row
+                if i == player_rank:
+                    hl = pygame.Surface((card_w - 8, row_h - 4), pygame.SRCALPHA)
+                    hl.fill((30, 80, 30, 160))
+                    surf.blit(hl, (card_x + 4, ry))
+                    name_col = UI_GOLD
+                else:
+                    name_col = WHITE
+
+                row_cy = ry + row_h // 2
+
+                # Rank column
+                rk_img = f_rank.render(f"#{rank}", True, rank_col)
+                surf.blit(rk_img, (card_x + 10, row_cy - rk_img.get_height() // 2))
+
+                # Name column
+                nm = entry["name"][:14]
+                nm_img = f_name.render(nm, True, name_col)
+                surf.blit(nm_img, (card_x + 52, row_cy - nm_img.get_height() // 2))
+
+                # Score column (right-aligned)
+                sc_img = f_score.render(str(entry["score"]), True, rank_col)
+                surf.blit(sc_img, (card_x + card_w - 12 - sc_img.get_width(),
+                                   row_cy - sc_img.get_height() // 2))
+
+                # Divider (skip after last row)
+                if i < n - 1:
+                    pygame.draw.line(surf, (30, 40, 80),
+                                     (card_x + 8, ry + row_h - 1),
+                                     (card_x + card_w - 8, ry + row_h - 1))
+                ry += row_h
+
+        # "TAP TO MENU" prompt below card
+        if cooldown <= 0:
+            alpha = int(150 + math.sin(self.title_t * 4) * 90)
+            f2 = _font(18, True)
+            prompt = f2.render("TAP TO MENU", True, WHITE)
+            prompt.set_alpha(alpha)
+            pr = prompt.get_rect(center=(W // 2, H - 48))
+            surf.blit(prompt, pr.topleft)
+
     def draw_gameover(self, surf, dt, score: int, new_best: bool):
         self.title_t += dt
         dim = pygame.Surface((W, H), pygame.SRCALPHA)

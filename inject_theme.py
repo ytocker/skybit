@@ -4,6 +4,7 @@ Post-process pygbag's generated build/web/index.html to inject:
   - Skybit dark-purple night-sky loading overlay
   - window.skyPlay() Web Audio synthesis (matches game/audio.py exactly)
 """
+import os
 from pathlib import Path
 
 src = Path("build/web/index.html")
@@ -11,6 +12,9 @@ if not src.exists():
     raise SystemExit("build/web/index.html not found — run pygbag first")
 
 html = src.read_text(encoding="utf-8")
+
+_SB_URL = os.environ.get("SUPABASE_URL", "")
+_SB_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 
 # ── 1. Dark body background (CSS) ────────────────────────────────────────────
 html = html.replace("background-color:powderblue", "background-color:#0d0820")
@@ -43,7 +47,29 @@ OVERLAY = """
   </svg>
 </div>
 """
-html = html.replace("<body>", "<body>\n" + OVERLAY, 1)
+NAME_OVERLAY = """
+<div id="name-overlay" style="display:none;position:fixed;inset:0;z-index:200;
+     background:rgba(8,3,26,.93);flex-direction:column;
+     align-items:center;justify-content:center;font-family:Arial,sans-serif;">
+  <p style="color:#f0c040;font-size:clamp(18px,5vw,26px);font-weight:900;
+             letter-spacing:4px;margin:0 0 8px;text-shadow:0 2px 8px #000">ENTER YOUR NAME</p>
+  <p style="color:#ddc870;font-size:13px;letter-spacing:2px;margin:0 0 28px;opacity:.7">
+     max 16 characters</p>
+  <input id="name-input" maxlength="16" autocomplete="off" spellcheck="false"
+         style="background:#1a0f38;color:#f0c040;border:2px solid #f07030;
+                border-radius:12px;padding:14px 24px;font-size:clamp(18px,5vw,24px);
+                font-weight:700;letter-spacing:3px;text-align:center;
+                outline:none;width:min(80vw,280px);box-sizing:border-box;"/>
+  <button id="name-submit"
+          style="margin-top:24px;background:linear-gradient(180deg,#cc4418,#881e04);
+                 color:#fff;border:2px solid #e86828;border-radius:50px;
+                 padding:13px 48px;font-size:17px;font-weight:900;
+                 letter-spacing:3px;cursor:pointer;">SUBMIT</button>
+  <p id="name-skip" style="margin-top:16px;color:rgba(200,200,220,.45);
+     font-size:12px;letter-spacing:1px;cursor:pointer;">skip</p>
+</div>
+"""
+html = html.replace("<body>", "<body>\n" + OVERLAY + NAME_OVERLAY, 1)
 
 # ── 3. CSS + JS injected before </body> ──────────────────────────────────────
 INJECTION = """
@@ -146,6 +172,65 @@ INJECTION = """
     pointer-events: none;
 }
 </style>
+
+<script>
+/* ── Supabase leaderboard bridge ───────────────────────────────────────── */
+(function () {
+    var _SB_URL = "__SB_URL__";
+    var _SB_KEY = "__SB_KEY__";
+
+    window.lbSubmit = async function (name, score) {
+        if (!_SB_URL || !_SB_KEY) return false;
+        try {
+            var r = await fetch(_SB_URL + '/rest/v1/scores', {
+                method: 'POST',
+                headers: {
+                    'apikey': _SB_KEY,
+                    'Authorization': 'Bearer ' + _SB_KEY,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=minimal'
+                },
+                body: JSON.stringify({name: String(name), score: Number(score)})
+            });
+            return r.ok;
+        } catch (e) { console.warn('lbSubmit:', e); return false; }
+    };
+
+    window.lbFetch = async function () {
+        if (!_SB_URL || !_SB_KEY) return [];
+        try {
+            var r = await fetch(
+                _SB_URL + '/rest/v1/scores?select=name,score&order=score.desc&limit=10',
+                { headers: {'apikey': _SB_KEY, 'Authorization': 'Bearer ' + _SB_KEY} }
+            );
+            return r.ok ? await r.json() : [];
+        } catch (e) { console.warn('lbFetch:', e); return []; }
+    };
+
+    window._pendingName = "__pending__";
+
+    window.openNameEntry = function () {
+        var ov = document.getElementById('name-overlay');
+        var inp = document.getElementById('name-input');
+        ov.style.display = 'flex';
+        inp.value = '';
+        setTimeout(function () { inp.focus(); }, 80);
+        window._pendingName = '__pending__';
+
+        function submit() {
+            var v = inp.value.trim();
+            window._pendingName = v.length > 0 ? v : '__skip__';
+            ov.style.display = 'none';
+        }
+        document.getElementById('name-submit').onclick = submit;
+        document.getElementById('name-skip').onclick = function () {
+            window._pendingName = '__skip__';
+            ov.style.display = 'none';
+        };
+        inp.onkeydown = function (e) { if (e.key === 'Enter') submit(); };
+    };
+}());
+</script>
 
 <script>
 (function () {
@@ -254,5 +339,12 @@ INJECTION = """
 """
 html = html.replace("</body>", INJECTION + "</body>", 1)
 
+html = html.replace("__SB_URL__", _SB_URL)
+html = html.replace("__SB_KEY__", _SB_KEY)
+
 src.write_text(html, encoding="utf-8")
 print("✓ Skybit theme injected into build/web/index.html")
+if _SB_URL:
+    print(f"✓ Supabase URL set: {_SB_URL[:40]}...")
+else:
+    print("⚠ SUPABASE_URL not set — leaderboard will be disabled")
