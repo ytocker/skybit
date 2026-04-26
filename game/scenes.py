@@ -208,6 +208,7 @@ class App:
                 (i for i, e in enumerate(scores) if e["score"] == self.world.score),
                 -1,
             )
+            self.hud.title_t = 0.0  # reset so slide-in starts from scratch
             self.state = STATE_LEADERBOARD
             self._cooldown_t = 1.0
         else:

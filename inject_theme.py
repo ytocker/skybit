@@ -48,25 +48,24 @@ OVERLAY = """
 </div>
 """
 NAME_OVERLAY = """
-<div id="name-overlay" style="display:none;position:fixed;inset:0;z-index:200;
-     background:rgba(8,3,26,.93);flex-direction:column;
-     align-items:center;justify-content:center;font-family:Arial,sans-serif;">
-  <p style="color:#f0c040;font-size:clamp(18px,5vw,26px);font-weight:900;
-             letter-spacing:4px;margin:0 0 8px;text-shadow:0 2px 8px #000">ENTER YOUR NAME</p>
-  <p style="color:#ddc870;font-size:13px;letter-spacing:2px;margin:0 0 28px;opacity:.7">
-     max 16 characters</p>
-  <input id="name-input" maxlength="16" autocomplete="off" spellcheck="false"
-         style="background:#1a0f38;color:#f0c040;border:2px solid #f07030;
-                border-radius:12px;padding:14px 24px;font-size:clamp(18px,5vw,24px);
-                font-weight:700;letter-spacing:3px;text-align:center;
-                outline:none;width:min(80vw,280px);box-sizing:border-box;"/>
-  <button id="name-submit"
-          style="margin-top:24px;background:linear-gradient(180deg,#cc4418,#881e04);
-                 color:#fff;border:2px solid #e86828;border-radius:50px;
-                 padding:13px 48px;font-size:17px;font-weight:900;
-                 letter-spacing:3px;cursor:pointer;">SUBMIT</button>
-  <p id="name-skip" style="margin-top:16px;color:rgba(200,200,220,.45);
-     font-size:12px;letter-spacing:1px;cursor:pointer;">skip</p>
+<div id="name-overlay">
+  <svg class="mountains" viewBox="0 0 1440 200" preserveAspectRatio="none"
+       xmlns="http://www.w3.org/2000/svg">
+    <path d="M0,200 L0,130 L60,70 L120,110 L200,40 L280,90 L360,20
+             L440,75 L520,45 L600,100 L680,15 L760,80 L840,35 L920,95
+             L1000,50 L1080,85 L1160,25 L1240,90 L1320,55 L1440,70 L1440,200 Z"
+          fill="#0e1a0c" opacity="0.95"/>
+    <path d="M0,200 L0,155 L80,125 L160,145 L240,108 L320,132 L400,95
+             L480,128 L560,105 L640,135 L720,88 L800,120 L880,100 L960,130
+             L1040,110 L1120,138 L1200,105 L1280,128 L1360,112 L1440,125 L1440,200 Z"
+          fill="#0a1208" opacity="0.75"/>
+  </svg>
+  <p class="ne-title">ENTER YOUR NAME</p>
+  <p class="ne-sub">up to 10 characters</p>
+  <input id="name-input" maxlength="10" autocomplete="off" spellcheck="false"/>
+  <p id="name-counter">0 / 10</p>
+  <button id="name-submit" class="ne-submit">SUBMIT</button>
+  <p id="name-skip" class="ne-skip">skip</p>
 </div>
 """
 html = html.replace("<body>", "<body>\n" + OVERLAY + NAME_OVERLAY, 1)
@@ -171,6 +170,109 @@ INJECTION = """
     width: 100%;
     pointer-events: none;
 }
+
+/* ── Name-entry overlay ─────────────────────────────────────── */
+#name-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: linear-gradient(180deg, #060115 0%, #12082a 50%, #0c1022 100%);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+}
+.ne-title {
+    font-family: Arial Black, Arial, sans-serif;
+    font-size: clamp(28px, 7vw, 38px);
+    font-weight: 900;
+    letter-spacing: 5px;
+    color: #f0c040;
+    margin: 0 0 8px;
+    text-shadow:
+        -2px  0   0 #a82010,
+         2px  0   0 #a82010,
+         0   -2px 0 #a82010,
+         0    2px 0 #a82010,
+         0    7px 10px rgba(0, 0, 0, 0.8);
+    animation: float-title 3.4s ease-in-out infinite;
+    pointer-events: none;
+    position: relative;
+    z-index: 1;
+}
+.ne-sub {
+    font-size: 12px;
+    letter-spacing: 3px;
+    color: #d8b855;
+    opacity: 0.65;
+    margin: 0 0 24px;
+    pointer-events: none;
+    text-transform: uppercase;
+    position: relative;
+    z-index: 1;
+}
+#name-input {
+    background: #0d0820;
+    color: #f0c040;
+    border: 2px solid #e86828;
+    border-radius: 14px;
+    padding: 16px 28px;
+    font-size: clamp(20px, 5vw, 26px);
+    font-weight: 700;
+    letter-spacing: 4px;
+    text-align: center;
+    outline: none;
+    width: min(78vw, 300px);
+    box-sizing: border-box;
+    transition: box-shadow 0.2s;
+    position: relative;
+    z-index: 1;
+}
+#name-input:focus {
+    box-shadow: 0 0 0 3px rgba(240, 192, 64, 0.35);
+}
+#name-counter {
+    font-size: 13px;
+    color: #d8b855;
+    opacity: 0.6;
+    margin: 8px 0 24px;
+    letter-spacing: 1px;
+    pointer-events: none;
+    position: relative;
+    z-index: 1;
+}
+.ne-submit {
+    font-family: Arial Black, Arial, sans-serif;
+    font-size: clamp(13px, 3.6vw, 18px);
+    font-weight: 900;
+    letter-spacing: 4px;
+    color: #ffffff;
+    background: linear-gradient(180deg, #c84018 0%, #7e1c02 100%);
+    border: 2px solid #e86828;
+    border-radius: 60px;
+    padding: 16px 52px;
+    box-shadow:
+        0 5px 30px rgba(200, 64, 20, 0.65),
+        inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    animation: pulse-btn 1.8s ease-in-out infinite;
+    cursor: pointer;
+    white-space: nowrap;
+    position: relative;
+    z-index: 1;
+}
+.ne-skip {
+    margin-top: 18px;
+    color: rgba(200, 200, 220, 0.38);
+    font-size: 12px;
+    letter-spacing: 2px;
+    cursor: pointer;
+    text-transform: uppercase;
+    position: relative;
+    z-index: 1;
+}
 </style>
 
 <script>
@@ -208,14 +310,39 @@ INJECTION = """
     };
 
     window._pendingName = "__pending__";
+    var _nameStarsAdded = false;
 
     window.openNameEntry = function () {
-        var ov = document.getElementById('name-overlay');
+        var ov  = document.getElementById('name-overlay');
         var inp = document.getElementById('name-input');
+        var ctr = document.getElementById('name-counter');
+
+        /* Inject twinkling stars once (same pattern as loading screen) */
+        if (!_nameStarsAdded) {
+            _nameStarsAdded = true;
+            for (var i = 0; i < 40; i++) {
+                var s = document.createElement('div');
+                s.className = 'star';
+                var sz = (Math.random() * 2.2 + 0.6).toFixed(1);
+                s.style.cssText =
+                    'width:' + sz + 'px;height:' + sz + 'px;' +
+                    'top:'   + (Math.random() * 90).toFixed(1)  + '%;' +
+                    'left:'  + (Math.random() * 100).toFixed(1) + '%;' +
+                    '--dur:'   + (Math.random() * 3 + 1.3).toFixed(1) + 's;' +
+                    '--delay:' + (Math.random() * 4).toFixed(1) + 's;';
+                ov.insertBefore(s, ov.firstChild);
+            }
+        }
+
         ov.style.display = 'flex';
         inp.value = '';
+        if (ctr) ctr.textContent = '0 / 10';
         setTimeout(function () { inp.focus(); }, 80);
         window._pendingName = '__pending__';
+
+        inp.oninput = function () {
+            if (ctr) ctr.textContent = inp.value.length + ' / 10';
+        };
 
         function submit() {
             var v = inp.value.trim();
