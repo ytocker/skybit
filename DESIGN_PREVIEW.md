@@ -2,7 +2,7 @@
 
 Branch: `claude/visual-overhaul`
 
-All non-gameplay screens redesigned to match the HTML loading screen's dark-purple / gold / red-outline night-sky aesthetic. Screenshots taken against the in-game night biome background.
+All non-gameplay screens redesigned to match the HTML loading screen's dark-purple / gold / red-outline night-sky aesthetic. Coins and powerups upgraded with glow halos, specular highlights, and animated particle effects.
 
 ---
 
@@ -16,7 +16,7 @@ Stars twinkling across a night sky, floating gold "SKYBIT" title with red pixel 
 
 ## In-Game HUD
 
-Score pill with dark panel + orange border. BEST and coin pills using the same themed language. Gold pause icon on dark button.
+Score pill with dark panel + orange border. BEST and coin pills use the same themed language. Gold pause icon on dark button.
 
 ![Play HUD](screenshots/02_play_hud.png)
 
@@ -51,3 +51,23 @@ Stars + outlined header, framed score block, dark stats card with thin orange ro
 Clean minimal layout for zero-score runs.
 
 ![Game Over – Try Again](screenshots/06_gameover_tryagain.png)
+
+---
+
+## Coins — Upgraded
+
+Gold glow halo (additive blend), 3-D depth from inner bright zone + specular crescent highlight that sweeps with the spin angle. Drop shadow beneath.
+
+![Coins](screenshots/07_coins.png)
+
+---
+
+## Powerups — Upgraded
+
+Each powerup has a colored glow halo, a float-bob animation, and orbiting/animated particles:
+
+- **Mushroom** — pulsing red halo, 3 orbiting pink sparkles, sweeping cap sheen
+- **Magnet** — electric-blue halo, 4 counter-rotating charged dots, animated lightning arc between silver tips
+- **Slowmo** — deep-purple halo, expanding ring pulse, rotating clock hands inside the lower glass, animated sand stream dots, pinch-point sparkle
+
+![Powerups](screenshots/08_powerups.png)
