@@ -12,8 +12,17 @@ if not src.exists():
 
 html = src.read_text(encoding="utf-8")
 
-# ── 1. Dark body background ───────────────────────────────────────────────────
+# ── 1. Dark body background (CSS) ────────────────────────────────────────────
 html = html.replace("background-color:powderblue", "background-color:#0d0820")
+
+# ── 2. Patch embedded Python progress-bar colors ──────────────────────────────
+# pygbag embeds custom_site() Python code as a comment inside a <script> tag.
+# These targeted replacements recolor the pygame loading bar to match the theme.
+html = html.replace('"#7f7f7f"', '"#0d0820"')       # body bg: gray → dark purple
+html = html.replace('(0,255,0)', '(240,192,64)')     # bar fill: green → gold
+html = html.replace('(10,10,10)', '(20,12,48)')      # bar track: near-black → deep purple
+# "Ready to start!" text: blue → gold
+html = html.replace(', True, "blue")', ', True, (240,192,64))')
 
 # ── 2. Loading overlay HTML (injected right after <body>) ─────────────────────
 OVERLAY = """
