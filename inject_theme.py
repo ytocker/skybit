@@ -27,6 +27,7 @@ html = html.replace(', True, "blue")', ', True, (240,192,64))')
 # ── 2. Loading overlay HTML (injected right after <body>) ─────────────────────
 OVERLAY = """
 <div id="skybit-loading">
+  <div class="title-glow"></div>
   <p class="skybit-title">SKYBIT</p>
   <p class="skybit-sub">Pocket Sky Flyer</p>
   <div class="tap-btn">TAP &nbsp;&middot;&nbsp; CLICK &nbsp;&middot;&nbsp; SPACE</div>
@@ -76,6 +77,23 @@ INJECTION = """
 @keyframes twinkle {
     0%, 100% { opacity: 0.12; transform: scale(1.0); }
     50%       { opacity: 0.95; transform: scale(1.4); }
+}
+
+/* Radial glow blob behind the title */
+.title-glow {
+    position: absolute;
+    width: 320px;
+    height: 180px;
+    background: radial-gradient(ellipse at center,
+        rgba(240,192,64,0.18) 0%,
+        rgba(200,64,24,0.08) 45%,
+        transparent 75%);
+    pointer-events: none;
+    animation: glow-pulse 3.4s ease-in-out infinite;
+}
+@keyframes glow-pulse {
+    0%, 100% { opacity: 0.7; transform: scale(1.0); }
+    50%       { opacity: 1.0; transform: scale(1.15); }
 }
 
 /* "SKYBIT" title */
