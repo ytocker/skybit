@@ -1,0 +1,514 @@
+<html lang="en-us"><script src="{{cookiecutter.cdn}}pythons.js" type=module id=site data-LINES={{cookiecutter.LINES}} data-CONSOLE={{cookiecutter.CONSOLE}} data-python=python{{cookiecutter.PYBUILD}} data-os=vtx,fs,snd,gui async defer>#<!--
+
+print("""
+
+Loading {{cookiecutter.title}} ...
+
+Pygbag Version : {{cookiecutter.version}}
+Python         : {{cookiecutter.PYBUILD}}
+
+""")
+
+WIDTH  = {{cookiecutter.width}}
+HEIGHT = {{cookiecutter.height}}
+
+REFX = 1980
+REFY = 1080
+
+def u(real, ref, v):
+    if abs(v)<0.9999999:
+        result = int( (float(real)/100.0) * (v*1000))
+        if v<0:
+            return real-result
+        return result
+    return int( (real/ref) * v )
+
+def ux(*argv):
+    global WIDTH, REFX
+    acc = 0
+    for v in argv:
+        acc += u(WIDTH, REFX, v)
+    return acc
+
+def uy(*argv):
+    global HEIGHT, REFY
+    acc = 0
+    for v in argv:
+        acc += u(HEIGHT, REFY, v)
+    return acc
+
+async def custom_site():
+    import sys
+    import asyncio
+    import platform
+    import json
+    from pathlib import Path
+    import embed
+
+    # Dark purple background to match game palette
+    platform.document.body.style.background = "#0d0820"
+
+    import pygame
+
+    def compose():
+        pygame.display.update()
+        window.chromakey(None, *screen.get_colorkey(), 40)
+
+    pygame.init()
+    pygame.font.init()
+    screen = pygame.display.set_mode([ux(.100),uy(.100)], pygame.SRCALPHA, 32)
+    screen.set_colorkey( (0,0,0,0), pygame.RLEACCEL )
+    screen.fill( (0,0,0,0) )
+    compose()
+
+    platform.window.transfer.hidden = True
+    platform.window.canvas.style.visibility = "visible"
+
+    apk = "{{cookiecutter.archive}}.apk"
+    bundle = "{{cookiecutter.archive}}"
+    appdir = Path(f"/data/data/{bundle}")
+    appdir.mkdir()
+
+    cfg = {
+        "io": "url",
+        "type":"mount",
+        "mount" : {
+            "point" : appdir.as_posix(),
+            "path" : "/",
+        },
+        "path" : f"/ => {appdir.as_posix()}",
+    }
+    track = platform.window.MM.prepare(apk, json.dumps(cfg))
+
+    marginx = ux(.020)
+    marginy = uy(.045)
+
+    def pg_bar(pos):
+        nonlocal marginx, marginy
+        total = track.len or 10
+        slot = ux(.060) / total
+        # Track: deep purple
+        pygame.draw.rect(screen, (20, 12, 48),
+            ( marginx-ux(10), marginy-uy(10), (total*slot)+ux(20), uy(110) ))
+        # Fill: gold
+        pygame.draw.rect(screen, (240, 192, 64),
+            ( marginx, marginy, track.pos*slot, uy(90) ))
+
+    while not track.ready:
+        pg_bar(track.pos)
+        compose()
+        await asyncio.sleep(.1)
+
+    pg_bar(track.len)
+    compose()
+
+    platform.run_main(PyConfig, loaderhome= appdir / "assets", loadermain=None)
+
+    while embed.counter()<0:
+        await asyncio.sleep(.1)
+
+    main = appdir / "assets" / "main.py"
+
+    await TopLevel_async_handler.start_toplevel(platform.shell, console=window.python.config.debug)
+
+    __import__(__name__).__file__ = str(main)
+
+    fnt = pygame.font.Font(None, uy(80))
+
+    def ui_callback(pkg, error=None):
+        nonlocal fnt
+        if error:
+            prompt = fnt.render(f"{error}", True, (240, 192, 64))
+        else:
+            prompt = fnt.render(f"Setting up [{pkg}]", True, (200, 170, 80))
+        pg_bar(track.len)
+        screen.blit(prompt, ( marginx+ ux(80), marginy - uy(10) ))
+        compose()
+
+    # Wait for user engagement (the HTML overlay sets MM.UME=true when clicked)
+    while not platform.window.MM.UME:
+        await asyncio.sleep(.1)
+
+    screen.fill( (0,0,0,0) )
+    pygame.display.flip()
+
+    await shell.runpy(main, callback=ui_callback)
+
+asyncio.run( custom_site() )
+
+# BEGIN BLOCK
+#
+# now this is the html part you can (and should) customize
+# do not alter that comment block it is separating python code from html code
+# =============================================================================
+# --></script><head><!--
+
+//=============================================================================
+
+{%- if cookiecutter.comment != "" -%}
+{{cookiecutter.comment}}
+{% endif %}
+
+\--><script type="application/javascript">
+config = {
+    xtermjs : "{{cookiecutter.xtermjs}}" ,
+    _sdl2 : "canvas",
+    user_canvas : 0,
+    user_canvas_managed : 0,
+    ume_block : {{cookiecutter.ume_block}},
+    can_close : {{cookiecutter.can_close}},
+    archive : "{{cookiecutter.archive}}",
+    gui_debug : 3,
+    cdn : "{{cookiecutter.cdn}}",
+    autorun : {{cookiecutter.autorun}},
+    PYBUILD : "{{cookiecutter.PYBUILD}}"
+}
+</script>
+
+<title>{{cookiecutter.title}}</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+
+<link rel="prefetch" href="{{cookiecutter.cdn}}pythons.js" as="script" crossorigin>
+<link rel="prefetch" href="{{cookiecutter.cdn}}empty.html" as="document" crossorigin>
+<link rel="icon" href="favicon.png" type="image/png">
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+    margin: 0; padding: 0;
+    background: #0d0820;
+    font-family: Arial, sans-serif;
+    overflow: hidden;
+}
+
+/* ── Loading overlay ─────────────────────────────── */
+#skybit-loading {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: linear-gradient(180deg,
+        #060115 0%,
+        #12082a 45%,
+        #0c1022 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Stars */
+.star {
+    position: absolute;
+    background: #ffffff;
+    border-radius: 50%;
+    pointer-events: none;
+    animation: twinkle var(--dur, 2s) ease-in-out infinite;
+    animation-delay: var(--delay, 0s);
+}
+@keyframes twinkle {
+    0%, 100% { opacity: 0.15; transform: scale(1); }
+    50%       { opacity: 0.95; transform: scale(1.3); }
+}
+
+/* Game title */
+.skybit-title {
+    font-size: clamp(56px, 15vw, 92px);
+    font-weight: 900;
+    letter-spacing: 8px;
+    color: #f0c040;
+    text-shadow:
+        -3px  0   0 #b02818,
+         3px  0   0 #b02818,
+         0   -3px 0 #b02818,
+         0    3px 0 #b02818,
+         0    8px 6px rgba(0,0,0,0.8);
+    margin: 0;
+    animation: float 3.4s ease-in-out infinite;
+    pointer-events: none;
+}
+@keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50%       { transform: translateY(-12px); }
+}
+
+/* Subtitle */
+.skybit-sub {
+    font-size: clamp(10px, 2.8vw, 14px);
+    font-weight: bold;
+    letter-spacing: 8px;
+    color: #ddc870;
+    margin: 12px 0 52px;
+    opacity: 0.8;
+    text-transform: uppercase;
+    pointer-events: none;
+}
+
+/* TAP TO PLAY button */
+.tap-btn {
+    font-size: clamp(14px, 3.8vw, 19px);
+    font-weight: 900;
+    letter-spacing: 4px;
+    color: #ffffff;
+    background: linear-gradient(180deg, #cc4418 0%, #881e04 100%);
+    border: 2px solid #f07030;
+    border-radius: 60px;
+    padding: 15px 48px;
+    box-shadow:
+        0 4px 28px rgba(200, 64, 20, 0.6),
+        inset 0 1px 0 rgba(255,255,255,0.15);
+    animation: pulse-btn 1.7s ease-in-out infinite;
+    pointer-events: none;
+    white-space: nowrap;
+}
+@keyframes pulse-btn {
+    0%, 100% { opacity: 0.72; transform: scale(1.00); }
+    50%       { opacity: 1.00; transform: scale(1.06); }
+}
+
+/* Mountain silhouette */
+.mountains {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    pointer-events: none;
+}
+
+/* ── Canvas ──────────────────────────────────────── */
+canvas.emscripten {
+    border: 0 none;
+    background-color: transparent;
+    width: 100%;
+    height: 100%;
+    z-index: 5;
+    padding: 0;
+    margin: 0 auto;
+    position: absolute;
+    top: 0; bottom: 0; left: 0; right: 0;
+}
+
+/* ── Misc pygbag layout ──────────────────────────── */
+.bottomright { position: absolute; top: 40%; right: 0; }
+.emscripten_border { border: 1px solid black; }
+.trinfo { position: relative; right: 0; border: 1px solid black; }
+.framed { position: relative; top: 150px; right: 10px; border: 1px solid black; }
+
+#pyconsole { display: none; }
+</style>
+
+<script type="application/javascript">
+async function custom_onload(debug_hidden) {
+    pyconsole.hidden = debug_hidden;
+    system.hidden = debug_hidden;
+    info.hidden = debug_hidden;
+    box.hidden = debug_hidden;
+    // transfer is already hidden by default; the overlay handles the loading UI
+}
+
+function custom_prerun() {}
+
+function custom_postrun() {
+    window.addEventListener("keydown", function(e) {
+        if (["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].indexOf(e.code) > -1) {
+            if (!python.config.debug)
+                e.preventDefault();
+        }
+    }, false);
+}
+
+function debug() {
+    python.config.debug = true;
+    custom_onload(false);
+    Module.PyRun_SimpleString("shell.uptime()");
+}
+
+function info_inline(data) {
+    document.getElementById("info").innerHTML = data;
+}
+</script>
+
+</head>
+<body>
+
+<div id="skybit-loading">
+  <p class="skybit-title">SKYBIT</p>
+  <p class="skybit-sub">Pocket Sky Flyer</p>
+  <div class="tap-btn">TAP &nbsp;·&nbsp; CLICK &nbsp;·&nbsp; SPACE</div>
+  <svg class="mountains" viewBox="0 0 1440 200" preserveAspectRatio="none"
+       xmlns="http://www.w3.org/2000/svg">
+    <path d="M0,200 L0,130 L60,70 L120,110 L200,40 L280,90 L360,20
+             L440,75 L520,45 L600,100 L680,15 L760,80 L840,35 L920,95
+             L1000,50 L1080,85 L1160,25 L1240,90 L1320,55 L1440,70 L1440,200 Z"
+          fill="#0e1a0c" opacity="0.95"/>
+    <path d="M0,200 L0,155 L80,125 L160,145 L240,108 L320,132 L400,95
+             L480,128 L560,105 L640,135 L720,88 L800,120 L880,100 L960,130
+             L1040,110 L1120,138 L1200,105 L1280,128 L1360,112 L1440,125 L1440,200 Z"
+          fill="#0a1208" opacity="0.75"/>
+  </svg>
+</div>
+
+<canvas class="emscripten" id="canvas"
+    width="1px" height="1px"
+    oncontextmenu="event.preventDefault()" tabindex=1>
+</canvas>
+
+<div id="transfer" hidden>
+    <div class="emscripten" id="status">Downloading...</div>
+    <div class="emscripten">
+        <progress value="0" max="100" id="progress"></progress>
+    </div>
+</div>
+
+<div id="html"></div>
+
+<div id="crt" class="bottomright">
+    <div id="system" hidden></div>
+    <div id="box" class="emscripten_border" hidden=true>
+        <div id="info" class="trinfo"></div>
+        <iframe id="iframe" class="framed" name="iframe"
+            width="470px" height="90%"
+            allowtransparency="true"
+            style="z-index: 10; background: #FFFFFF;"
+            frameborder="1"
+            allowfullscreen="true"
+            webkitallowfullscreen="true"
+            msallowfullscreen="true"
+            mozallowfullscreen="true"
+            sandbox="allow-same-origin allow-top-navigation allow-scripts allow-pointer-lock"
+            allow="autoplay; fullscreen *; geolocation; microphone; camera; midi; monetization; xr-spatial-tracking; gamepad; gyroscope; accelerometer; xr; cross-origin-isolated"
+            src="{{cookiecutter.cdn}}empty.html"
+            scrolling="yes">
+        </iframe>
+    </div>
+</div>
+
+<div id="dlg" hidden>
+    <input type="file" id="dlg_multifile" multiple accept="image/*">
+    <label for="dlg_multifile">Select files</label>
+</div>
+
+<div id="pyconsole">
+    <div id="terminal" tabIndex=1 align="left"></div>
+</div>
+
+<script type="application/javascript">
+// ── skyPlay: Web Audio API sound synthesis ────────────────────────────────
+(function(){
+    let _ctx = null;
+    function getCtx(){
+        if(!_ctx) _ctx = new(window.AudioContext||window.webkitAudioContext)();
+        if(_ctx.state==='suspended') _ctx.resume();
+        return _ctx;
+    }
+    function tone(ac, f0, f1, dur, type, vol, atk, rel, t0){
+        const osc = ac.createOscillator(), g = ac.createGain();
+        osc.connect(g); g.connect(ac.destination);
+        osc.type = type;
+        osc.frequency.setValueAtTime(f0, t0);
+        if(f0 !== f1) osc.frequency.linearRampToValueAtTime(f1, t0 + dur);
+        g.gain.setValueAtTime(0, t0);
+        g.gain.linearRampToValueAtTime(vol, t0 + atk);
+        g.gain.setValueAtTime(vol, t0 + dur - rel);
+        g.gain.linearRampToValueAtTime(0, t0 + dur);
+        osc.start(t0); osc.stop(t0 + dur);
+    }
+    window.skyPlay = function(name, volume){
+        try {
+            const ac = getCtx(), t = ac.currentTime, v = volume || 0.5;
+            if      (name==='flap')      { tone(ac,260,520,.07,'square',.25*v,.004,.05,t); }
+            else if (name==='coin')      { tone(ac,880,1320,.10,'sine',.40*v,.004,.08,t); }
+            else if (name==='coin_combo'){ tone(ac,1175,1760,.13,'sine',.45*v,.003,.09,t); }
+            else if (name==='coin_triple'){
+                tone(ac,880,880,.05,'sine',.35*v,.01,.02,t);
+                tone(ac,1175,1175,.06,'sine',.40*v,.01,.02,t+.05);
+                tone(ac,1568,1568,.08,'sine',.45*v,.01,.02,t+.11);
+            }
+            else if (name==='mushroom'){
+                tone(ac,523,523,.08,'triangle',.42*v,.01,.08,t);
+                tone(ac,659,659,.08,'triangle',.42*v,.01,.08,t+.08);
+                tone(ac,784,988,.14,'triangle',.50*v,.01,.08,t+.16);
+            }
+            else if (name==='magnet'){
+                tone(ac,220,660,.10,'triangle',.40*v,.01,.08,t);
+                tone(ac,660,990,.12,'sine',.42*v,.01,.08,t+.10);
+            }
+            else if (name==='slowmo'){
+                tone(ac,880,660,.10,'triangle',.38*v,.01,.08,t);
+                tone(ac,660,440,.10,'triangle',.40*v,.01,.08,t+.10);
+                tone(ac,440,220,.18,'sine',.45*v,.01,.08,t+.20);
+            }
+            else if (name==='thunder'){
+                tone(ac,80,60,.20,'triangle',.38*v,.01,.08,t);
+                tone(ac,60,50,.20,'triangle',.35*v,.01,.08,t+.20);
+                tone(ac,50,40,.40,'sine',.32*v,.01,.08,t+.40);
+            }
+            else if (name==='death')    { tone(ac,330,90,.32,'square',.45*v,.005,.18,t); }
+            else if (name==='gameover'){
+                tone(ac,523,523,.12,'triangle',.35*v,.01,.08,t);
+                tone(ac,440,440,.12,'triangle',.35*v,.01,.08,t+.12);
+                tone(ac,349,349,.14,'triangle',.38*v,.01,.08,t+.24);
+                tone(ac,262,262,.18,'triangle',.42*v,.01,.08,t+.38);
+            }
+        } catch(e){ console.warn('skyPlay error:', e); }
+    };
+})();
+
+// ── Animated stars ────────────────────────────────────────────────────────
+(function(){
+    const ov = document.getElementById('skybit-loading');
+    if(!ov) return;
+    for(let i = 0; i < 70; i++){
+        const s = document.createElement('div');
+        s.className = 'star';
+        const sz = (Math.random() * 2.4 + 0.8).toFixed(1);
+        s.style.cssText =
+            'width:' + sz + 'px;height:' + sz + 'px;' +
+            'top:'  + (Math.random() * 92).toFixed(1) + '%;' +
+            'left:' + (Math.random() * 100).toFixed(1) + '%;' +
+            '--dur:'   + (Math.random() * 3 + 1.4).toFixed(1) + 's;' +
+            '--delay:' + (Math.random() * 4).toFixed(1) + 's;';
+        ov.insertBefore(s, ov.firstChild);
+    }
+})();
+
+// ── Overlay dismiss: satisfies Web Audio + pygbag UME ────────────────────
+(function(){
+    const ov = document.getElementById('skybit-loading');
+    if(!ov) return;
+    function dismiss(e){
+        // Resume Web Audio API context
+        try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if(AudioCtx){
+                const tmp = new AudioCtx();
+                tmp.resume();
+            }
+        } catch(_){}
+        // Signal pygbag media manager
+        if(window.MM) window.MM.UME = true;
+        // Forward gesture to canvas so pygbag event handlers fire
+        const cv = document.getElementById('canvas');
+        if(cv) cv.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));
+        // Fade out
+        ov.style.transition = 'opacity 0.45s ease';
+        ov.style.opacity = '0';
+        setTimeout(function(){ ov.style.display = 'none'; }, 480);
+        ov.removeEventListener('click',    dismiss);
+        ov.removeEventListener('touchend', dismiss);
+    }
+    ov.addEventListener('click',    dismiss);
+    ov.addEventListener('touchend', dismiss);
+})();
+</script>
+
+</body>
+</html>
