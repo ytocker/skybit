@@ -17,11 +17,9 @@ from game import audio
 
 STATE_MENU = 0
 STATE_PLAY = 1
-STATE_NAMEENTRY = 2
 STATE_GAMEOVER = 3
 STATE_PAUSE = 4
 STATE_STATS = 5
-STATE_LEADERBOARD = 6
 
 
 class App:
@@ -36,9 +34,6 @@ class App:
         self.session_best = 0
         self._new_best = False
         self.state = STATE_MENU
-        self._lb_scores: list = []
-        self._lb_loading = False
-        self._lb_player_rank = -1
         self._cloud_phase = 0.0
         self._running = True
         self._stats_t = 0.0
@@ -48,8 +43,6 @@ class App:
         # desktop this never fires (no FINGERDOWN ever arrives).
         self._last_finger_t = -1e9
         self._finger_dedup_window = 0.5
-        self._start_name_entry = False
-        self._final_score = 0
 
     # ── helpers ─────────────────────────────────────────────────────────────
 
@@ -72,11 +65,6 @@ class App:
         elif self.state == STATE_STATS:
             if self._stats_t >= 0.6:
                 self._advance_past_stats()
-        elif self.state == STATE_NAMEENTRY:
-            pass  # JS overlay handles input
-        elif self.state == STATE_LEADERBOARD:
-            if self._cooldown_t <= 0:
-                self.state = STATE_MENU
         elif self.state == STATE_GAMEOVER:
             if self._cooldown_t <= 0:
                 self._restart()
@@ -106,7 +94,6 @@ class App:
     async def async_run(self):
         import asyncio
         self._cooldown_t = 0.0
-        self._start_name_entry = False
         while self._running:
             dt = min(self.clock.tick(FPS) / 1000.0, 1 / 20.0)
             for e in pygame.event.get():
@@ -114,13 +101,9 @@ class App:
             self._update(dt)
             self._render()
             pygame.display.flip()
-            if self._start_name_entry:
-                self._start_name_entry = False
-                await self._on_name_submitted()
-            else:
-                # Yield to the browser's event loop each frame. On native runs
-                # this is a zero-cost no-op between ticks.
-                await asyncio.sleep(0)
+            # Yield to the browser's event loop each frame. On native runs
+            # this is a zero-cost no-op between ticks.
+            await asyncio.sleep(0)
         pygame.quit()
 
     def _handle_event(self, e):
@@ -171,10 +154,6 @@ class App:
             self._stats_t += dt
             if self._stats_t >= 4.5:
                 self._advance_past_stats()
-        elif self.state == STATE_NAMEENTRY:
-            self.world.update(dt)  # world keeps running behind JS overlay
-        elif self.state == STATE_LEADERBOARD:
-            self._cooldown_t = max(0.0, self._cooldown_t - dt)
         elif self.state == STATE_GAMEOVER:
             self.world.update(dt)
             self._cooldown_t = max(0.0, self._cooldown_t - dt)
@@ -189,42 +168,8 @@ class App:
         self._stats_t = 0.0
 
     def _advance_past_stats(self):
-        import sys
-        if self.world.score > 0 and sys.platform == "emscripten":
-            self._final_score = self.world.score
-            self.state = STATE_NAMEENTRY
-            self._stats_t = 0.0
-            self._start_name_entry = True
-        else:
-            self.state = STATE_GAMEOVER
-            self._cooldown_t = 0.5
-
-    async def _on_name_submitted(self):
-        try:
-            from game import leaderboard
-            name = await leaderboard.open_name_entry()
-            if name:
-                await leaderboard.submit(name, self._final_score)
-            self._lb_loading = True
-            self._lb_scores = []
-            self._lb_player_rank = -1
-            scores = await leaderboard.fetch_top10()
-            self._lb_scores = scores
-            self._lb_loading = False
-            if scores:
-                self._lb_player_rank = next(
-                    (i for i, e in enumerate(scores) if e["score"] == self._final_score),
-                    -1,
-                )
-                self.hud.title_t = 0.0
-                self.state = STATE_LEADERBOARD
-                self._cooldown_t = 1.0
-            else:
-                self.state = STATE_GAMEOVER
-                self._cooldown_t = 0.5
-        except Exception:
-            self.state = STATE_GAMEOVER
-            self._cooldown_t = 0.5
+        self.state = STATE_GAMEOVER
+        self._cooldown_t = 0.5
 
     # ── render ──────────────────────────────────────────────────────────────
 
@@ -325,14 +270,6 @@ class App:
             self.hud.draw_pause_overlay(self.screen)
         elif self.state == STATE_STATS:
             self.hud.draw_stats(self.screen, self.world, 1 / 60, self._stats_t)
-        elif self.state == STATE_NAMEENTRY:
-            pass  # JS overlay renders on top of canvas; no pygame overlay needed
-        elif self.state == STATE_LEADERBOARD:
-            self.hud.draw_leaderboard(
-                self.screen, 1 / 60,
-                self._lb_scores, self._lb_player_rank, self._lb_loading,
-                self._cooldown_t,
-            )
         else:  # GAMEOVER
             self.hud.draw_gameover(
                 self.screen, 1 / 60, self.world.score, self._new_best,
