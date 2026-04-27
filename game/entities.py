@@ -438,15 +438,6 @@ class PowerUp:
         EYE_IRIS = (50,  110, 220, 255)
         EYE_PUP  = (12,  18,  60,  255)
 
-        # Pulsing blue additive glow
-        glow_a = int(55 + 40 * math.sin(self.pulse * 2.0))
-        glow_r = 22 + int(3 * math.sin(self.pulse * 1.4))
-        aura = pygame.Surface(((glow_r + 2) * 2, (glow_r + 2) * 2), pygame.SRCALPHA)
-        pygame.draw.circle(aura, (90, 155, 255, glow_a),
-                           (glow_r + 2, glow_r + 2), glow_r + 2)
-        surf.blit(aura, (cx - glow_r - 2, cy - glow_r - 2),
-                  special_flags=pygame.BLEND_ADD)
-
         # Drop shadow
         sh = pygame.Surface((32, 7), pygame.SRCALPHA)
         pygame.draw.ellipse(sh, (0, 0, 0, 70), sh.get_rect())
