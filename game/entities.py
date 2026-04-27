@@ -317,68 +317,67 @@ class PowerUp:
 
 
     def _draw_kfc(self, surf):
+        """Colonel Sanders face badge — simplified KFC logo."""
         cx = int(self.x)
         cy = int(self.y + math.sin(self.pulse * 0.9) * 2.5)
-        r = MUSHROOM_R
+        r = MUSHROOM_R + 2   # slightly larger badge
 
         # Drop shadow
         sh_w = r * 3
         sh = pygame.Surface((sh_w, 8), pygame.SRCALPHA)
         pygame.draw.ellipse(sh, (0, 0, 0, 90), sh.get_rect())
-        surf.blit(sh, (cx - sh_w // 2, cy + r + 4))
+        surf.blit(sh, (cx - sh_w // 2, cy + r + 2))
 
-        # KFC bucket — classic red trapezoid (wider at top, narrower at bottom)
-        bw_t = r + 4   # half-width at top
-        bw_b = r - 1   # half-width at bottom
-        bh   = r + 3   # bucket height
-        bucket_pts = [
-            (cx - bw_t, cy - bh // 2),
-            (cx + bw_t, cy - bh // 2),
-            (cx + bw_b, cy + bh // 2),
-            (cx - bw_b, cy + bh // 2),
-        ]
-        pygame.draw.polygon(surf, (110, 8, 8),   [(p[0]+1, p[1]+1) for p in bucket_pts])  # shadow
-        pygame.draw.polygon(surf, (205, 18, 18), bucket_pts)  # red body
+        # Pulsing red aura (tight, no blob)
+        aura_a = max(0, min(255, int(40 + 25 * math.sin(self.pulse * 2))))
+        aura = pygame.Surface(((r + 4) * 2, (r + 4) * 2), pygame.SRCALPHA)
+        pygame.draw.circle(aura, (220, 15, 15, aura_a), (r + 4, r + 4), r + 4)
+        surf.blit(aura, (cx - r - 4, cy - r - 4))
 
-        # Lighter highlight strip on upper third
-        hi_pts = [
-            (cx - bw_t,     cy - bh // 2),
-            (cx + bw_t,     cy - bh // 2),
-            (cx + bw_t - 1, cy - bh // 2 + 7),
-            (cx - bw_t + 1, cy - bh // 2 + 7),
-        ]
-        pygame.draw.polygon(surf, (245, 48, 35), hi_pts)
+        # Red circular badge background
+        pygame.draw.circle(surf, (90, 4, 4),    (cx, cy), r + 2)  # dark outline
+        pygame.draw.circle(surf, (210, 18, 18), (cx, cy), r + 1)
+        pygame.draw.circle(surf, (228, 22, 22), (cx, cy), r)
 
-        # White "KFC" stripe across the middle of the bucket
-        stripe_y = cy + 1
-        pygame.draw.rect(surf, (255, 255, 255),
-                         (cx - bw_t + 2, stripe_y, (bw_t - 1) * 2, 4))
+        # White hair — two puffy lobes above the face
+        hair_y = cy - r + 3
+        pygame.draw.circle(surf, (248, 248, 248), (cx - 4, hair_y), 6)
+        pygame.draw.circle(surf, (248, 248, 248), (cx + 4, hair_y), 6)
+        pygame.draw.ellipse(surf, (248, 248, 248),
+                            (cx - 8, hair_y - 3, 16, 8))
 
-        # Bucket outline
-        pygame.draw.polygon(surf, (80, 5, 5), bucket_pts, 1)
+        # Cream face oval
+        pygame.draw.ellipse(surf, (245, 225, 200),
+                            (cx - 8, cy - 7, 16, 14))
 
-        # Lid — slightly wider flat rectangle on top
-        lid_w = bw_t + 2
-        lid_rect = pygame.Rect(cx - lid_w, cy - bh // 2 - 4, lid_w * 2, 5)
-        pygame.draw.rect(surf, (220, 35, 22), lid_rect, border_radius=2)
-        pygame.draw.rect(surf, (255, 100, 85),
-                         (lid_rect.x + 2, lid_rect.y + 1, lid_rect.width - 4, 1))
+        # Black round glasses — two circles + bridge
+        pygame.draw.circle(surf, (20, 20, 20), (cx - 4, cy - 2), 3)
+        pygame.draw.circle(surf, (20, 20, 20), (cx + 4, cy - 2), 3)
+        # Lens glint
+        pygame.draw.circle(surf, (80, 80, 80), (cx - 5, cy - 3), 2)
+        pygame.draw.circle(surf, (80, 80, 80), (cx + 3, cy - 3), 2)
+        # Bridge between lenses
+        pygame.draw.line(surf, (60, 60, 60), (cx - 1, cy - 2), (cx + 1, cy - 2), 1)
 
-        # Chicken drumstick peeking out from the top of the bucket
-        drum_cx = cx + 4
-        drum_cy = cy - bh // 2 - 5
-        pygame.draw.ellipse(surf, (210, 140, 42),
-                            (drum_cx - 6, drum_cy - 4, 12, 9))
-        pygame.draw.circle(surf, (175, 105, 22), (drum_cx, drum_cy), 4)
-        pygame.draw.line(surf, (148, 82, 18),
-                         (drum_cx, drum_cy + 3),
-                         (drum_cx - 2, drum_cy + 8), 2)
+        # Black string tie — vertical line from chin
+        pygame.draw.line(surf, (15, 15, 15), (cx, cy + 2), (cx, cy + 7), 1)
+        pygame.draw.circle(surf, (15, 15, 15), (cx, cy + 2), 2)  # knot
 
-        # Animated golden shimmer on the drumstick
-        pulse_a = max(0, min(255, int(140 + 90 * math.sin(self.pulse * 2.5))))
-        chip = pygame.Surface((10, 6), pygame.SRCALPHA)
-        pygame.draw.ellipse(chip, (255, 225, 130, pulse_a), chip.get_rect())
-        surf.blit(chip, (drum_cx - 5, drum_cy - 5))
+        # White collar / shirt bottom — two angled white wedges
+        pygame.draw.polygon(surf, (245, 245, 245),
+                            [(cx - 6, cy + 5), (cx - 2, cy + 2), (cx, cy + 7)])
+        pygame.draw.polygon(surf, (245, 245, 245),
+                            [(cx + 6, cy + 5), (cx + 2, cy + 2), (cx, cy + 7)])
+
+        # Red accent on shirt (below collar)
+        pygame.draw.ellipse(surf, (210, 18, 18),
+                            (cx - 7, cy + 6, 14, 5))
+
+        # Subtle face sheen (animated)
+        sheen_a = max(0, min(255, int(60 + 40 * math.sin(self.pulse * 1.8))))
+        sheen = pygame.Surface((10, 4), pygame.SRCALPHA)
+        pygame.draw.ellipse(sheen, (255, 240, 220, sheen_a), sheen.get_rect())
+        surf.blit(sheen, (cx - 5, cy - 6))
 
 
 # Back-compat alias — some callers (e.g. snapshot/playtest scripts) still say Mushroom.
