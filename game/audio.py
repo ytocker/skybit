@@ -144,18 +144,43 @@ else:
             data,
         ))
 
-    def _shape(shape: str, phase: float) -> float:
-        x = math.sin(2 * math.pi * phase)
-        if shape == "sine":
-            return x
+    _NYQUIST = SAMPLE_RATE / 2
+    _TWO_PI = 2 * math.pi
+
+    def _osc(shape: str, phase: float, f: float) -> float:
+        """Band-limited oscillator — mirrors Web Audio OscillatorNode.
+
+        `phase` is in cycles (already integrated f/sr per sample).
+        `f` is the instantaneous frequency in Hz, used to clip harmonics that
+        would otherwise alias above Nyquist.
+        """
+        if shape == "sine" or f <= 0:
+            return math.sin(_TWO_PI * phase)
         if shape == "square":
-            return 1.0 if x > 0 else -1.0
+            # square = (4/π) Σ_{k=1,3,5,...<Nyquist/f} sin(2π·k·phase)/k
+            s = 0.0
+            k = 1
+            while k * f < _NYQUIST:
+                s += math.sin(_TWO_PI * k * phase) / k
+                k += 2
+            return (4.0 / math.pi) * s
         if shape == "triangle":
-            p = phase - math.floor(phase)
-            return 4 * abs(p - 0.5) - 1
-        return x
+            # triangle = (8/π²) Σ_{k=1,3,5,...} (-1)^((k-1)/2) sin(2π·k·phase)/k²
+            s = 0.0
+            k = 1
+            sign = 1.0
+            while k * f < _NYQUIST:
+                s += sign * math.sin(_TWO_PI * k * phase) / (k * k)
+                sign = -sign
+                k += 2
+            return (8.0 / (math.pi ** 2)) * s
+        return math.sin(_TWO_PI * phase)
 
     def _envelope(i: int, n: int, attack_s: float = 0.008, release_s: float = 0.12) -> float:
+        """Linear attack → hold → linear release, matching Web Audio gain ramp:
+            setValueAtTime(0, 0); linearRampToValueAtTime(vol, atk);
+            setValueAtTime(vol, dur-rel); linearRampToValueAtTime(0, dur).
+        """
         a = max(1, int(attack_s * SAMPLE_RATE))
         r = max(1, int(release_s * SAMPLE_RATE))
         if i < a:
@@ -170,12 +195,12 @@ else:
         n = int(duration_s * SAMPLE_RATE)
         samples: list[int] = []
         phase = 0.0
+        df = (f_end - f_start) / max(1, n)  # linearRampToValueAtTime ≡ linear in i
         for i in range(n):
-            t = i / n
-            f = f_start + (f_end - f_start) * t
+            f = f_start + df * i
             phase += f / SAMPLE_RATE
             env = _envelope(i, n, attack_s, release_s)
-            s = _shape(shape, phase) * env * volume
+            s = _osc(shape, phase, f) * env * volume
             samples.append(max(-32768, min(32767, int(s * 32767))))
         return _wav_bytes(samples)
 
@@ -184,12 +209,12 @@ else:
         for dur, f0, f1, shape, vol in steps:
             n = int(dur * SAMPLE_RATE)
             phase = 0.0
+            df = (f1 - f0) / max(1, n)
             for i in range(n):
-                t = i / max(1, n)
-                f = f0 + (f1 - f0) * t
+                f = f0 + df * i
                 phase += f / SAMPLE_RATE
                 env = _envelope(i, n, 0.01, 0.08)
-                s = _shape(shape, phase) * env * vol
+                s = _osc(shape, phase, f) * env * vol
                 samples.append(max(-32768, min(32767, int(s * 32767))))
         return _wav_bytes(samples)
 

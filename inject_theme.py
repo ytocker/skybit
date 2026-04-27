@@ -495,6 +495,17 @@ body   { background: #0d0820 !important; }
                 tone(ac,570,570,.07,'square',.42*v,.01,.08,t+.07);
                 tone(ac,760,950,.18,'triangle',.48*v,.01,.08,t+.14);
             }
+            else if (name === 'poof') {
+                tone(ac,420,260,.03,'triangle',.58*v,.01,.08,t);
+                tone(ac,260,150,.05,'square',  .44*v,.01,.08,t+.03);
+                tone(ac,150, 65,.10,'sine',    .28*v,.01,.08,t+.08);
+            }
+            else if (name === 'ghost') {
+                tone(ac,1200, 900,.12,'sine',    .30*v,.01,.08,t);
+                tone(ac, 900, 600,.12,'sine',    .28*v,.01,.08,t+.12);
+                tone(ac, 600, 800,.18,'triangle',.22*v,.01,.08,t+.24);
+                tone(ac, 800,1100,.22,'sine',    .26*v,.01,.08,t+.42);
+            }
         } catch (e) { console.warn('skyPlay error:', e); }
     };
 
