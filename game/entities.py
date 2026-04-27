@@ -535,58 +535,68 @@ class PowerUp:
         cx = int(self.x)
         cy = int(self.y + math.sin(self.pulse * 1.2) * 2)
 
-        # Tiny parrot silhouette in the centre — simplified macaw face/body.
         BIRD_BODY  = (240,  55,  55)
         BIRD_BELLY = (255, 130,  90)
         BIRD_BEAK  = (255, 195,  60)
         BIRD_WING  = ( 40, 100, 255)
         BIRD_OUT   = ( 80,  10,  18)
         SHADES     = ( 20,  18,  30)
+        EYE_W      = (252, 252, 255)
+        RAY_HI     = ( 50, 220, 100)
+        RAY_OUT    = ( 28, 160,  70)
 
-        # Body ellipse + 1px outline
-        body_rect = pygame.Rect(cx - 8, cy - 6, 16, 14)
+        # Eight short green rays radiating outward — "powering up" sparkle.
+        # The pulse drives a length oscillation so the badge looks alive.
+        ray_pulse = 1.0 + 0.18 * math.sin(self.pulse * 2.6)
+        r0 = 14.0
+        r1 = 18.0 * ray_pulse
+        for i in range(8):
+            ang = i * (math.tau / 8) - math.pi / 2 + math.sin(self.pulse * 0.8) * 0.05
+            x0 = cx + math.cos(ang) * r0
+            y0 = cy + math.sin(ang) * r0
+            x1 = cx + math.cos(ang) * r1
+            y1 = cy + math.sin(ang) * r1
+            pygame.draw.line(surf, RAY_OUT, (int(x0), int(y0)), (int(x1), int(y1)), 4)
+            pygame.draw.line(surf, RAY_HI,  (int(x0), int(y0)), (int(x1), int(y1)), 2)
+
+        # Parrot body — round, facing right. Belly is the orange splash on
+        # the lower-front; tail flares back to the LEFT.
+        body_rect = pygame.Rect(cx - 9, cy - 6, 18, 14)
         pygame.draw.ellipse(surf, BIRD_OUT,  body_rect.inflate(2, 2))
         pygame.draw.ellipse(surf, BIRD_BODY, body_rect)
-        # Belly highlight
-        pygame.draw.ellipse(surf, BIRD_BELLY, pygame.Rect(cx - 4, cy - 1, 9, 6))
-        # Wing tick (blue patch)
-        pygame.draw.circle(surf, BIRD_OUT,  (cx + 2, cy + 1), 4)
-        pygame.draw.circle(surf, BIRD_WING, (cx + 2, cy + 1), 3)
-        # Aviator sunglasses bar across the eye line
-        pygame.draw.rect(surf, SHADES, (cx - 6, cy - 4, 11, 3), border_radius=1)
-        # Beak hooked downward
-        pygame.draw.polygon(surf, BIRD_OUT,
-                            [(cx - 9, cy - 1), (cx - 12, cy + 1), (cx - 8, cy + 2)])
-        pygame.draw.polygon(surf, BIRD_BEAK,
-                            [(cx - 9, cy - 1), (cx - 11, cy + 1), (cx - 8, cy + 1)])
-
-        # Two upward green chevrons flanking the bird, oscillating ±2px.
-        ARROW_HI  = (50, 220, 100)
-        ARROW_OUT = (28, 160,  70)
-        oy = int(math.sin(self.pulse * 2.4) * 2)
-        for sign in (-1, 1):
-            ax = cx + sign * 14
-            ay = cy + oy
-            outline = [
-                (ax,     ay - 9),
-                (ax + 6, ay - 2),
-                (ax + 3, ay - 2),
-                (ax + 3, ay + 6),
-                (ax - 3, ay + 6),
-                (ax - 3, ay - 2),
-                (ax - 6, ay - 2),
-            ]
-            pygame.draw.polygon(surf, ARROW_OUT, outline)
-            inner = [
-                (ax,     ay - 7),
-                (ax + 4, ay - 3),
-                (ax + 2, ay - 3),
-                (ax + 2, ay + 5),
-                (ax - 2, ay + 5),
-                (ax - 2, ay - 3),
-                (ax - 4, ay - 3),
-            ]
-            pygame.draw.polygon(surf, ARROW_HI, inner)
+        pygame.draw.ellipse(surf, BIRD_BELLY,
+                            pygame.Rect(cx - 4, cy + 1, 11, 6))
+        # Tail — left-pointing wedge
+        tail = [(cx - 8, cy - 1), (cx - 12, cy - 3), (cx - 13, cy + 3), (cx - 8, cy + 2)]
+        pygame.draw.polygon(surf, BIRD_OUT, tail)
+        pygame.draw.polygon(surf, BIRD_BODY,
+                            [(cx - 8, cy), (cx - 11, cy - 1), (cx - 11, cy + 2), (cx - 8, cy + 1)])
+        # Wing — blue triangle on the side
+        wing = [(cx - 2, cy), (cx + 6, cy + 2), (cx - 1, cy + 6)]
+        pygame.draw.polygon(surf, BIRD_OUT, wing)
+        pygame.draw.polygon(surf, BIRD_WING,
+                            [(cx - 1, cy + 1), (cx + 4, cy + 2), (cx - 1, cy + 5)])
+        # Aviator sunglasses bar — black with two tiny pupil dots
+        pygame.draw.rect(surf, SHADES, (cx + 1, cy - 5, 8, 4), border_radius=1)
+        pygame.draw.circle(surf, EYE_W, (cx + 3, cy - 3), 1)
+        pygame.draw.circle(surf, EYE_W, (cx + 7, cy - 3), 1)
+        # Beak — short hooked macaw beak pointing right-down
+        beak_o = [
+            (cx + 8,  cy + 0),
+            (cx + 12, cy + 2),
+            (cx + 11, cy + 5),
+            (cx + 9,  cy + 5),
+            (cx + 7,  cy + 3),
+        ]
+        pygame.draw.polygon(surf, BIRD_OUT, beak_o)
+        beak_in = [
+            (cx + 9,  cy + 1),
+            (cx + 11, cy + 2),
+            (cx + 10, cy + 4),
+            (cx + 9,  cy + 4),
+            (cx + 8,  cy + 3),
+        ]
+        pygame.draw.polygon(surf, BIRD_BEAK, beak_in)
 
 
 # Back-compat alias — some callers (e.g. snapshot/playtest scripts) still say Mushroom.

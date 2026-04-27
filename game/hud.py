@@ -277,37 +277,42 @@ def _draw_buff_icon(surf, rect, kind):
             pygame.draw.circle(mg, (50, 110, 220, 255),  (ex + 1, gcy), 2)
         surf.blit(mg, (cx - gcx, cy - gcy - 2))
     elif kind == "grow":
-        # Mini parrot silhouette flanked by two upward green chevrons.
+        # Parrot facing right with green sparkle rays around it ("powering up").
         BIRD_BODY = (240,  55,  55)
+        BIRD_BELLY= (255, 130,  90)
         BIRD_WING = ( 40, 100, 255)
         BIRD_BEAK = (255, 195,  60)
         BIRD_OUT  = ( 80,  10,  18)
         SHADES    = ( 20,  18,  30)
-        ARROW_HI  = ( 50, 220, 100)
-        ARROW_OUT = ( 28, 160,  70)
+        RAY_HI    = ( 50, 220, 100)
+        RAY_OUT   = ( 28, 160,  70)
 
-        # Bird body (small ellipse)
-        pygame.draw.ellipse(surf, BIRD_OUT,  (cx - 5, cy - 4, 10, 9))
-        pygame.draw.ellipse(surf, BIRD_BODY, (cx - 4, cy - 3, 8, 7))
+        # Eight short green rays around the bird
+        for i in range(8):
+            ang = i * (math.tau / 8) - math.pi / 2
+            x0 = cx + math.cos(ang) * 8.5
+            y0 = cy + math.sin(ang) * 8.5
+            x1 = cx + math.cos(ang) * 11.0
+            y1 = cy + math.sin(ang) * 11.0
+            pygame.draw.line(surf, RAY_OUT, (int(x0), int(y0)), (int(x1), int(y1)), 3)
+            pygame.draw.line(surf, RAY_HI,  (int(x0), int(y0)), (int(x1), int(y1)), 1)
+
+        # Parrot body — round, facing right
+        pygame.draw.ellipse(surf, BIRD_OUT,  (cx - 6, cy - 4, 12, 9))
+        pygame.draw.ellipse(surf, BIRD_BODY, (cx - 5, cy - 3, 10, 7))
+        # Belly
+        pygame.draw.ellipse(surf, BIRD_BELLY, (cx - 2, cy, 6, 3))
+        # Tail wedge to the left
+        pygame.draw.polygon(surf, BIRD_OUT,
+                            [(cx - 5, cy - 1), (cx - 8, cy - 2), (cx - 8, cy + 2), (cx - 5, cy + 2)])
+        # Blue wing
+        pygame.draw.polygon(surf, BIRD_WING,
+                            [(cx, cy), (cx + 3, cy + 1), (cx, cy + 3)])
         # Sunglasses bar
-        pygame.draw.rect(surf, SHADES, (cx - 4, cy - 3, 7, 2))
-        # Wing tick
-        pygame.draw.circle(surf, BIRD_WING, (cx + 1, cy + 1), 2)
+        pygame.draw.rect(surf, SHADES, (cx, cy - 3, 5, 2))
         # Beak
         pygame.draw.polygon(surf, BIRD_BEAK,
-                            [(cx - 5, cy - 1), (cx - 7, cy), (cx - 5, cy + 1)])
-        # Two upward chevrons
-        for sign in (-1, 1):
-            ax = cx + sign * 8
-            ay = cy
-            outline = [(ax, ay - 6), (ax + 4, ay - 2), (ax + 2, ay - 2),
-                       (ax + 2, ay + 4), (ax - 2, ay + 4), (ax - 2, ay - 2),
-                       (ax - 4, ay - 2)]
-            pygame.draw.polygon(surf, ARROW_OUT, outline)
-            inner = [(ax, ay - 5), (ax + 3, ay - 2), (ax + 1, ay - 2),
-                     (ax + 1, ay + 3), (ax - 1, ay + 3), (ax - 1, ay - 2),
-                     (ax - 3, ay - 2)]
-            pygame.draw.polygon(surf, ARROW_HI, inner)
+                            [(cx + 5, cy - 1), (cx + 8, cy), (cx + 5, cy + 2)])
 
 
 class PauseButton:
