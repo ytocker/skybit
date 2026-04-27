@@ -300,15 +300,6 @@ class PowerUp:
         pygame.draw.ellipse(sh, (0, 0, 0, 130), sh.get_rect())
         surf.blit(sh, (cx - outer_r - outer_r // 2, leg_bot + 4))
 
-        # Electric-blue additive glow halo
-        glow_a = int(65 + 35 * math.sin(self.pulse * 1.4))
-        glow_r = outer_r + 7 + int(2 * math.sin(self.pulse))
-        aura = pygame.Surface(((glow_r + 2) * 2, (glow_r + 2) * 2), pygame.SRCALPHA)
-        pygame.draw.circle(aura, (55, 160, 255, glow_a),
-                           (glow_r + 2, glow_r + 2), glow_r + 2)
-        surf.blit(aura, (cx - glow_r - 2, arch_cy - glow_r - 2),
-                  special_flags=pygame.BLEND_ADD)
-
         # Build the horseshoe on an SRCALPHA scratch surface so the hollow
         # can be punched cleanly with alpha=0 overdraw.
         sz  = 42
