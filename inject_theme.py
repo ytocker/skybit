@@ -69,6 +69,7 @@ NAME_OVERLAY = """
              L1040,110 L1120,138 L1200,105 L1280,128 L1360,112 L1440,125 L1440,200 Z"
           fill="#0a1208" opacity="0.75"/>
   </svg>
+  <p class="ne-celebrate">YOU MADE THE TOP 10!</p>
   <p class="ne-title">ENTER YOUR NAME</p>
   <p class="ne-sub">up to 10 characters</p>
   <input id="name-input" maxlength="10" autocomplete="off" spellcheck="false"/>
@@ -197,6 +198,23 @@ body   { background: #0d0820 !important; }
     overflow: hidden;
     font-family: Arial, sans-serif;
     -webkit-tap-highlight-color: transparent;
+}
+.ne-celebrate {
+    font-family: Arial Black, Arial, sans-serif;
+    font-size: clamp(16px, 4.4vw, 22px);
+    font-weight: 900;
+    letter-spacing: 3px;
+    color: #ffd84a;
+    margin: 0 0 18px;
+    text-shadow:
+        0 0 12px rgba(255, 216, 74, 0.55),
+        0 2px 0 #a82010,
+        0 4px 8px rgba(0, 0, 0, 0.7);
+    animation: pulse-btn 1.8s ease-in-out infinite;
+    pointer-events: none;
+    text-transform: uppercase;
+    position: relative;
+    z-index: 1;
 }
 .ne-title {
     font-family: Arial Black, Arial, sans-serif;
