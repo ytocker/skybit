@@ -219,17 +219,30 @@ _CRISPY_SPOT  = (125,  68,  12)
 
 
 def _build_fried_wing(angle_deg):
-    w = pygame.Surface((54, 54), pygame.SRCALPHA)
-    pygame.draw.polygon(w, (0, 0, 0, 110),
-                        [(24, 26), (48, 12), (52, 30), (36, 46), (18, 40)])
-    pts = [(24, 24), (46, 11), (50, 28), (34, 44), (18, 38)]
-    pygame.draw.polygon(w, _CRISPY_GOLD, pts)
-    pygame.draw.polygon(w, _CRISPY_DARK, [(24, 24), (34, 44), (18, 38)])
-    for px, py, pr in ((38, 18, 2), (46, 23, 2), (28, 34, 2), (42, 30, 2)):
+    w = pygame.Surface((62, 62), pygame.SRCALPHA)
+    # Drop shadow
+    pygame.draw.polygon(w, (0, 0, 0, 120),
+                        [(22, 28), (52, 10), (58, 32), (40, 50), (16, 44)])
+    # Dark crust outline layer
+    pygame.draw.polygon(w, _CRISPY_DARK,
+                        [(22, 26), (50,  9), (56, 30), (38, 48), (16, 42)])
+    # Main batter
+    pygame.draw.polygon(w, _CRISPY_GOLD,
+                        [(22, 24), (48,  8), (54, 28), (36, 46), (16, 40)])
+    # Underside shadow
+    pygame.draw.polygon(w, _CRISPY_DARK, [(22, 24), (36, 46), (16, 40)])
+    # Bright ridge highlight
+    _aaellipse(w, _CRISPY_LIGHT, (38, 22), 12, 6)
+    # Dense crispy spots on wing
+    for px, py, pr in ((40, 14, 3), (50, 20, 3), (44, 28, 3),
+                       (30, 18, 2), (54, 28, 2), (34, 36, 2), (46, 34, 2)):
         pygame.draw.circle(w, _CRISPY_SPOT, (px, py), pr)
-    pygame.draw.line(w, _CRISPY_DARK,  (26, 25), (44, 17), 2)
-    pygame.draw.line(w, _CRISPY_DARK,  (28, 32), (46, 26), 2)
-    pygame.draw.line(w, _CRISPY_LIGHT, (25, 24), (43, 15), 1)
+    # Crackle lines
+    pygame.draw.line(w, _CRISPY_DARK,  (25, 27), (47, 15), 2)
+    pygame.draw.line(w, _CRISPY_DARK,  (28, 34), (50, 24), 2)
+    pygame.draw.line(w, _CRISPY_DARK,  (30, 40), (52, 32), 1)
+    pygame.draw.line(w, _CRISPY_LIGHT, (24, 25), (46, 13), 1)
+    pygame.draw.line(w, _CRISPY_LIGHT, (27, 32), (49, 22), 1)
     return pygame.transform.rotate(w, angle_deg)
 
 
@@ -271,9 +284,9 @@ def _build_fried_frame(wing_angle_deg):
     pygame.draw.ellipse(sheen, (255, 225, 145, 130), sheen.get_rect())
     surf.blit(sheen, (17, 20))
 
-    # Wing
+    # Wing — larger, anchored higher so it fans out prominently
     wing = _build_fried_wing(wing_angle_deg)
-    surf.blit(wing, wing.get_rect(center=(34, 27)).topleft)
+    surf.blit(wing, wing.get_rect(center=(32, 24)).topleft)
 
     # Head — slightly bigger
     _aaellipse(surf, ( 95,  50,  6),   (49, 23), 13, 12)
@@ -295,14 +308,11 @@ def _build_fried_frame(wing_angle_deg):
     pygame.draw.line(surf, (255, 230, 150), (55, 22), (59, 24), 1)
     pygame.draw.line(surf, BIRD_BEAK_D,    (52, 24), (58, 25), 1)
 
-    # Drumstick legs — thicker, longer, proper bone tips
-    for lx, ly, ex, ey in ((27, 46, 20, 56), (37, 46, 44, 56)):
-        pygame.draw.line(surf, _CRISPY_DARK,  (lx,   ly  ), (ex,   ey  ), 6)
-        pygame.draw.line(surf, _CRISPY_GOLD,  (lx-1, ly-1), (ex-1, ey-1), 4)
-        pygame.draw.line(surf, _CRISPY_LIGHT, (lx-2, ly-2), (ex-2, ey-2), 1)
-        pygame.draw.circle(surf, _CRISPY_GOLD, (ex, ey), 5)
-        pygame.draw.circle(surf, _CRISPY_DARK, (ex, ey), 5, 1)
-        pygame.draw.circle(surf, WHITE,        (ex, ey), 2)  # bone tip
+    # Simple tucked legs (original style)
+    for lx, ly, ex, ey in ((28, 44, 24, 51), (34, 44, 38, 51)):
+        pygame.draw.line(surf, _CRISPY_DARK, (lx, ly), (ex, ey), 3)
+        pygame.draw.circle(surf, _CRISPY_GOLD, (ex, ey), 3)
+        pygame.draw.circle(surf, _CRISPY_DARK, (ex, ey), 3, 1)
 
     return surf
 
