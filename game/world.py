@@ -14,7 +14,7 @@ from game.config import (
     BIRD_X, BIRD_R, COIN_R, MUSHROOM_R,
     MUSHROOM_CHANCE, MUSHROOM_COOLDOWN,
     TRIPLE_DURATION, MAGNET_DURATION, MAGNET_RADIUS,
-    SLOWMO_DURATION, SLOWMO_SCALE,
+    SLOWMO_DURATION, SLOWMO_SCALE, KFC_DURATION,
     POWERUP_WEIGHTS, COMBO_WINDOW,
     COIN_RUSH_INTERVAL, COIN_RUSH_GAP_BOOST, COIN_RUSH_COINS,
 )
@@ -55,6 +55,7 @@ class World:
         self.triple_timer = 0.0
         self.magnet_timer = 0.0
         self.slowmo_timer = 0.0
+        self.kfc_timer    = 0.0
         self.mushroom_cooldown = 0.0
 
         # Coin-rush counter: increments each spawn; every Nth pipe is a rush.
@@ -65,7 +66,7 @@ class World:
         self.pillars_passed = 0
         self.time_alive = 0.0
         self.near_misses = 0
-        self.powerups_picked = {"triple": 0, "magnet": 0, "slowmo": 0}
+        self.powerups_picked = {"triple": 0, "magnet": 0, "slowmo": 0, "kfc": 0}
         # Transient flag so near-miss detection fires once per pillar.
         self._near_miss_flags: dict[int, bool] = {}
 
@@ -330,6 +331,9 @@ class World:
                 self.magnet_timer = max(0.0, self.magnet_timer - dt)
             if self.slowmo_timer > 0:
                 self.slowmo_timer = max(0.0, self.slowmo_timer - dt)
+            if self.kfc_timer > 0:
+                self.kfc_timer = max(0.0, self.kfc_timer - dt)
+            self.bird.kfc_active = self.kfc_timer > 0
             if self.mushroom_cooldown > 0:
                 self.mushroom_cooldown -= dt
             if self.combo_timer > 0:
@@ -516,6 +520,8 @@ class World:
             self._activate_magnet(m)
         elif m.kind == "slowmo":
             self._activate_slowmo(m)
+        elif m.kind == "kfc":
+            self._activate_kfc(m)
 
     def _pickup_burst(self, m, colors, n=30, speed_hi=320, grav=150):
         for _ in range(n):
@@ -558,6 +564,17 @@ class World:
         self._pickup_burst(m, ((180, 100, 255), (120, 60, 200), WHITE, UI_CREAM))
         self.float_texts.append(FloatText(
             "SLOW-MO!", m.x, m.y - 22, (200, 140, 255), size=24, life=1.3, vy=-30,
+        ))
+
+    def _activate_kfc(self, m):
+        self.kfc_timer = KFC_DURATION
+        self.bird.kfc_active = True
+        self.shake_mag = max(self.shake_mag, 5.0)
+        self.shake_t   = max(self.shake_t,   0.4)
+        audio.play_mushroom()
+        self._pickup_burst(m, ((210, 138, 42), (238, 178, 72), (148, 82, 18), WHITE), n=40)
+        self.float_texts.append(FloatText(
+            "FINGER LICKIN'!", m.x, m.y - 22, (230, 160, 40), size=22, life=1.6, vy=-28,
         ))
 
     # ── utility ──────────────────────────────────────────────────────────────

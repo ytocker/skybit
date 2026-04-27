@@ -208,3 +208,97 @@ def get_parrot(frame_idx: int, tilt_deg: float) -> pygame.Surface:
         s = pygame.transform.rotozoom(FRAMES[frame_idx], key[1], 1.0)
         _rot_cache[key] = s
     return s
+
+
+# ── Fried-chicken variant (KFC powerup) ──────────────────────────────────────
+
+_CRISPY_GOLD  = (210, 138,  42)
+_CRISPY_DARK  = (148,  82,  18)
+_CRISPY_LIGHT = (238, 178,  72)
+_CRISPY_SPOT  = (125,  68,  12)
+
+
+def _build_fried_wing(angle_deg):
+    w = pygame.Surface((50, 50), pygame.SRCALPHA)
+    pygame.draw.polygon(w, (0, 0, 0, 110),
+                        [(24, 26), (46, 14), (50, 30), (34, 44), (18, 40)])
+    pts = [(24, 24), (44, 13), (48, 28), (32, 42), (18, 36)]
+    pygame.draw.polygon(w, _CRISPY_GOLD, pts)
+    pygame.draw.polygon(w, _CRISPY_DARK, [(24, 24), (32, 42), (18, 36)])
+    for px, py, pr in ((36, 20, 2), (44, 22, 2), (28, 34, 2)):
+        pygame.draw.circle(w, _CRISPY_SPOT, (px, py), pr)
+    pygame.draw.line(w, _CRISPY_DARK, (26, 25), (42, 18), 2)
+    pygame.draw.line(w, _CRISPY_DARK, (28, 30), (44, 25), 2)
+    pygame.draw.line(w, _CRISPY_LIGHT, (25, 25), (41, 15), 1)
+    return pygame.transform.rotate(w, angle_deg)
+
+
+def _build_fried_frame(wing_angle_deg):
+    surf = pygame.Surface((SPRITE_W, SPRITE_H), pygame.SRCALPHA)
+
+    # Tail — golden-brown crispy wedges instead of flowing feathers
+    for i, c in enumerate([(148, 82, 18), (178, 108, 28), (208, 138, 42), (228, 162, 58)]):
+        pts = [(2 + i*3, 26 + i*2), (14 + i, 24 + i),
+               (20 + i, 30 + i*2), (6 + i*3, 36 + i*2)]
+        pygame.draw.polygon(surf, c, pts)
+    pygame.draw.line(surf, _CRISPY_DARK, (4, 27), (18, 31), 1)
+    pygame.draw.line(surf, _CRISPY_DARK, (6, 33), (20, 35), 1)
+
+    # Body shadow + base
+    _aaellipse(surf, (100, 55, 8),   (34, 35), 19, 14)
+    _aaellipse(surf, _CRISPY_GOLD,   (32, 32), 19, 14)
+    _aaellipse(surf, _CRISPY_LIGHT,  (30, 29), 13,  8)
+    _aaellipse(surf, (242, 190, 80), (28, 38), 12,  6)
+    for px, py, pr in ((26, 32, 2), (38, 28, 2), (32, 38, 2), (36, 34, 1)):
+        pygame.draw.circle(surf, _CRISPY_SPOT, (px, py), pr)
+    sheen = pygame.Surface((28, 6), pygame.SRCALPHA)
+    pygame.draw.ellipse(sheen, (255, 225, 155, 120), sheen.get_rect())
+    surf.blit(sheen, (22, 21))
+
+    # Wing (fried variant)
+    wing = _build_fried_wing(wing_angle_deg)
+    surf.blit(wing, wing.get_rect(center=(34, 28)).topleft)
+
+    # Head
+    _aaellipse(surf, (118, 65, 10),  (48, 23), 12, 11)
+    _aaellipse(surf, _CRISPY_GOLD,   (47, 21), 12, 11)
+    _aaellipse(surf, _CRISPY_LIGHT,  (44, 24),  4,  3)
+    _aaellipse(surf, (232, 172, 68), (46, 16),  7,  3)
+    for px, py, pr in ((50, 18, 2), (44, 22, 1)):
+        pygame.draw.circle(surf, _CRISPY_SPOT, (px, py), pr)
+
+    # Round eyes (no sunglasses — it's a chicken now)
+    pygame.draw.circle(surf, WHITE,       (51, 20), 4)
+    pygame.draw.circle(surf, (15, 15, 25),(52, 20), 2)
+    pygame.draw.circle(surf, WHITE,       (53, 18), 1)   # glint
+
+    # Beak unchanged
+    beak_pts = [(55, 21), (61, 24), (58, 28), (52, 26)]
+    pygame.draw.polygon(surf, BIRD_BEAK,   beak_pts)
+    pygame.draw.polygon(surf, BIRD_BEAK_D, beak_pts, 1)
+    pygame.draw.line(surf, (255, 230, 150), (55, 22), (59, 24), 1)
+    pygame.draw.line(surf, BIRD_BEAK_D,    (52, 24), (58, 25), 1)
+
+    # Drumstick legs
+    for lx, ly, ex, ey in ((28, 44, 24, 51), (34, 44, 38, 51)):
+        pygame.draw.line(surf, _CRISPY_DARK, (lx, ly), (ex, ey), 3)
+        pygame.draw.circle(surf, _CRISPY_GOLD, (ex, ey), 3)
+        pygame.draw.circle(surf, _CRISPY_DARK, (ex, ey), 3, 1)
+
+    return surf
+
+
+KFC_FRAMES: list[pygame.Surface] = [_add_outline(_build_fried_frame(a)) for a in _WING_ANGLES]
+
+_kfc_rot_cache: dict = {}
+
+
+def get_fried_parrot(frame_idx: int, tilt_deg: float) -> pygame.Surface:
+    """Return rotated fried-chicken parrot, cached by (frame, rounded-angle)."""
+    frame_idx = frame_idx % len(KFC_FRAMES)
+    key = (frame_idx, int(round(tilt_deg / 3.0)) * 3)
+    s = _kfc_rot_cache.get(key)
+    if s is None:
+        s = pygame.transform.rotozoom(KFC_FRAMES[frame_idx], key[1], 1.0)
+        _kfc_rot_cache[key] = s
+    return s

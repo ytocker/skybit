@@ -4,7 +4,7 @@ import os
 import random
 import pygame
 
-from game.config import W, H, TRIPLE_DURATION, MAGNET_DURATION, SLOWMO_DURATION
+from game.config import W, H, TRIPLE_DURATION, MAGNET_DURATION, SLOWMO_DURATION, KFC_DURATION
 from game.draw import (
     rounded_rect, rounded_rect_grad, lerp_color,
     UI_SCORE, UI_GOLD, UI_ORANGE, UI_SHADOW, UI_CREAM, UI_RED,
@@ -178,6 +178,18 @@ def _draw_buff_icon(surf, rect, kind):
         pygame.draw.line(surf, (255, 230, 150), (cx, cy - 4), (cx, cy + 4), 2)
         pygame.draw.rect(surf, (120, 60, 30), (cx - 7, cy - 9, 14, 2))
         pygame.draw.rect(surf, (120, 60, 30), (cx - 7, cy + 7, 14, 2))
+    elif kind == "kfc":
+        # Tiny red KFC bucket
+        bw = 6
+        bh = 7
+        pts = [(cx - bw, cy - bh), (cx + bw, cy - bh),
+               (cx + bw - 2, cy + bh), (cx - bw + 2, cy + bh)]
+        pygame.draw.polygon(surf, (200, 18, 18), pts)
+        pygame.draw.line(surf, WHITE,
+                         (cx - bw + 1, cy), (cx + bw - 1, cy), 1)
+        pygame.draw.rect(surf, (220, 35, 22),
+                         (cx - bw - 1, cy - bh - 2, (bw + 1) * 2, 3),
+                         border_radius=1)
 
 
 class PauseButton:
@@ -419,6 +431,8 @@ class HUD:
             active.append(("magnet", world.magnet_timer, MAGNET_DURATION))
         if world.slowmo_timer > 0:
             active.append(("slowmo", world.slowmo_timer, SLOWMO_DURATION))
+        if world.kfc_timer > 0:
+            active.append(("kfc", world.kfc_timer, KFC_DURATION))
         if active:
             slot_w, slot_h = 28, 32
             gap = 6

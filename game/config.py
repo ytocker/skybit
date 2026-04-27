@@ -35,14 +35,16 @@ MAGNET_DURATION    = 5.0
 MAGNET_RADIUS      = 82.0
 SLOWMO_DURATION    = 3.0
 SLOWMO_SCALE       = 0.5
+KFC_DURATION       = 8.0
 COMBO_WINDOW       = 1.6
 
-# Spawn weights for the three power-up kinds. Must sum to anything — they're
-# normalized at pick time.
+# Spawn weights for power-up kinds. Must sum to anything — they're
+# normalized at pick time.  kfc is intentionally ultra-rare.
 POWERUP_WEIGHTS    = (
     ("triple", 60),
     ("slowmo", 25),
     ("magnet", 15),
+    ("kfc",     3),
 )
 
 SAVE_FILE = "skybit_save.json"

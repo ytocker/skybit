@@ -49,6 +49,7 @@ class Bird:
         self.alive = True
         self.frame_t = 0.0
         self.flap_boost = 0.0
+        self.kfc_active = False
 
     @property
     def tilt_deg(self):
@@ -76,7 +77,10 @@ class Bird:
 
     def draw(self, surf, shake_x=0, shake_y=0):
         frame_idx = int(self.frame_t) % len(parrot.FRAMES)
-        img = parrot.get_parrot(frame_idx, self.tilt_deg)
+        if self.kfc_active:
+            img = parrot.get_fried_parrot(frame_idx, self.tilt_deg)
+        else:
+            img = parrot.get_parrot(frame_idx, self.tilt_deg)
         r = img.get_rect(center=(self.x + shake_x, self.y + shake_y))
         surf.blit(img, r.topleft)
 
@@ -204,6 +208,8 @@ class PowerUp:
             self._draw_magnet(surf)
         elif self.kind == "slowmo":
             self._draw_slowmo(surf)
+        elif self.kind == "kfc":
+            self._draw_kfc(surf)
 
     # ── sprite variants ─────────────────────────────────────────────────────
     def _draw_mushroom(self, surf):
@@ -308,6 +314,71 @@ class PowerUp:
         pygame.draw.rect(surf, (180, 110, 60), (cx - MUSHROOM_R + 1,
                                                  cy - MUSHROOM_R - 1,
                                                  MUSHROOM_R * 2 - 2, 2))
+
+
+    def _draw_kfc(self, surf):
+        cx = int(self.x)
+        cy = int(self.y + math.sin(self.pulse * 0.9) * 2.5)
+        r = MUSHROOM_R
+
+        # Drop shadow
+        sh_w = r * 3
+        sh = pygame.Surface((sh_w, 8), pygame.SRCALPHA)
+        pygame.draw.ellipse(sh, (0, 0, 0, 90), sh.get_rect())
+        surf.blit(sh, (cx - sh_w // 2, cy + r + 4))
+
+        # KFC bucket — classic red trapezoid (wider at top, narrower at bottom)
+        bw_t = r + 4   # half-width at top
+        bw_b = r - 1   # half-width at bottom
+        bh   = r + 3   # bucket height
+        bucket_pts = [
+            (cx - bw_t, cy - bh // 2),
+            (cx + bw_t, cy - bh // 2),
+            (cx + bw_b, cy + bh // 2),
+            (cx - bw_b, cy + bh // 2),
+        ]
+        pygame.draw.polygon(surf, (110, 8, 8),   [(p[0]+1, p[1]+1) for p in bucket_pts])  # shadow
+        pygame.draw.polygon(surf, (205, 18, 18), bucket_pts)  # red body
+
+        # Lighter highlight strip on upper third
+        hi_pts = [
+            (cx - bw_t,     cy - bh // 2),
+            (cx + bw_t,     cy - bh // 2),
+            (cx + bw_t - 1, cy - bh // 2 + 7),
+            (cx - bw_t + 1, cy - bh // 2 + 7),
+        ]
+        pygame.draw.polygon(surf, (245, 48, 35), hi_pts)
+
+        # White "KFC" stripe across the middle of the bucket
+        stripe_y = cy + 1
+        pygame.draw.rect(surf, (255, 255, 255),
+                         (cx - bw_t + 2, stripe_y, (bw_t - 1) * 2, 4))
+
+        # Bucket outline
+        pygame.draw.polygon(surf, (80, 5, 5), bucket_pts, 1)
+
+        # Lid — slightly wider flat rectangle on top
+        lid_w = bw_t + 2
+        lid_rect = pygame.Rect(cx - lid_w, cy - bh // 2 - 4, lid_w * 2, 5)
+        pygame.draw.rect(surf, (220, 35, 22), lid_rect, border_radius=2)
+        pygame.draw.rect(surf, (255, 100, 85),
+                         (lid_rect.x + 2, lid_rect.y + 1, lid_rect.width - 4, 1))
+
+        # Chicken drumstick peeking out from the top of the bucket
+        drum_cx = cx + 4
+        drum_cy = cy - bh // 2 - 5
+        pygame.draw.ellipse(surf, (210, 140, 42),
+                            (drum_cx - 6, drum_cy - 4, 12, 9))
+        pygame.draw.circle(surf, (175, 105, 22), (drum_cx, drum_cy), 4)
+        pygame.draw.line(surf, (148, 82, 18),
+                         (drum_cx, drum_cy + 3),
+                         (drum_cx - 2, drum_cy + 8), 2)
+
+        # Animated golden shimmer on the drumstick
+        pulse_a = max(0, min(255, int(140 + 90 * math.sin(self.pulse * 2.5))))
+        chip = pygame.Surface((10, 6), pygame.SRCALPHA)
+        pygame.draw.ellipse(chip, (255, 225, 130, pulse_a), chip.get_rect())
+        surf.blit(chip, (drum_cx - 5, drum_cy - 5))
 
 
 # Back-compat alias — some callers (e.g. snapshot/playtest scripts) still say Mushroom.
