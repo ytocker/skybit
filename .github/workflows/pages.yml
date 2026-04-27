@@ -1,8 +1,8 @@
-name: Deploy to GitHub Pages (leaderboard branch)
+name: Deploy to GitHub Pages (v1_skybit)
 
 on:
   push:
-    branches: [v1_leaderboard_feature]
+    branches: [v1_skybit]
   workflow_dispatch:
 
 permissions:
