@@ -81,6 +81,7 @@ class Bird:
         self.flap_boost = 0.0
         self.kfc_active = False
         self.ghost_active = False
+        self.grow_active = False
 
     @property
     def tilt_deg(self):
@@ -114,6 +115,10 @@ class Bird:
             img = parrot.get_ghost_parrot(frame_idx, self.tilt_deg)
         else:
             img = parrot.get_parrot(frame_idx, self.tilt_deg)
+        if self.grow_active:
+            from game.config import GROW_SCALE
+            w, h = img.get_size()
+            img = pygame.transform.smoothscale(img, (int(w * GROW_SCALE), int(h * GROW_SCALE)))
         r = img.get_rect(center=(self.x + shake_x, self.y + shake_y))
         surf.blit(img, r.topleft)
 
@@ -245,6 +250,8 @@ class PowerUp:
             self._draw_kfc(surf)
         elif self.kind == "ghost":
             self._draw_ghost(surf)
+        elif self.kind == "grow":
+            self._draw_grow(surf)
 
     # ── sprite variants ─────────────────────────────────────────────────────
     def _draw_mushroom(self, surf):
@@ -522,6 +529,64 @@ class PowerUp:
 
         # Blit: head-circle centre aligns with (cx, cy)
         surf.blit(g, (cx - gcx, cy - gcy))
+
+
+    def _draw_grow(self, surf):
+        cx = int(self.x)
+        cy = int(self.y + math.sin(self.pulse * 1.2) * 2)
+
+        # Tiny parrot silhouette in the centre — simplified macaw face/body.
+        BIRD_BODY  = (240,  55,  55)
+        BIRD_BELLY = (255, 130,  90)
+        BIRD_BEAK  = (255, 195,  60)
+        BIRD_WING  = ( 40, 100, 255)
+        BIRD_OUT   = ( 80,  10,  18)
+        SHADES     = ( 20,  18,  30)
+
+        # Body ellipse + 1px outline
+        body_rect = pygame.Rect(cx - 8, cy - 6, 16, 14)
+        pygame.draw.ellipse(surf, BIRD_OUT,  body_rect.inflate(2, 2))
+        pygame.draw.ellipse(surf, BIRD_BODY, body_rect)
+        # Belly highlight
+        pygame.draw.ellipse(surf, BIRD_BELLY, pygame.Rect(cx - 4, cy - 1, 9, 6))
+        # Wing tick (blue patch)
+        pygame.draw.circle(surf, BIRD_OUT,  (cx + 2, cy + 1), 4)
+        pygame.draw.circle(surf, BIRD_WING, (cx + 2, cy + 1), 3)
+        # Aviator sunglasses bar across the eye line
+        pygame.draw.rect(surf, SHADES, (cx - 6, cy - 4, 11, 3), border_radius=1)
+        # Beak hooked downward
+        pygame.draw.polygon(surf, BIRD_OUT,
+                            [(cx - 9, cy - 1), (cx - 12, cy + 1), (cx - 8, cy + 2)])
+        pygame.draw.polygon(surf, BIRD_BEAK,
+                            [(cx - 9, cy - 1), (cx - 11, cy + 1), (cx - 8, cy + 1)])
+
+        # Two upward green chevrons flanking the bird, oscillating ±2px.
+        ARROW_HI  = (50, 220, 100)
+        ARROW_OUT = (28, 160,  70)
+        oy = int(math.sin(self.pulse * 2.4) * 2)
+        for sign in (-1, 1):
+            ax = cx + sign * 14
+            ay = cy + oy
+            outline = [
+                (ax,     ay - 9),
+                (ax + 6, ay - 2),
+                (ax + 3, ay - 2),
+                (ax + 3, ay + 6),
+                (ax - 3, ay + 6),
+                (ax - 3, ay - 2),
+                (ax - 6, ay - 2),
+            ]
+            pygame.draw.polygon(surf, ARROW_OUT, outline)
+            inner = [
+                (ax,     ay - 7),
+                (ax + 4, ay - 3),
+                (ax + 2, ay - 3),
+                (ax + 2, ay + 5),
+                (ax - 2, ay + 5),
+                (ax - 2, ay - 3),
+                (ax - 4, ay - 3),
+            ]
+            pygame.draw.polygon(surf, ARROW_HI, inner)
 
 
 # Back-compat alias — some callers (e.g. snapshot/playtest scripts) still say Mushroom.

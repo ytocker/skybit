@@ -460,6 +460,11 @@ body   { background: #0d0820 !important; }
                 tone(ac,349,349,.14,'triangle',.38*v,.01,.08,t+.24);
                 tone(ac,262,262,.18,'triangle',.42*v,.01,.08,t+.38);
             }
+            else if (name === 'grow') {
+                tone(ac,380,380,.07,'square',.40*v,.01,.08,t);
+                tone(ac,570,570,.07,'square',.42*v,.01,.08,t+.07);
+                tone(ac,760,950,.18,'triangle',.48*v,.01,.08,t+.14);
+            }
         } catch (e) { console.warn('skyPlay error:', e); }
     };
 

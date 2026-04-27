@@ -4,7 +4,7 @@ import os
 import random
 import pygame
 
-from game.config import W, H, TRIPLE_DURATION, MAGNET_DURATION, SLOWMO_DURATION, KFC_DURATION, GHOST_DURATION
+from game.config import W, H, TRIPLE_DURATION, MAGNET_DURATION, SLOWMO_DURATION, KFC_DURATION, GHOST_DURATION, GROW_DURATION
 from game.draw import (
     rounded_rect, rounded_rect_grad, lerp_color,
     UI_SCORE, UI_GOLD, UI_ORANGE, UI_SHADOW, UI_CREAM, UI_RED,
@@ -276,6 +276,38 @@ def _draw_buff_icon(surf, rect, kind):
             pygame.draw.circle(mg, (252, 254, 255, 255), (ex, gcy - 1), 3)
             pygame.draw.circle(mg, (50, 110, 220, 255),  (ex + 1, gcy), 2)
         surf.blit(mg, (cx - gcx, cy - gcy - 2))
+    elif kind == "grow":
+        # Mini parrot silhouette flanked by two upward green chevrons.
+        BIRD_BODY = (240,  55,  55)
+        BIRD_WING = ( 40, 100, 255)
+        BIRD_BEAK = (255, 195,  60)
+        BIRD_OUT  = ( 80,  10,  18)
+        SHADES    = ( 20,  18,  30)
+        ARROW_HI  = ( 50, 220, 100)
+        ARROW_OUT = ( 28, 160,  70)
+
+        # Bird body (small ellipse)
+        pygame.draw.ellipse(surf, BIRD_OUT,  (cx - 5, cy - 4, 10, 9))
+        pygame.draw.ellipse(surf, BIRD_BODY, (cx - 4, cy - 3, 8, 7))
+        # Sunglasses bar
+        pygame.draw.rect(surf, SHADES, (cx - 4, cy - 3, 7, 2))
+        # Wing tick
+        pygame.draw.circle(surf, BIRD_WING, (cx + 1, cy + 1), 2)
+        # Beak
+        pygame.draw.polygon(surf, BIRD_BEAK,
+                            [(cx - 5, cy - 1), (cx - 7, cy), (cx - 5, cy + 1)])
+        # Two upward chevrons
+        for sign in (-1, 1):
+            ax = cx + sign * 8
+            ay = cy
+            outline = [(ax, ay - 6), (ax + 4, ay - 2), (ax + 2, ay - 2),
+                       (ax + 2, ay + 4), (ax - 2, ay + 4), (ax - 2, ay - 2),
+                       (ax - 4, ay - 2)]
+            pygame.draw.polygon(surf, ARROW_OUT, outline)
+            inner = [(ax, ay - 5), (ax + 3, ay - 2), (ax + 1, ay - 2),
+                     (ax + 1, ay + 3), (ax - 1, ay + 3), (ax - 1, ay - 2),
+                     (ax - 3, ay - 2)]
+            pygame.draw.polygon(surf, ARROW_HI, inner)
 
 
 class PauseButton:
@@ -521,6 +553,8 @@ class HUD:
             active.append(("kfc", world.kfc_timer, KFC_DURATION))
         if world.ghost_timer > 0:
             active.append(("ghost", world.ghost_timer, GHOST_DURATION))
+        if world.grow_timer > 0:
+            active.append(("grow", world.grow_timer, GROW_DURATION))
         if active:
             slot_w, slot_h = 28, 32
             gap = 6

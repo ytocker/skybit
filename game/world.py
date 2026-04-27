@@ -15,6 +15,7 @@ from game.config import (
     MUSHROOM_CHANCE, MUSHROOM_COOLDOWN,
     TRIPLE_DURATION, MAGNET_DURATION, MAGNET_RADIUS,
     SLOWMO_DURATION, SLOWMO_SCALE, KFC_DURATION, GHOST_DURATION,
+    GROW_DURATION, GROW_SCALE,
     POWERUP_WEIGHTS, COMBO_WINDOW,
     COIN_RUSH_INTERVAL, COIN_RUSH_GAP_BOOST, COIN_RUSH_COINS,
 )
@@ -57,6 +58,7 @@ class World:
         self.slowmo_timer = 0.0
         self.kfc_timer    = 0.0
         self.ghost_timer  = 0.0
+        self.grow_timer   = 0.0
         self.mushroom_cooldown = 0.0
 
         # Coin-rush counter: increments each spawn; every Nth pipe is a rush.
@@ -67,7 +69,7 @@ class World:
         self.pillars_passed = 0
         self.time_alive = 0.0
         self.near_misses = 0
-        self.powerups_picked = {"triple": 0, "magnet": 0, "slowmo": 0, "kfc": 0, "ghost": 0}
+        self.powerups_picked = {"triple": 0, "magnet": 0, "slowmo": 0, "kfc": 0, "ghost": 0, "grow": 0}
         # Transient flag so near-miss detection fires once per pillar.
         self._near_miss_flags: dict[int, bool] = {}
 
@@ -376,6 +378,9 @@ class World:
             if self.ghost_timer > 0:
                 self.ghost_timer = max(0.0, self.ghost_timer - dt)
             self.bird.ghost_active = self.ghost_timer > 0
+            if self.grow_timer > 0:
+                self.grow_timer = max(0.0, self.grow_timer - dt)
+            self.bird.grow_active = self.grow_timer > 0
             if self.mushroom_cooldown > 0:
                 self.mushroom_cooldown -= dt
             if self.combo_timer > 0:
@@ -433,15 +438,19 @@ class World:
 
     # ── collisions ───────────────────────────────────────────────────────────
 
+    def bird_radius(self) -> float:
+        return BIRD_R * GROW_SCALE if self.grow_timer > 0 else BIRD_R
+
     def _check_collisions(self):
         bx, by = self.bird.x, self.bird.y
-        if by + BIRD_R > GROUND_Y or by - BIRD_R < 0:
+        br = self.bird_radius()
+        if by + br > GROUND_Y or by - br < 0:
             self._die()
             return
         if self.ghost_timer > 0:
             return  # phase through pipes while ghost is active
         for p in self.pipes:
-            if p.collides_circle(bx, by, BIRD_R - 2):
+            if p.collides_circle(bx, by, br - 2):
                 self._die()
                 return
 
@@ -568,6 +577,8 @@ class World:
             self._activate_kfc(m)
         elif m.kind == "ghost":
             self._activate_ghost(m)
+        elif m.kind == "grow":
+            self._activate_grow(m)
 
     def _pickup_burst(self, m, colors, n=30, speed_hi=320, grav=150):
         for _ in range(n):
@@ -649,6 +660,19 @@ class World:
             ))
         self.float_texts.append(FloatText(
             "GHOST!", m.x, m.y - 22, (180, 210, 255), size=24, life=1.3, vy=-30,
+        ))
+
+    def _activate_grow(self, m):
+        GROW_HI  = (50, 220, 100)
+        GROW_OUT = (28, 160,  70)
+        self.grow_timer = GROW_DURATION
+        self.bird.grow_active = True
+        self.shake_mag = max(self.shake_mag, 4.0)
+        self.shake_t   = max(self.shake_t,   0.3)
+        audio.play_grow()
+        self._pickup_burst(m, (GROW_HI, GROW_OUT, WHITE, UI_CREAM), n=30, speed_hi=300)
+        self.float_texts.append(FloatText(
+            "GROW!", m.x, m.y - 22, GROW_HI, size=26, life=1.3, vy=-30,
         ))
 
     def _spawn_poof(self, x, y):

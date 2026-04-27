@@ -105,6 +105,7 @@ if _IS_BROWSER:
     def play_gameover() -> None:      _play("gameover", 0.70)
     def play_poof() -> None:          _play("poof", 0.88)
     def play_ghost() -> None:         _play("ghost", 0.70)
+    def play_grow() -> None:          _play("grow", 0.80)
 
 
 # ── Native backend (pygame.mixer + synthesized WAV) ──────────────────────────
@@ -252,6 +253,12 @@ else:
                     (0.18,  600, 800,  "triangle", 0.22),
                     (0.22,  800, 1100, "sine",     0.26),
                 ]))
+            _sounds["grow"] = pygame.mixer.Sound(
+                buffer=_synth_sequence([
+                    (0.07, 380, 380, "square",   0.40),
+                    (0.07, 570, 570, "square",   0.42),
+                    (0.18, 760, 950, "triangle", 0.48),
+                ]))
         except pygame.error:
             _sounds.clear()
             _mixer_ok = False
@@ -284,3 +291,4 @@ else:
     def play_gameover() -> None:      _play("gameover", 0.70)
     def play_poof() -> None:          _play("poof", 0.88)
     def play_ghost() -> None:         _play("ghost", 0.70)
+    def play_grow() -> None:          _play("grow", 0.80)
