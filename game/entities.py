@@ -33,7 +33,7 @@ def _get_kfc_sprite() -> "pygame.Surface":
     if _kfc_sprite is None:
         import os
         r         = MUSHROOM_R + 2
-        logo_size = int(r * 2)
+        logo_size = int(r * 2.4)
         path      = os.path.join(os.path.dirname(__file__), "assets", "kfc_logo.jpg")
         raw = pygame.image.load(path)
         # Crop to square (center crop on the wider axis)
@@ -356,16 +356,6 @@ class PowerUp:
         sh = pygame.Surface((sh_w, 8), pygame.SRCALPHA)
         pygame.draw.ellipse(sh, (0, 0, 0, 80), sh.get_rect())
         surf.blit(sh, (cx - sh_w // 2, cy + r + 2))
-
-        # Pulsing red glow ring
-        glow_a = max(0, min(255, int(55 + 30 * math.sin(self.pulse * 2))))
-        glow_r = r + 4 + int(2 * math.sin(self.pulse * 1.3))
-        glow = pygame.Surface(((glow_r + 2) * 2, (glow_r + 2) * 2), pygame.SRCALPHA)
-        pygame.draw.circle(glow, (228, 0, 43, glow_a), (glow_r + 2, glow_r + 2), glow_r + 2)
-        surf.blit(glow, (cx - glow_r - 2, cy - glow_r - 2))
-
-        # Dark outline ring behind the logo
-        pygame.draw.circle(surf, (20, 15, 35), (cx, cy), r + 2)
 
         # KFC logo (real image, pre-scaled & circle-clipped)
         logo = _get_kfc_sprite()
