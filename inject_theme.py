@@ -354,6 +354,35 @@ body   { background: #0d0820 !important; }
     window._pendingName = "__pending__";
     var _nameStarsAdded = false;
 
+    /* Desktop keyboard fix:
+       SDL/pygame attaches a keydown listener at the window level and calls
+       preventDefault on every key. That swallows the browser's default
+       text-typing behavior on the focused <input>, so the field stays empty
+       no matter what the user types. We register our own keydown listener
+       in CAPTURE phase on window — it runs before SDL's bubble listener
+       and, while the overlay is visible, calls stopPropagation so SDL never
+       sees (or preventDefaults) the event. The browser's default action
+       (typing into the focused input) still happens because that's not a
+       listener — it's the browser's intrinsic behavior, which is gated by
+       preventDefault, not stopPropagation.
+
+       Enter must be handled here too because the input's own keydown
+       listener is in the propagation path we're cutting short. */
+    window.addEventListener('keydown', function (e) {
+        var ov = document.getElementById('name-overlay');
+        if (!ov || ov.style.display !== 'flex') return;
+        e.stopPropagation();
+        if (e.key === 'Enter') {
+            var inp = document.getElementById('name-input');
+            var v = (inp && inp.value || '').trim();
+            window._pendingName = v.length > 0 ? v : '__skip__';
+            ov.style.display = 'none';
+        } else if (e.key === 'Escape') {
+            window._pendingName = '__skip__';
+            ov.style.display = 'none';
+        }
+    }, true);
+
     window.openNameEntry = function () {
         var ov  = document.getElementById('name-overlay');
         var inp = document.getElementById('name-input');
@@ -396,7 +425,8 @@ body   { background: #0d0820 !important; }
             window._pendingName = '__skip__';
             ov.style.display = 'none';
         };
-        inp.onkeydown = function (e) { if (e.key === 'Enter') submit(); };
+        // Enter / Escape are handled by the global capture-phase listener
+        // above, since SDL would otherwise eat the input's own keydown.
     };
 }());
 </script>
