@@ -5,6 +5,7 @@ Post-process pygbag's generated build/web/index.html to inject:
   - window.skyPlay() Web Audio synthesis (matches game/audio.py exactly)
 """
 import os
+import re
 from pathlib import Path
 
 src = Path("build/web/index.html")
@@ -16,17 +17,25 @@ html = src.read_text(encoding="utf-8")
 _SB_URL = os.environ.get("SUPABASE_URL", "")
 _SB_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 
-# ── 1. Dark body background (CSS) ────────────────────────────────────────────
+# ── 1. Dark body + canvas background (CSS) ───────────────────────────────────
 html = html.replace("background-color:powderblue", "background-color:#0d0820")
+# Inline style on <canvas> if present
+html = re.sub(
+    r'(<canvas\b[^>]*style=["\'])([^"\']*)',
+    lambda m: m.group(1) + "background:#0d0820;" + m.group(2),
+    html,
+)
 
 # ── 2. Patch embedded Python progress-bar colors ──────────────────────────────
 # pygbag embeds custom_site() Python code as a comment inside a <script> tag.
-# These targeted replacements recolor the pygame loading bar to match the theme.
-html = html.replace('"#7f7f7f"', '"#0d0820"')       # body bg: gray → dark purple
-html = html.replace('(0,255,0)', '(240,192,64)')     # bar fill: green → gold
-html = html.replace('(10,10,10)', '(20,12,48)')      # bar track: near-black → deep purple
-# "Ready to start!" text: blue → gold
-html = html.replace(', True, "blue")', ', True, (240,192,64))')
+# Use regex so spaces inside tuples don't break the match.
+html = html.replace('"#7f7f7f"', '"#0d0820"')                        # bg: gray → dark purple
+html = re.sub(r'\(\s*0\s*,\s*255\s*,\s*0\s*\)', '(240,192,64)', html)   # bar: green → gold
+html = re.sub(r'\(\s*10\s*,\s*10\s*,\s*10\s*\)', '(20,12,48)', html)    # track: near-black → deep purple
+html = re.sub(r',\s*True\s*,\s*"blue"\)', ', True, (240,192,64))', html)  # text: blue → gold
+# Some pygbag versions name the bg color differently
+html = html.replace('"powderblue"', '"#0d0820"')
+html = html.replace("'powderblue'", "'#0d0820'")
 
 # ── 2. Loading overlay HTML (injected right after <body>) ─────────────────────
 OVERLAY = """
@@ -73,6 +82,10 @@ html = html.replace("<body>", "<body>\n" + OVERLAY + NAME_OVERLAY, 1)
 # ── 3. CSS + JS injected before </body> ──────────────────────────────────────
 INJECTION = """
 <style>
+/* ── Canvas base (shows behind pygame loading bar) ─── */
+canvas { background: #0d0820 !important; }
+body   { background: #0d0820 !important; }
+
 /* ── Loading overlay ───────────────────────────────── */
 #skybit-loading {
     position: fixed;
