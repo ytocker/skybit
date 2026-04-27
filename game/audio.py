@@ -103,6 +103,7 @@ if _IS_BROWSER:
     def play_thunder() -> None:       _play("thunder", 0.85)
     def play_death() -> None:         _play("death", 0.75)
     def play_gameover() -> None:      _play("gameover", 0.70)
+    def play_poof() -> None:          _play("poof", 0.88)
 
 
 # ── Native backend (pygame.mixer + synthesized WAV) ──────────────────────────
@@ -237,6 +238,12 @@ else:
                     (0.14, 349, 349, "triangle", 0.38),
                     (0.18, 262, 262, "triangle", 0.42),
                 ]))
+            _sounds["poof"] = pygame.mixer.Sound(
+                buffer=_synth_sequence([
+                    (0.03, 420, 260, "triangle", 0.58),
+                    (0.05, 260, 150, "square",   0.44),
+                    (0.10, 150,  65, "sine",     0.28),
+                ]))
         except pygame.error:
             _sounds.clear()
             _mixer_ok = False
@@ -267,3 +274,4 @@ else:
     def play_thunder() -> None:       _play("thunder", 0.85)
     def play_death() -> None:         _play("death", 0.75)
     def play_gameover() -> None:      _play("gameover", 0.70)
+    def play_poof() -> None:          _play("poof", 0.88)

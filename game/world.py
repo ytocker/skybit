@@ -19,7 +19,7 @@ from game.config import (
     COIN_RUSH_INTERVAL, COIN_RUSH_GAP_BOOST, COIN_RUSH_COINS,
 )
 from game.entities import (
-    Bird, Pipe, Coin, PowerUp, Particle, FloatText,
+    Bird, Pipe, Coin, PowerUp, Particle, CloudPuff, FloatText,
 )
 from game.draw import (
     COIN_GOLD, COIN_LIGHT,
@@ -333,6 +333,8 @@ class World:
                 self.slowmo_timer = max(0.0, self.slowmo_timer - dt)
             if self.kfc_timer > 0:
                 self.kfc_timer = max(0.0, self.kfc_timer - dt)
+                if self.kfc_timer == 0:          # just expired — poof back
+                    self._spawn_poof(self.bird.x, self.bird.y)
             self.bird.kfc_active = self.kfc_timer > 0
             if self.mushroom_cooldown > 0:
                 self.mushroom_cooldown -= dt
@@ -571,11 +573,29 @@ class World:
         self.bird.kfc_active = True
         self.shake_mag = max(self.shake_mag, 5.0)
         self.shake_t   = max(self.shake_t,   0.4)
-        audio.play_mushroom()
-        self._pickup_burst(m, ((210, 138, 42), (238, 178, 72), (148, 82, 18), WHITE), n=40)
+        audio.play_poof()
+        self._spawn_poof(self.bird.x, self.bird.y)
+        self._pickup_burst(m, ((210, 138, 42), (238, 178, 72), (148, 82, 18), WHITE), n=28)
         self.float_texts.append(FloatText(
             "FINGER LICKIN'!", m.x, m.y - 22, (230, 160, 40), size=22, life=1.6, vy=-28,
         ))
+
+    def _spawn_poof(self, x, y):
+        """Burst of expanding cloud puffs — used on KFC transformation start and end."""
+        puff_colors = [
+            (255, 255, 255), (240, 240, 240),
+            (225, 225, 225), (210, 215, 220),
+        ]
+        for _ in range(14):
+            angle = random.uniform(0, math.pi * 2)
+            speed = random.uniform(50, 130)
+            vx    = math.cos(angle) * speed
+            vy    = math.sin(angle) * speed - random.uniform(10, 40)
+            life  = random.uniform(0.32, 0.52)
+            r0    = random.randint(4, 9)
+            r1    = random.randint(13, 22)
+            color = random.choice(puff_colors)
+            self.particles.append(CloudPuff(x, y, vx, vy, life, r0, r1, color))
 
     # ── utility ──────────────────────────────────────────────────────────────
 

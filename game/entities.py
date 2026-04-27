@@ -404,6 +404,37 @@ class Particle:
         surf.blit(s, (int(self.x - rr - 1), int(self.y - rr - 1)), special_flags=pygame.BLEND_ADD)
 
 
+# ── CloudPuff ────────────────────────────────────────────────────────────────
+
+class CloudPuff:
+    """Expanding, fading cloud circle for the transformation poof effect.
+    Uses normal alpha blend (not additive) so it looks like white smoke."""
+    __slots__ = ("x", "y", "vx", "vy", "life", "life_max", "r_start", "r_end", "color")
+
+    def __init__(self, x, y, vx, vy, life, r_start, r_end, color):
+        self.x, self.y   = float(x), float(y)
+        self.vx, self.vy = vx, vy
+        self.life = self.life_max = life
+        self.r_start, self.r_end = r_start, r_end
+        self.color = color
+
+    def update(self, dt):
+        self.x += self.vx * dt
+        self.y += self.vy * dt
+        self.life -= dt
+
+    def alive(self):
+        return self.life > 0
+
+    def draw(self, surf):
+        t = max(0.0, self.life / self.life_max)          # 1→0 as puff dies
+        alpha = int(200 * t)
+        r = max(1, int(self.r_start + (self.r_end - self.r_start) * (1.0 - t)))
+        s = pygame.Surface((r * 2 + 2, r * 2 + 2), pygame.SRCALPHA)
+        pygame.draw.circle(s, (*self.color, alpha), (r + 1, r + 1), r)
+        surf.blit(s, (int(self.x - r - 1), int(self.y - r - 1)))
+
+
 # ── FloatText ────────────────────────────────────────────────────────────────
 
 _float_font_cache: dict = {}
