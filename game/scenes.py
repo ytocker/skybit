@@ -209,27 +209,34 @@ class App:
         self._final_score = self.world.score
         self._name_input_buf = ""
         self._stats_t = 0.0
-        if self.world.score > 0:
+        if sys.platform == "emscripten":
+            # Browser: defer the qualification check + (maybe) name entry to
+            # the async task — fetching top-10 from Supabase blocks. World
+            # keeps ticking visibly until the task transitions us to the
+            # leaderboard or opens the JS overlay.
             self.state = STATE_NAMEENTRY
-            if sys.platform == "emscripten":
-                self._start_name_entry = True  # triggers JS overlay via create_task
+            self._start_name_entry = True
         else:
-            # Score 0: skip name entry, go straight to leaderboard
-            if sys.platform == "emscripten":
-                self.state = STATE_NAMEENTRY  # keeps world ticking while task runs
-                self._start_name_entry = True
+            # Native: top-10 lives in local JSON, fetch is sync.
+            from game import leaderboard
+            scores = leaderboard._native_fetch()
+            if self._qualifies_for_top10(scores, self._final_score):
+                self.state = STATE_NAMEENTRY
             else:
-                self._submit_name_native("")
+                self._show_leaderboard_native(scores, submitted=False)
 
-    def _submit_name_native(self, name: str):
-        """Finish native name-entry: save to local JSON, show leaderboard."""
-        from game import leaderboard
-        if name:
-            leaderboard._native_submit(name, self._final_score)
-        scores = leaderboard._native_fetch()
+    @staticmethod
+    def _qualifies_for_top10(scores, score) -> bool:
+        if score <= 0:
+            return False
+        if len(scores) < 10:
+            return True
+        return score > scores[-1]["score"]
+
+    def _show_leaderboard_native(self, scores, submitted: bool):
         self._lb_scores = scores
         self._lb_loading = False
-        if scores and name:
+        if scores and submitted:
             self._lb_player_rank = next(
                 (i for i, e in enumerate(scores) if e["score"] == self._final_score),
                 -1,
@@ -240,29 +247,35 @@ class App:
         self.state = STATE_LEADERBOARD
         self._cooldown_t = 1.0
 
+    def _submit_name_native(self, name: str):
+        """Finish native name-entry: save to local JSON, show leaderboard."""
+        from game import leaderboard
+        if name:
+            leaderboard._native_submit(name, self._final_score)
+        scores = leaderboard._native_fetch()
+        self._show_leaderboard_native(scores, submitted=bool(name))
+
     async def _on_name_submitted(self):
         try:
             from game import leaderboard
-            if self._final_score > 0:
-                name = await leaderboard.open_name_entry()
-            else:
-                name = None
-            if name:
-                await leaderboard.submit(name, self._final_score)
-            self._lb_loading = True
-            self._lb_scores = []
-            self._lb_player_rank = -1
             scores = await leaderboard.fetch_top10()
+            if self._qualifies_for_top10(scores, self._final_score):
+                name = await leaderboard.open_name_entry()
+                if name:
+                    await leaderboard.submit(name, self._final_score)
+                    scores = await leaderboard.fetch_top10()
+                    self._lb_player_rank = next(
+                        (i for i, e in enumerate(scores) if e["score"] == self._final_score),
+                        -1,
+                    )
+                else:
+                    self._lb_player_rank = -1
+            else:
+                self._lb_player_rank = -1
             self._lb_scores = scores
             self._lb_loading = False
-            if scores and name:
-                self._lb_player_rank = next(
-                    (i for i, e in enumerate(scores) if e["score"] == self._final_score),
-                    -1,
-                )
         except Exception:
             self._lb_loading = False
-        # Always show the leaderboard screen regardless of scores or skip
         self.hud.title_t = 0.0
         self.state = STATE_LEADERBOARD
         self._cooldown_t = 1.0
