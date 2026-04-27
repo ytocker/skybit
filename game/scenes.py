@@ -51,7 +51,7 @@ class App:
         self._lb_player_rank = -1
         self._start_name_entry = False
         self._final_score = 0
-        self._lb_elapsed = 0.0
+        self._name_task = None  # strong ref prevents GC killing the task mid-flight
 
     # ── helpers ─────────────────────────────────────────────────────────────
 
@@ -78,7 +78,7 @@ class App:
             pass  # JS overlay handles input
         elif self.state == STATE_LEADERBOARD:
             if self._cooldown_t <= 0:
-                self._restart()
+                self.state = STATE_MENU
         elif self.state == STATE_GAMEOVER:
             if self._cooldown_t <= 0:
                 self._restart()
@@ -108,6 +108,7 @@ class App:
     async def async_run(self):
         import asyncio
         self._cooldown_t = 0.0
+        self._start_name_entry = False
         while self._running:
             dt = min(self.clock.tick(FPS) / 1000.0, 1 / 20.0)
             for e in pygame.event.get():
@@ -117,7 +118,10 @@ class App:
             pygame.display.flip()
             if self._start_name_entry:
                 self._start_name_entry = False
-                await self._on_name_submitted()
+                # create_task keeps the game loop running every frame while the
+                # network coroutine makes progress between asyncio.sleep(0) yields.
+                # Store strong ref so GC doesn't silently kill the task mid-flight.
+                self._name_task = asyncio.create_task(self._on_name_submitted())
             # Yield to the browser's event loop each frame. On native runs
             # this is a zero-cost no-op between ticks.
             await asyncio.sleep(0)
@@ -174,9 +178,7 @@ class App:
         elif self.state == STATE_NAMEENTRY:
             self.world.update(dt)  # keep world alive behind JS overlay
         elif self.state == STATE_LEADERBOARD:
-            self.world.update(dt)
             self._cooldown_t = max(0.0, self._cooldown_t - dt)
-            self._lb_elapsed += dt
         elif self.state == STATE_GAMEOVER:
             self.world.update(dt)
             self._cooldown_t = max(0.0, self._cooldown_t - dt)
@@ -192,39 +194,39 @@ class App:
 
     def _advance_past_stats(self):
         import sys
-        score = self.world.score
-        if sys.platform == "emscripten" and score > 0:
-            self._final_score = score
-            self._lb_scores = []
-            self._lb_loading = True
-            self._lb_player_rank = -1
+        if self.world.score > 0 and sys.platform == "emscripten":
+            self._final_score = self.world.score
             self.state = STATE_NAMEENTRY
+            self._stats_t = 0.0
             self._start_name_entry = True
         else:
             self.state = STATE_GAMEOVER
             self._cooldown_t = 0.5
 
     async def _on_name_submitted(self):
-        from game import leaderboard
-        name = await leaderboard.open_name_entry()
-        if name:
-            await leaderboard.submit(name, self._final_score)
         try:
+            from game import leaderboard
+            name = await leaderboard.open_name_entry()
+            if name:
+                await leaderboard.submit(name, self._final_score)
+            self._lb_loading = True
+            self._lb_scores = []
+            self._lb_player_rank = -1
             scores = await leaderboard.fetch_top10()
+            self._lb_scores = scores
+            self._lb_loading = False
+            if scores:
+                self._lb_player_rank = next(
+                    (i for i, e in enumerate(scores) if e["score"] == self._final_score),
+                    -1,
+                )
+                self.hud.title_t = 0.0
+                self.state = STATE_LEADERBOARD
+                self._cooldown_t = 1.0
+            else:
+                self.state = STATE_GAMEOVER
+                self._cooldown_t = 0.5
         except Exception:
-            scores = []
-        self._lb_scores = scores
-        self._lb_loading = False
-        if scores and name:
-            for i, entry in enumerate(scores):
-                if entry.get("name") == name:
-                    self._lb_player_rank = i + 1
-                    break
-        if scores:
-            self._lb_elapsed = 0.0
-            self.state = STATE_LEADERBOARD
-            self._cooldown_t = 1.5
-        else:
             self.state = STATE_GAMEOVER
             self._cooldown_t = 0.5
 
@@ -353,7 +355,7 @@ class App:
             self.hud.draw_leaderboard(
                 self.screen, 1 / 60,
                 self._lb_scores, self._lb_player_rank,
-                self._lb_loading, self._cooldown_t, self._lb_elapsed,
+                self._lb_loading, self._cooldown_t,
             )
         else:  # GAMEOVER
             self.hud.draw_gameover(

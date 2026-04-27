@@ -1,46 +1,39 @@
 """
 Global leaderboard bridge — Supabase REST API via the JS layer.
 
-In-browser (emscripten/pygbag): delegates to window.lbSubmit / window.lbFetch /
-window.openNameEntry injected by inject_theme.py at build time.
+In-browser (emscripten): delegates to window.lbSubmit / window.lbFetch /
+window.openNameEntry injected by inject_theme.py.
 Native / headless: all calls are silent no-ops that return immediately.
-
-Usage:
-    from game import leaderboard
-    name  = await leaderboard.open_name_entry()   # None if skipped
-    ok    = await leaderboard.submit(name, score)
-    top10 = await leaderboard.fetch_top10()
-    # top10 is a list of {"name": str, "score": int}
 """
 import sys
 
 _IS_BROWSER = sys.platform == "emscripten"
 
-_lbSubmit     = None
-_lbFetch      = None
+_lbSubmit = None
+_lbFetch = None
 _openNameEntry = None
 
 
 def _resolve() -> None:
-    """Lazily bind JS functions on first call (Pyodide js module or pygbag platform.window)."""
     global _lbSubmit, _lbFetch, _openNameEntry
     if _lbSubmit is not None:
         return
+    # Only openNameEntry needs a cached reference; submit/fetch use polling globals directly.
     try:
         import js  # type: ignore
-        if hasattr(js, "lbSubmit"):
-            _lbSubmit      = js.lbSubmit
-            _lbFetch       = js.lbFetch
+        if hasattr(js, "openNameEntry"):
             _openNameEntry = js.openNameEntry
+            _lbSubmit = True   # sentinel: resolved
+            _lbFetch = True
             return
     except Exception:
         pass
     try:
         import platform as _pgb  # type: ignore
-        if hasattr(_pgb, "window") and hasattr(_pgb.window, "lbSubmit"):
-            _lbSubmit      = _pgb.window.lbSubmit
-            _lbFetch       = _pgb.window.lbFetch
+        if hasattr(_pgb, "window") and hasattr(_pgb.window, "openNameEntry"):
             _openNameEntry = _pgb.window.openNameEntry
+            _lbSubmit = True
+            _lbFetch = True
     except Exception:
         pass
 
@@ -56,6 +49,7 @@ async def open_name_entry() -> "str | None":
         import asyncio
         import platform as _p  # type: ignore
         _openNameEntry()
+        # Poll until JS sets _pendingName to something other than the sentinel
         while True:
             try:
                 v = str(_p.window._pendingName)
@@ -71,31 +65,52 @@ async def open_name_entry() -> "str | None":
 
 
 async def submit(name: str, score: int) -> bool:
-    """POST score to Supabase. Returns True on success, False on failure/native."""
+    """POST score to Supabase. Returns True on success.
+
+    Uses fire-and-poll: calls window.lbSubmitStart() synchronously (it kicks
+    off a JS async IIFE internally), then polls window._lbSubmitDone each tick.
+    This avoids awaiting a JS Promise directly, which freezes Python's asyncio.
+    """
     if not _IS_BROWSER:
         return False
     _resolve()
     if _lbSubmit is None:
         return False
     try:
-        result = await _lbSubmit(name, score)
-        return bool(result)
+        import asyncio
+        import platform as _p  # type: ignore
+        _p.window.lbSubmitStart(name, score)
+        while True:
+            v = _p.window._lbSubmitDone
+            if v is not None:
+                return bool(v)
+            await asyncio.sleep(0.05)
     except Exception:
         return False
 
 
 async def fetch_top10() -> list:
-    """GET top-10 scores from Supabase. Returns list of {'name': str, 'score': int}."""
+    """GET top-10 scores. Returns list of {'name': str, 'score': int}.
+
+    Same fire-and-poll pattern: calls window.lbFetchStart() synchronously
+    then polls window._lbFetchResult.
+    """
     if not _IS_BROWSER:
         return []
     _resolve()
     if _lbFetch is None:
         return []
     try:
-        import js as _js  # type: ignore
+        import asyncio
         import json as _json
-        raw  = await _lbFetch()
-        data = _json.loads(_js.JSON.stringify(raw))
-        return [{"name": str(e["name"]), "score": int(e["score"])} for e in data]
+        import js as _js  # type: ignore
+        import platform as _p  # type: ignore
+        _p.window.lbFetchStart()
+        while True:
+            v = _p.window._lbFetchResult
+            if v is not None:
+                data = _json.loads(_js.JSON.stringify(v))
+                return [{"name": str(e["name"]), "score": int(e["score"])} for e in data]
+            await asyncio.sleep(0.05)
     except Exception:
         return []

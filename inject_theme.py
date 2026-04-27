@@ -3,20 +3,18 @@
 Post-process pygbag's generated build/web/index.html to inject:
   - Skybit dark-purple night-sky loading overlay
   - window.skyPlay() Web Audio synthesis (matches game/audio.py exactly)
-  - Supabase leaderboard JS bridge (lbSubmit / lbFetch / openNameEntry)
-    Reads SUPABASE_URL and SUPABASE_ANON_KEY from environment at build time.
 """
 import os
 from pathlib import Path
-
-_SB_URL = os.environ.get("SUPABASE_URL", "")
-_SB_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 
 src = Path("build/web/index.html")
 if not src.exists():
     raise SystemExit("build/web/index.html not found — run pygbag first")
 
 html = src.read_text(encoding="utf-8")
+
+_SB_URL = os.environ.get("SUPABASE_URL", "")
+_SB_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 
 # ── 1. Dark body background (CSS) ────────────────────────────────────────────
 html = html.replace("background-color:powderblue", "background-color:#0d0820")
@@ -33,7 +31,6 @@ html = html.replace(', True, "blue")', ', True, (240,192,64))')
 # ── 2. Loading overlay HTML (injected right after <body>) ─────────────────────
 OVERLAY = """
 <div id="skybit-loading">
-  <div class="title-glow"></div>
   <p class="skybit-title">SKYBIT</p>
   <p class="skybit-sub">Pocket Sky Flyer</p>
   <div class="tap-btn">TAP &nbsp;&middot;&nbsp; CLICK &nbsp;&middot;&nbsp; SPACE</div>
@@ -50,27 +47,25 @@ OVERLAY = """
   </svg>
 </div>
 """
-# Name-entry overlay — shown by window.openNameEntry(), hidden after submit/skip
 NAME_OVERLAY = """
-<div id="name-overlay" style="display:none;position:fixed;inset:0;z-index:200;
-     background:rgba(8,3,26,.93);flex-direction:column;
-     align-items:center;justify-content:center;font-family:Arial,sans-serif;">
-  <p style="color:#f0c040;font-size:clamp(18px,5vw,26px);font-weight:900;
-             letter-spacing:4px;margin:0 0 8px;text-shadow:0 2px 8px #000">ENTER YOUR NAME</p>
-  <p style="color:#ddc870;font-size:13px;letter-spacing:2px;margin:0 0 28px;opacity:.7">
-     max 16 characters</p>
-  <input id="name-input" maxlength="16" autocomplete="off" spellcheck="false"
-         style="background:#1a0f38;color:#f0c040;border:2px solid #f07030;
-                border-radius:12px;padding:14px 24px;font-size:clamp(18px,5vw,24px);
-                font-weight:700;letter-spacing:3px;text-align:center;
-                outline:none;width:min(80vw,280px);box-sizing:border-box;"/>
-  <button id="name-submit"
-          style="margin-top:24px;background:linear-gradient(180deg,#cc4418,#881e04);
-                 color:#fff;border:2px solid #e86828;border-radius:50px;
-                 padding:13px 48px;font-size:17px;font-weight:900;
-                 letter-spacing:3px;cursor:pointer;">SUBMIT</button>
-  <p id="name-skip" style="margin-top:16px;color:rgba(200,200,220,.45);
-     font-size:12px;letter-spacing:1px;cursor:pointer;">skip</p>
+<div id="name-overlay">
+  <svg class="mountains" viewBox="0 0 1440 200" preserveAspectRatio="none"
+       xmlns="http://www.w3.org/2000/svg">
+    <path d="M0,200 L0,130 L60,70 L120,110 L200,40 L280,90 L360,20
+             L440,75 L520,45 L600,100 L680,15 L760,80 L840,35 L920,95
+             L1000,50 L1080,85 L1160,25 L1240,90 L1320,55 L1440,70 L1440,200 Z"
+          fill="#0e1a0c" opacity="0.95"/>
+    <path d="M0,200 L0,155 L80,125 L160,145 L240,108 L320,132 L400,95
+             L480,128 L560,105 L640,135 L720,88 L800,120 L880,100 L960,130
+             L1040,110 L1120,138 L1200,105 L1280,128 L1360,112 L1440,125 L1440,200 Z"
+          fill="#0a1208" opacity="0.75"/>
+  </svg>
+  <p class="ne-title">ENTER YOUR NAME</p>
+  <p class="ne-sub">up to 10 characters</p>
+  <input id="name-input" maxlength="10" autocomplete="off" spellcheck="false"/>
+  <p id="name-counter">0 / 10</p>
+  <button id="name-submit" class="ne-submit">SUBMIT</button>
+  <p id="name-skip" class="ne-skip">skip</p>
 </div>
 """
 html = html.replace("<body>", "<body>\n" + OVERLAY + NAME_OVERLAY, 1)
@@ -106,23 +101,6 @@ INJECTION = """
 @keyframes twinkle {
     0%, 100% { opacity: 0.12; transform: scale(1.0); }
     50%       { opacity: 0.95; transform: scale(1.4); }
-}
-
-/* Radial glow blob behind the title */
-.title-glow {
-    position: absolute;
-    width: 320px;
-    height: 180px;
-    background: radial-gradient(ellipse at center,
-        rgba(240,192,64,0.18) 0%,
-        rgba(200,64,24,0.08) 45%,
-        transparent 75%);
-    pointer-events: none;
-    animation: glow-pulse 3.4s ease-in-out infinite;
-}
-@keyframes glow-pulse {
-    0%, 100% { opacity: 0.7; transform: scale(1.0); }
-    50%       { opacity: 1.0; transform: scale(1.15); }
 }
 
 /* "SKYBIT" title */
@@ -192,7 +170,205 @@ INJECTION = """
     width: 100%;
     pointer-events: none;
 }
+
+/* ── Name-entry overlay ─────────────────────────────────────── */
+#name-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: linear-gradient(180deg, #060115 0%, #12082a 50%, #0c1022 100%);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+}
+.ne-title {
+    font-family: Arial Black, Arial, sans-serif;
+    font-size: clamp(28px, 7vw, 38px);
+    font-weight: 900;
+    letter-spacing: 5px;
+    color: #f0c040;
+    margin: 0 0 8px;
+    text-shadow:
+        -2px  0   0 #a82010,
+         2px  0   0 #a82010,
+         0   -2px 0 #a82010,
+         0    2px 0 #a82010,
+         0    7px 10px rgba(0, 0, 0, 0.8);
+    animation: float-title 3.4s ease-in-out infinite;
+    pointer-events: none;
+    position: relative;
+    z-index: 1;
+}
+.ne-sub {
+    font-size: 12px;
+    letter-spacing: 3px;
+    color: #d8b855;
+    opacity: 0.65;
+    margin: 0 0 24px;
+    pointer-events: none;
+    text-transform: uppercase;
+    position: relative;
+    z-index: 1;
+}
+#name-input {
+    background: #0d0820;
+    color: #f0c040;
+    border: 2px solid #e86828;
+    border-radius: 14px;
+    padding: 16px 28px;
+    font-size: clamp(20px, 5vw, 26px);
+    font-weight: 700;
+    letter-spacing: 4px;
+    text-align: center;
+    outline: none;
+    width: min(78vw, 300px);
+    box-sizing: border-box;
+    transition: box-shadow 0.2s;
+    position: relative;
+    z-index: 1;
+}
+#name-input:focus {
+    box-shadow: 0 0 0 3px rgba(240, 192, 64, 0.35);
+}
+#name-counter {
+    font-size: 13px;
+    color: #d8b855;
+    opacity: 0.6;
+    margin: 8px 0 24px;
+    letter-spacing: 1px;
+    pointer-events: none;
+    position: relative;
+    z-index: 1;
+}
+.ne-submit {
+    font-family: Arial Black, Arial, sans-serif;
+    font-size: clamp(13px, 3.6vw, 18px);
+    font-weight: 900;
+    letter-spacing: 4px;
+    color: #ffffff;
+    background: linear-gradient(180deg, #c84018 0%, #7e1c02 100%);
+    border: 2px solid #e86828;
+    border-radius: 60px;
+    padding: 16px 52px;
+    box-shadow:
+        0 5px 30px rgba(200, 64, 20, 0.65),
+        inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    animation: pulse-btn 1.8s ease-in-out infinite;
+    cursor: pointer;
+    white-space: nowrap;
+    position: relative;
+    z-index: 1;
+}
+.ne-skip {
+    margin-top: 18px;
+    color: rgba(200, 200, 220, 0.38);
+    font-size: 12px;
+    letter-spacing: 2px;
+    cursor: pointer;
+    text-transform: uppercase;
+    position: relative;
+    z-index: 1;
+}
 </style>
+
+<script>
+/* ── Supabase leaderboard bridge ───────────────────────────────────────── */
+(function () {
+    var _SB_URL = "__SB_URL__";
+    var _SB_KEY = "__SB_KEY__";
+
+    /* Fire-and-poll pattern: Python polls window._lbSubmitDone / window._lbFetchResult
+       instead of awaiting a JS Promise directly (which freezes Python's asyncio loop). */
+    window._lbSubmitDone = null;
+    window._lbFetchResult = null;
+
+    window.lbSubmitStart = function (name, score) {
+        window._lbSubmitDone = null;
+        (async function () {
+            if (!_SB_URL || !_SB_KEY) { window._lbSubmitDone = false; return; }
+            try {
+                var r = await fetch(_SB_URL + '/rest/v1/scores', {
+                    method: 'POST',
+                    headers: {
+                        'apikey': _SB_KEY,
+                        'Authorization': 'Bearer ' + _SB_KEY,
+                        'Content-Type': 'application/json',
+                        'Prefer': 'return=minimal'
+                    },
+                    body: JSON.stringify({name: String(name), score: Number(score)})
+                });
+                window._lbSubmitDone = r.ok;
+            } catch (e) { console.warn('lbSubmitStart:', e); window._lbSubmitDone = false; }
+        })();
+    };
+
+    window.lbFetchStart = function () {
+        window._lbFetchResult = null;
+        (async function () {
+            if (!_SB_URL || !_SB_KEY) { window._lbFetchResult = []; return; }
+            try {
+                var r = await fetch(
+                    _SB_URL + '/rest/v1/scores?select=name,score&order=score.desc&limit=10',
+                    { headers: {'apikey': _SB_KEY, 'Authorization': 'Bearer ' + _SB_KEY} }
+                );
+                window._lbFetchResult = r.ok ? await r.json() : [];
+            } catch (e) { console.warn('lbFetchStart:', e); window._lbFetchResult = []; }
+        })();
+    };
+
+    window._pendingName = "__pending__";
+    var _nameStarsAdded = false;
+
+    window.openNameEntry = function () {
+        var ov  = document.getElementById('name-overlay');
+        var inp = document.getElementById('name-input');
+        var ctr = document.getElementById('name-counter');
+
+        /* Inject twinkling stars once (same pattern as loading screen) */
+        if (!_nameStarsAdded) {
+            _nameStarsAdded = true;
+            for (var i = 0; i < 40; i++) {
+                var s = document.createElement('div');
+                s.className = 'star';
+                var sz = (Math.random() * 2.2 + 0.6).toFixed(1);
+                s.style.cssText =
+                    'width:' + sz + 'px;height:' + sz + 'px;' +
+                    'top:'   + (Math.random() * 90).toFixed(1)  + '%;' +
+                    'left:'  + (Math.random() * 100).toFixed(1) + '%;' +
+                    '--dur:'   + (Math.random() * 3 + 1.3).toFixed(1) + 's;' +
+                    '--delay:' + (Math.random() * 4).toFixed(1) + 's;';
+                ov.insertBefore(s, ov.firstChild);
+            }
+        }
+
+        ov.style.display = 'flex';
+        inp.value = '';
+        if (ctr) ctr.textContent = '0 / 10';
+        setTimeout(function () { inp.focus(); }, 80);
+        window._pendingName = '__pending__';
+
+        inp.oninput = function () {
+            if (ctr) ctr.textContent = inp.value.length + ' / 10';
+        };
+
+        function submit() {
+            var v = inp.value.trim();
+            window._pendingName = v.length > 0 ? v : '__skip__';
+            ov.style.display = 'none';
+        }
+        document.getElementById('name-submit').onclick = submit;
+        document.getElementById('name-skip').onclick = function () {
+            window._pendingName = '__skip__';
+            ov.style.display = 'none';
+        };
+        inp.onkeydown = function (e) { if (e.key === 'Enter') submit(); };
+    };
+}());
+</script>
 
 <script>
 (function () {
@@ -298,69 +474,15 @@ INJECTION = """
     }
 }());
 </script>
-
-<script>
-/* ── Supabase leaderboard bridge ──────────────────────────────────────────
-   lbSubmit / lbFetch / openNameEntry are called from game/leaderboard.py.
-   SUPABASE_URL and SUPABASE_ANON_KEY are baked in at build time.        */
-(function () {
-    var _SB_URL = """ + repr(_SB_URL) + """;
-    var _SB_KEY = """ + repr(_SB_KEY) + """;
-
-    window.lbSubmit = async function (name, score) {
-        if (!_SB_URL || !_SB_KEY) return false;
-        try {
-            var r = await fetch(_SB_URL + '/rest/v1/scores', {
-                method: 'POST',
-                headers: {
-                    'apikey': _SB_KEY,
-                    'Authorization': 'Bearer ' + _SB_KEY,
-                    'Content-Type': 'application/json',
-                    'Prefer': 'return=minimal'
-                },
-                body: JSON.stringify({name: String(name), score: Number(score)})
-            });
-            return r.ok;
-        } catch (e) { console.warn('lbSubmit:', e); return false; }
-    };
-
-    window.lbFetch = async function () {
-        if (!_SB_URL || !_SB_KEY) return [];
-        try {
-            var r = await fetch(
-                _SB_URL + '/rest/v1/scores?select=name,score&order=score.desc&limit=10',
-                { headers: {'apikey': _SB_KEY, 'Authorization': 'Bearer ' + _SB_KEY} }
-            );
-            return r.ok ? await r.json() : [];
-        } catch (e) { console.warn('lbFetch:', e); return []; }
-    };
-
-    window._pendingName = '__pending__';
-
-    window.openNameEntry = function () {
-        var ov  = document.getElementById('name-overlay');
-        var inp = document.getElementById('name-input');
-        ov.style.display = 'flex';
-        inp.value = '';
-        setTimeout(function () { inp.focus(); }, 80);
-        window._pendingName = '__pending__';
-
-        function submit() {
-            var v = inp.value.trim();
-            window._pendingName = v.length > 0 ? v : '__skip__';
-            ov.style.display = 'none';
-        }
-        document.getElementById('name-submit').onclick = submit;
-        document.getElementById('name-skip').onclick = function () {
-            window._pendingName = '__skip__';
-            ov.style.display = 'none';
-        };
-        inp.onkeydown = function (e) { if (e.key === 'Enter') submit(); };
-    };
-}());
-</script>
 """
 html = html.replace("</body>", INJECTION + "</body>", 1)
 
+html = html.replace("__SB_URL__", _SB_URL)
+html = html.replace("__SB_KEY__", _SB_KEY)
+
 src.write_text(html, encoding="utf-8")
 print("✓ Skybit theme injected into build/web/index.html")
+if _SB_URL:
+    print(f"✓ Supabase URL set: {_SB_URL[:40]}...")
+else:
+    print("⚠ SUPABASE_URL not set — leaderboard will be disabled")
