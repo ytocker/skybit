@@ -191,13 +191,27 @@ def _draw_buff_icon(surf, rect, kind):
                          (cx - bw - 1, cy - bh - 2, (bw + 1) * 2, 3),
                          border_radius=1)
     elif kind == "ghost":
-        orb = pygame.Surface((18, 18), pygame.SRCALPHA)
-        pygame.draw.circle(orb, (210, 225, 255, 200), (9, 9), 7)
-        pygame.draw.circle(orb, (240, 248, 255, 230), (9, 9), 5)
-        pygame.draw.circle(orb, (255, 255, 255, 160), (7, 7), 2)
-        surf.blit(orb, (cx - 9, cy - 9))
-        for ex in (cx - 3, cx + 3):
-            pygame.draw.circle(surf, (50, 55, 90), (ex, cy - 1), 2)
+        # Mini classic ghost: rounded head + straight sides + 3-bump skirt
+        GW, GH = 20, 24
+        gcx, gcy, hr = 10, 8, 8
+        body_y2 = 16
+        DARK_G = (32,  52, 120, 255)
+        BODY_G = (205, 228, 255, 235)
+        skirt   = [(1, body_y2), (4, GH-2), (8, body_y2+3),
+                   (gcx, GH-2), (12, body_y2+3), (16, GH-2), (GW-1, body_y2)]
+        skirt_o = [(0, body_y2), (4, GH-1), (7, body_y2+3),
+                   (gcx, GH-1), (13, body_y2+3), (16, GH-1), (GW, body_y2)]
+        mg = pygame.Surface((GW, GH), pygame.SRCALPHA)
+        pygame.draw.circle(mg, DARK_G, (gcx, gcy), hr + 1)
+        pygame.draw.rect(mg, DARK_G, (0, gcy, GW, body_y2 - gcy + 1))
+        pygame.draw.polygon(mg, DARK_G, skirt_o)
+        pygame.draw.circle(mg, BODY_G, (gcx, gcy), hr)
+        pygame.draw.rect(mg, BODY_G, (1, gcy, GW - 2, body_y2 - gcy))
+        pygame.draw.polygon(mg, BODY_G, skirt)
+        for ex in (gcx - 3, gcx + 3):
+            pygame.draw.circle(mg, (252, 254, 255, 255), (ex, gcy - 1), 3)
+            pygame.draw.circle(mg, (50, 110, 220, 255),  (ex + 1, gcy), 2)
+        surf.blit(mg, (cx - gcx, cy - gcy - 2))
 
 
 class PauseButton:

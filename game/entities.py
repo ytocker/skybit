@@ -428,43 +428,91 @@ class PowerUp:
 
     def _draw_ghost(self, surf):
         cx = int(self.x)
-        # Wafting bob: slightly irregular so it feels supernatural
-        cy = int(self.y + math.sin(self.pulse * 0.85) * 3.5
-                        + math.sin(self.pulse * 1.9) * 1.5)
-        r  = MUSHROOM_R + 1
+        # Supernatural wafting bob: two overlaid frequencies
+        cy = int(self.y + math.sin(self.pulse * 0.9) * 4
+                        + math.sin(self.pulse * 1.8) * 1.5)
 
-        # Drop shadow
-        sh = pygame.Surface((r * 3, 7), pygame.SRCALPHA)
-        pygame.draw.ellipse(sh, (0, 0, 0, 70), sh.get_rect())
-        surf.blit(sh, (cx - r - r // 2, cy + r + 4))
+        DARK     = (32,  52, 120, 255)
+        BODY     = (205, 228, 255, 235)
+        EYE_W    = (252, 254, 255, 255)
+        EYE_IRIS = (50,  110, 220, 255)
+        EYE_PUP  = (12,  18,  60,  255)
 
         # Pulsing blue additive glow
-        glow_a = int(55 + 40 * math.sin(self.pulse * 2.2))
-        glow_r = r + 6 + int(3 * math.sin(self.pulse * 1.3))
+        glow_a = int(55 + 40 * math.sin(self.pulse * 2.0))
+        glow_r = 22 + int(3 * math.sin(self.pulse * 1.4))
         aura = pygame.Surface(((glow_r + 2) * 2, (glow_r + 2) * 2), pygame.SRCALPHA)
-        pygame.draw.circle(aura, (130, 180, 255, glow_a),
+        pygame.draw.circle(aura, (90, 155, 255, glow_a),
                            (glow_r + 2, glow_r + 2), glow_r + 2)
         surf.blit(aura, (cx - glow_r - 2, cy - glow_r - 2),
                   special_flags=pygame.BLEND_ADD)
 
-        # Main orb body (pale blue-white, SRCALPHA so it blends softly)
-        orb = pygame.Surface((r * 2 + 2, r * 2 + 2), pygame.SRCALPHA)
-        pygame.draw.circle(orb, (210, 225, 255, 210), (r + 1, r + 1), r)
-        pygame.draw.circle(orb, (240, 248, 255, 240), (r + 1, r + 1), r - 3)
-        # Specular
-        pygame.draw.circle(orb, (255, 255, 255, 180), (r - 2, r - 4), 4)
-        surf.blit(orb, (cx - r - 1, cy - r - 1))
+        # Drop shadow
+        sh = pygame.Surface((32, 7), pygame.SRCALPHA)
+        pygame.draw.ellipse(sh, (0, 0, 0, 70), sh.get_rect())
+        surf.blit(sh, (cx - 16, cy + 19))
 
-        # Wispy tail — 3 bumps below the orb
-        for i, (dx, size) in enumerate(((-5, 5), (0, 6), (5, 5))):
-            bob = math.sin(self.pulse * 2.5 + i * 1.2) * 2
-            pygame.draw.circle(surf, (210, 225, 255, 180),
-                               (cx + dx, int(cy + r + 3 + bob)), size)
+        # ── Classic ghost silhouette on scratch SRCALPHA surface ──────────────
+        # 28 × 36 px sprite; head centre at local (14, 12).
+        GW, GH   = 28, 36
+        gcx      = GW // 2    # 14
+        gcy      = 12         # head-circle centre y
+        hr       = 12         # head radius
+        body_y2  = 26         # y where straight sides end, scallop starts
 
-        # Hollow dark eyes
-        for ex in (cx - 4, cx + 4):
-            pygame.draw.circle(surf, (50, 55, 90), (ex, cy - 2), 3)
-            pygame.draw.circle(surf, (30, 35, 70), (ex, cy - 2), 2)
+        # Scalloped-skirt polygon: 3 hanging bumps with 2 concave indents.
+        scallop = [
+            (1,        body_y2),
+            (6,        GH - 4),          # left bump
+            (11,       body_y2 + 4),     # indent 1
+            (gcx,      GH - 4),          # centre bump
+            (GW - 12,  body_y2 + 4),     # indent 2
+            (GW - 7,   GH - 4),          # right bump
+            (GW - 2,   body_y2),
+        ]
+        # Expanded by 1 px for the outline pass
+        scallop_o = [
+            (0,        body_y2),
+            (6,        GH - 3),
+            (10,       body_y2 + 4),
+            (gcx,      GH - 3),
+            (GW - 11,  body_y2 + 4),
+            (GW - 7,   GH - 3),
+            (GW,       body_y2),
+        ]
+
+        g = pygame.Surface((GW, GH), pygame.SRCALPHA)
+
+        # Outline pass
+        pygame.draw.circle(g, DARK, (gcx, gcy), hr + 1)
+        pygame.draw.rect(g, DARK, (0, gcy, GW, body_y2 - gcy + 1))
+        pygame.draw.polygon(g, DARK, scallop_o)
+
+        # Body fill
+        pygame.draw.circle(g, BODY, (gcx, gcy), hr)
+        pygame.draw.rect(g, BODY, (1, gcy, GW - 2, body_y2 - gcy))
+        pygame.draw.polygon(g, BODY, scallop)
+
+        # Right-side depth shading
+        sh2 = pygame.Surface((GW, GH), pygame.SRCALPHA)
+        pygame.draw.circle(sh2, (130, 175, 240, 55), (gcx + 5, gcy + 2), 11)
+        g.blit(sh2, (0, 0))
+
+        # Left-side highlight
+        hi = pygame.Surface((GW, GH), pygame.SRCALPHA)
+        pygame.draw.circle(hi, (255, 255, 255, 70), (gcx - 5, gcy - 5), 8)
+        g.blit(hi, (0, 0))
+
+        # Eyes: white → iris → pupil → specular dot
+        for ex in (gcx - 5, gcx + 5):
+            ey = gcy - 1
+            pygame.draw.circle(g, EYE_W,    (ex,     ey    ), 4)
+            pygame.draw.circle(g, EYE_IRIS, (ex + 1, ey + 1), 3)
+            pygame.draw.circle(g, EYE_PUP,  (ex + 1, ey + 1), 1)
+            pygame.draw.circle(g, (255, 255, 255, 200), (ex - 1, ey - 2), 1)
+
+        # Blit: head-circle centre aligns with (cx, cy)
+        surf.blit(g, (cx - gcx, cy - gcy))
 
 
 # Back-compat alias — some callers (e.g. snapshot/playtest scripts) still say Mushroom.
