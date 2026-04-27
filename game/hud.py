@@ -620,3 +620,85 @@ class HUD:
         btn_alpha = int(150 + math.sin(self.title_t * 4) * 90)
         _pill_btn(surf, (W // 2, H - 72), "TAP TO RETRY", size=19, alpha=btn_alpha)
         _draw_mountain_silhouette(surf, alpha=160)
+
+    def draw_leaderboard(self, surf, dt, scores, player_rank, loading, cooldown, elapsed=0.0):
+        self.title_t += dt
+        dim = pygame.Surface((W, H), pygame.SRCALPHA)
+        dim.fill((6, 1, 21, 200))
+        surf.blit(dim, (0, 0))
+
+        _draw_overlay_stars(surf, self._stars, self.title_t)
+
+        # Slide-in from below
+        slide_t = max(0.0, min(1.0, elapsed / 0.4))
+        e = slide_t * slide_t * (3 - 2 * slide_t)
+        card_top = int(50 + (1.0 - e) * (H // 2))
+
+        _outlined_text(surf, "GLOBAL TOP 10", (W // 2, card_top + 4),
+                       size=24, px=2, shadow_offset=(2, 3))
+
+        if loading:
+            for i in range(3):
+                phase = self.title_t * 4 + i * 0.8
+                a = int(120 + 120 * math.sin(phase))
+                r = int(5 + 2 * math.sin(phase))
+                dot = pygame.Surface((r * 2 + 2, r * 2 + 2), pygame.SRCALPHA)
+                pygame.draw.circle(dot, (*_GOLD_BRIGHT, a), (r + 1, r + 1), r)
+                surf.blit(dot, (W // 2 - 28 + i * 28 - r, card_top + 48 - r))
+        else:
+            row_h = 34
+            n_rows = min(len(scores), 10)
+            card_rect = pygame.Rect(12, card_top + 28, W - 24, n_rows * row_h + 16)
+            _dark_panel(surf, card_rect, radius=14, alpha=215)
+
+            RANK_GOLD   = (255, 215,   0)
+            RANK_SILVER = (192, 192, 192)
+            RANK_BRONZE = (205, 127,  50)
+            RANK_NAVY   = ( 30,  50, 120)
+            GREEN_HI    = ( 30, 180,  80,  60)
+
+            f_rank  = _font(13, True)
+            f_name  = _font(14, False)
+            f_score = _font(15, True)
+            f_you   = _font(11, True)
+
+            ry = card_rect.y + 10
+            for i, entry in enumerate(scores[:10]):
+                rank = i + 1
+                is_player = (rank == player_rank)
+
+                if is_player:
+                    hi = pygame.Surface((card_rect.width - 8, row_h - 2), pygame.SRCALPHA)
+                    hi.fill(GREEN_HI)
+                    surf.blit(hi, (card_rect.x + 4, ry - 1))
+
+                badge_color = {1: RANK_GOLD, 2: RANK_SILVER, 3: RANK_BRONZE}.get(rank, RANK_NAVY)
+                badge = pygame.Surface((24, 20), pygame.SRCALPHA)
+                pygame.draw.rect(badge, (*badge_color, 220), (0, 0, 24, 20), border_radius=5)
+                rank_img = f_rank.render(str(rank), True,
+                                         _NIGHT_DEEP if rank <= 3 else WHITE)
+                badge.blit(rank_img, rank_img.get_rect(center=(12, 10)))
+                surf.blit(badge, (card_rect.x + 8, ry + 1))
+
+                name = str(entry.get("name", "???"))[:14]
+                name_col = (180, 255, 180) if is_player else _GOLD_MUTED
+                n_img = f_name.render(name, True, name_col)
+                surf.blit(n_img, (card_rect.x + 38, ry + 3))
+
+                if is_player:
+                    you_bg = pygame.Surface((30, 16), pygame.SRCALPHA)
+                    pygame.draw.rect(you_bg, (30, 180, 80, 180), (0, 0, 30, 16), border_radius=8)
+                    you_img = f_you.render("YOU", True, WHITE)
+                    you_bg.blit(you_img, you_img.get_rect(center=(15, 8)))
+                    surf.blit(you_bg, (card_rect.x + 38 + n_img.get_width() + 5, ry + 4))
+
+                sc_img = f_score.render(str(entry.get("score", 0)), True, _GOLD_BRIGHT)
+                surf.blit(sc_img, (card_rect.right - 12 - sc_img.get_width(), ry + 2))
+
+                ry += row_h
+
+        if cooldown <= 0:
+            alpha = int(150 + math.sin(self.title_t * 4) * 90)
+            _pill_btn(surf, (W // 2, H - 48), "TAP TO MENU", size=17, alpha=alpha)
+
+        _draw_mountain_silhouette(surf, alpha=160)
