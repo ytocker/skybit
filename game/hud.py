@@ -171,13 +171,32 @@ def _draw_buff_icon(surf, rect, kind):
         pygame.draw.rect(surf, (220, 220, 235), (cx - 8, cy + 4, 3, 3))
         pygame.draw.rect(surf, (220, 220, 235), (cx + 5, cy + 4, 3, 3))
     elif kind == "slowmo":
-        top = [(cx - 6, cy - 7), (cx + 6, cy - 7), (cx, cy)]
-        bot = [(cx - 6, cy + 7), (cx + 6, cy + 7), (cx, cy)]
-        pygame.draw.polygon(surf, (140, 70, 210), top)
-        pygame.draw.polygon(surf, (140, 70, 210), bot)
-        pygame.draw.line(surf, (255, 230, 150), (cx, cy - 4), (cx, cy + 4), 2)
-        pygame.draw.rect(surf, (120, 60, 30), (cx - 7, cy - 9, 14, 2))
-        pygame.draw.rect(surf, (120, 60, 30), (cx - 7, cy + 7, 14, 2))
+        # Tiny clock face on SRCALPHA scratch
+        r = 7
+        D = r * 2 + 2
+        mc = pygame.Surface((D, D), pygame.SRCALPHA)
+        cc = (D // 2, D // 2)
+        pygame.draw.circle(mc, (130, 65, 190, 255), cc, r)       # bezel
+        pygame.draw.circle(mc, (42, 10, 70, 255), cc, r - 1)     # face
+        # 4 major ticks
+        for i in range(4):
+            ang = math.pi / 2 * i - math.pi / 2
+            x1 = cc[0] + math.cos(ang) * (r - 1)
+            y1 = cc[1] + math.sin(ang) * (r - 1)
+            x2 = cc[0] + math.cos(ang) * (r - 3)
+            y2 = cc[1] + math.sin(ang) * (r - 3)
+            pygame.draw.line(mc, (220, 190, 255, 230), (int(x1), int(y1)), (int(x2), int(y2)), 1)
+        # Hour hand ~10 o'clock
+        ha = math.pi * 2 * 10 / 12 - math.pi / 2
+        pygame.draw.line(mc, (250, 225, 255, 255), cc,
+                         (int(cc[0] + math.cos(ha) * 3), int(cc[1] + math.sin(ha) * 3)), 2)
+        # Minute hand ~12 o'clock
+        ma = -math.pi / 2
+        pygame.draw.line(mc, (200, 155, 255, 255), cc,
+                         (int(cc[0] + math.cos(ma) * 5), int(cc[1] + math.sin(ma) * 5)), 1)
+        # Center dot
+        pygame.draw.circle(mc, (255, 240, 255, 255), cc, 1)
+        surf.blit(mc, (cx - D // 2, cy - D // 2))
     elif kind == "kfc":
         # Tiny red KFC bucket
         bw = 6

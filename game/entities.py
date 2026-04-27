@@ -370,36 +370,73 @@ class PowerUp:
 
     def _draw_slowmo(self, surf):
         cx = int(self.x)
-        cy = int(self.y)
-        # Purple aura
-        aura = pygame.Surface((MUSHROOM_R * 3, MUSHROOM_R * 3), pygame.SRCALPHA)
-        pygame.draw.circle(aura, (180, 100, 255, 70),
-                           (aura.get_width() // 2, aura.get_height() // 2),
-                           MUSHROOM_R + 4)
-        surf.blit(aura, (cx - aura.get_width() // 2, cy - aura.get_height() // 2),
-                  special_flags=pygame.BLEND_ADD)
-        # Hourglass body: two triangles joined at a pinch
-        top = [(cx - MUSHROOM_R + 2, cy - MUSHROOM_R + 1),
-               (cx + MUSHROOM_R - 2, cy - MUSHROOM_R + 1),
-               (cx, cy)]
-        bot = [(cx - MUSHROOM_R + 2, cy + MUSHROOM_R - 1),
-               (cx + MUSHROOM_R - 2, cy + MUSHROOM_R - 1),
-               (cx, cy)]
-        pygame.draw.polygon(surf, (60, 20, 90), [(p[0] - 1, p[1] - 1) for p in top] + [top[2]])
-        pygame.draw.polygon(surf, (140, 70, 210), top)
-        pygame.draw.polygon(surf, (60, 20, 90), [(p[0] - 1, p[1] + 1) for p in bot] + [bot[2]])
-        pygame.draw.polygon(surf, (140, 70, 210), bot)
-        # Sand — light falling stream in the middle
-        pygame.draw.line(surf, (255, 230, 150), (cx, cy - MUSHROOM_R + 4), (cx, cy - 1), 2)
-        pygame.draw.line(surf, (255, 230, 150), (cx, cy + 1), (cx, cy + MUSHROOM_R - 4), 2)
-        # Wooden end caps
-        pygame.draw.rect(surf, (120, 60, 30), (cx - MUSHROOM_R, cy - MUSHROOM_R - 2,
-                                                MUSHROOM_R * 2, 4))
-        pygame.draw.rect(surf, (120, 60, 30), (cx - MUSHROOM_R, cy + MUSHROOM_R - 2,
-                                                MUSHROOM_R * 2, 4))
-        pygame.draw.rect(surf, (180, 110, 60), (cx - MUSHROOM_R + 1,
-                                                 cy - MUSHROOM_R - 1,
-                                                 MUSHROOM_R * 2 - 2, 2))
+        cy = int(self.y + math.sin(self.pulse * 0.7) * 3)
+        R = MUSHROOM_R  # 14
+
+        # Drop shadow
+        sh_w = R * 2 + 6
+        sh = pygame.Surface((sh_w, 8), pygame.SRCALPHA)
+        pygame.draw.ellipse(sh, (0, 0, 0, 75), sh.get_rect())
+        surf.blit(sh, (cx - sh_w // 2, cy + R + 2))
+
+        # Clock face on scratch SRCALPHA surface for clean edges
+        PAD = 2
+        D = (R + PAD) * 2
+        g = pygame.Surface((D, D), pygame.SRCALPHA)
+        gc = (D // 2, D // 2)
+
+        # Outer shadow ring
+        pygame.draw.circle(g, (15, 0, 35, 200), gc, R + 1)
+        # Bezel: two rings for a bevelled metallic look
+        pygame.draw.circle(g, (195, 135, 255, 255), gc, R)
+        pygame.draw.circle(g, (130, 70, 195, 255), gc, R - 1)
+        # Deep purple face
+        pygame.draw.circle(g, (42, 10, 70, 255), gc, R - 2)
+        # Slightly lighter inner face
+        pygame.draw.circle(g, (62, 20, 98, 255), gc, R - 4)
+
+        # Top-left specular highlight
+        hl = pygame.Surface((D, D), pygame.SRCALPHA)
+        pygame.draw.circle(hl, (255, 230, 255, 60), (gc[0] - 2, gc[1] - 3), R - 5)
+        g.blit(hl, (0, 0))
+
+        # Tick marks: 4 major (every 3rd) + 8 minor
+        for i in range(12):
+            ang = math.pi * 2 * i / 12 - math.pi / 2
+            major = (i % 3 == 0)
+            r_out = R - 2
+            r_in  = r_out - (3 if major else 2)
+            x1 = gc[0] + math.cos(ang) * r_out
+            y1 = gc[1] + math.sin(ang) * r_out
+            x2 = gc[0] + math.cos(ang) * r_in
+            y2 = gc[1] + math.sin(ang) * r_in
+            col = (230, 200, 255, 240) if major else (165, 125, 210, 160)
+            pygame.draw.line(g, col, (int(x1), int(y1)), (int(x2), int(y2)),
+                             2 if major else 1)
+
+        # Hour hand — short, thick, slow
+        hr_ang = self.pulse * 0.15 - math.pi / 2
+        hx = int(gc[0] + math.cos(hr_ang) * (R - 7))
+        hy = int(gc[1] + math.sin(hr_ang) * (R - 7))
+        pygame.draw.line(g, (250, 225, 255, 255), gc, (hx, hy), 3)
+
+        # Minute hand — long, thinner
+        min_ang = self.pulse * 1.1 - math.pi / 2
+        mx = int(gc[0] + math.cos(min_ang) * (R - 4))
+        my = int(gc[1] + math.sin(min_ang) * (R - 4))
+        pygame.draw.line(g, (200, 155, 255, 255), gc, (mx, my), 2)
+
+        # Sweep hand — thinnest, amber, fastest (adds drama)
+        sec_ang = self.pulse * 3.8 - math.pi / 2
+        sx = int(gc[0] + math.cos(sec_ang) * (R - 3))
+        sy = int(gc[1] + math.sin(sec_ang) * (R - 3))
+        pygame.draw.line(g, (255, 185, 60, 215), gc, (sx, sy), 1)
+
+        # Center pin
+        pygame.draw.circle(g, (255, 240, 255, 255), gc, 2)
+        pygame.draw.circle(g, (155, 95, 220, 255), gc, 1)
+
+        surf.blit(g, (cx - D // 2, cy - D // 2))
 
 
     def _draw_kfc(self, surf):

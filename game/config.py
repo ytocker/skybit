@@ -40,13 +40,13 @@ GHOST_DURATION     = 4.0
 COMBO_WINDOW       = 1.6
 
 # Spawn weights for power-up kinds. Must sum to anything — they're
-# normalized at pick time.  kfc is intentionally ultra-rare.
+# normalized at pick time.
 POWERUP_WEIGHTS    = (
-    ("triple", 60),
-    ("slowmo", 25),
-    ("magnet", 15),
-    ("kfc",     3),
-    ("ghost",  10),
+    ("triple", 1),
+    ("slowmo", 1),
+    ("magnet", 1),
+    ("kfc",    1),
+    ("ghost",  1),
 )
 
 SAVE_FILE = "skybit_save.json"
