@@ -133,10 +133,10 @@ pu_panel.fill((12, 8, 38))
 for gy in range(20, 220, 30):
     for gx in range(30, W, 30):
         pygame.draw.circle(pu_panel, (25, 18, 55), (gx, gy), 1)
-lbl2 = lf.render("POWERUPS  —  mushroom · magnet · slowmo", True, (180, 160, 110))
+lbl2 = lf.render("POWERUPS  —  mushroom · magnet · slowmo · kfc", True, (180, 160, 110))
 pu_panel.blit(lbl2, (W//2 - lbl2.get_width()//2, 8))
 
-for kind, cx in (("triple", 70), ("magnet", 180), ("slowmo", 290)):
+for kind, cx in (("triple", 55), ("magnet", 145), ("slowmo", 235), ("kfc", 325)):
     pu = PowerUp(cx, 120, kind)
     pu.pulse = 1.5  # mid-animation
     pu.draw(pu_panel)

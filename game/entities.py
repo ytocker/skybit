@@ -25,6 +25,29 @@ from game.draw import (
 from game import parrot
 from game.pillar_variants import draw_pillar_pair
 
+# ── KFC logo sprite (lazy-loaded once at first draw) ─────────────────────────
+_kfc_sprite: "pygame.Surface | None" = None
+
+def _get_kfc_sprite() -> "pygame.Surface":
+    global _kfc_sprite
+    if _kfc_sprite is None:
+        import os
+        r         = MUSHROOM_R + 2
+        logo_size = int(r * 1.72)
+        path      = os.path.join(os.path.dirname(__file__), "assets", "kfc_logo.png")
+        try:
+            raw = pygame.image.load(path).convert_alpha()
+        except pygame.error:
+            raw = pygame.image.load(path)
+        logo      = pygame.transform.smoothscale(raw, (logo_size, logo_size))
+        # Clip to circle so logo corners don't bleed outside the white badge
+        mask = pygame.Surface((logo_size, logo_size), pygame.SRCALPHA)
+        pygame.draw.circle(mask, (255, 255, 255, 255),
+                           (logo_size // 2, logo_size // 2), logo_size // 2)
+        logo.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+        _kfc_sprite = logo
+    return _kfc_sprite
+
 
 # Default pillar palette (fallback when no biome provided).
 _DEFAULT_PILLAR = {
@@ -317,67 +340,30 @@ class PowerUp:
 
 
     def _draw_kfc(self, surf):
-        """Colonel Sanders face badge — simplified KFC logo."""
         cx = int(self.x)
         cy = int(self.y + math.sin(self.pulse * 0.9) * 2.5)
-        r = MUSHROOM_R + 2   # slightly larger badge
+        r  = MUSHROOM_R + 2
 
         # Drop shadow
-        sh_w = r * 3
+        sh_w = int(r * 2.8)
         sh = pygame.Surface((sh_w, 8), pygame.SRCALPHA)
-        pygame.draw.ellipse(sh, (0, 0, 0, 90), sh.get_rect())
+        pygame.draw.ellipse(sh, (0, 0, 0, 80), sh.get_rect())
         surf.blit(sh, (cx - sh_w // 2, cy + r + 2))
 
-        # Pulsing red aura (tight, no blob)
-        aura_a = max(0, min(255, int(40 + 25 * math.sin(self.pulse * 2))))
-        aura = pygame.Surface(((r + 4) * 2, (r + 4) * 2), pygame.SRCALPHA)
-        pygame.draw.circle(aura, (220, 15, 15, aura_a), (r + 4, r + 4), r + 4)
-        surf.blit(aura, (cx - r - 4, cy - r - 4))
+        # Pulsing red glow ring
+        glow_a = max(0, min(255, int(55 + 30 * math.sin(self.pulse * 2))))
+        glow_r = r + 4 + int(2 * math.sin(self.pulse * 1.3))
+        glow = pygame.Surface(((glow_r + 2) * 2, (glow_r + 2) * 2), pygame.SRCALPHA)
+        pygame.draw.circle(glow, (228, 0, 43, glow_a), (glow_r + 2, glow_r + 2), glow_r + 2)
+        surf.blit(glow, (cx - glow_r - 2, cy - glow_r - 2))
 
-        # Red circular badge background
-        pygame.draw.circle(surf, (90, 4, 4),    (cx, cy), r + 2)  # dark outline
-        pygame.draw.circle(surf, (210, 18, 18), (cx, cy), r + 1)
-        pygame.draw.circle(surf, (228, 22, 22), (cx, cy), r)
+        # White circle background
+        pygame.draw.circle(surf, (40, 40, 60),   (cx, cy), r + 2)   # dark outline
+        pygame.draw.circle(surf, (255, 255, 255), (cx, cy), r + 1)
 
-        # White hair — two puffy lobes above the face
-        hair_y = cy - r + 3
-        pygame.draw.circle(surf, (248, 248, 248), (cx - 4, hair_y), 6)
-        pygame.draw.circle(surf, (248, 248, 248), (cx + 4, hair_y), 6)
-        pygame.draw.ellipse(surf, (248, 248, 248),
-                            (cx - 8, hair_y - 3, 16, 8))
-
-        # Cream face oval
-        pygame.draw.ellipse(surf, (245, 225, 200),
-                            (cx - 8, cy - 7, 16, 14))
-
-        # Black round glasses — two circles + bridge
-        pygame.draw.circle(surf, (20, 20, 20), (cx - 4, cy - 2), 3)
-        pygame.draw.circle(surf, (20, 20, 20), (cx + 4, cy - 2), 3)
-        # Lens glint
-        pygame.draw.circle(surf, (80, 80, 80), (cx - 5, cy - 3), 2)
-        pygame.draw.circle(surf, (80, 80, 80), (cx + 3, cy - 3), 2)
-        # Bridge between lenses
-        pygame.draw.line(surf, (60, 60, 60), (cx - 1, cy - 2), (cx + 1, cy - 2), 1)
-
-        # Black string tie — vertical line from chin
-        pygame.draw.line(surf, (15, 15, 15), (cx, cy + 2), (cx, cy + 7), 1)
-        pygame.draw.circle(surf, (15, 15, 15), (cx, cy + 2), 2)  # knot
-
-        # White collar / shirt bottom — two angled white wedges
-        pygame.draw.polygon(surf, (245, 245, 245),
-                            [(cx - 6, cy + 5), (cx - 2, cy + 2), (cx, cy + 7)])
-        pygame.draw.polygon(surf, (245, 245, 245),
-                            [(cx + 6, cy + 5), (cx + 2, cy + 2), (cx, cy + 7)])
-
-        # Red accent on shirt (below collar)
-        pygame.draw.ellipse(surf, (210, 18, 18),
-                            (cx - 7, cy + 6, 14, 5))
-
-        # Subtle face sheen (animated)
-        sheen_a = max(0, min(255, int(60 + 40 * math.sin(self.pulse * 1.8))))
-        sheen = pygame.Surface((10, 4), pygame.SRCALPHA)
-        pygame.draw.ellipse(sheen, (255, 240, 220, sheen_a), sheen.get_rect())
-        surf.blit(sheen, (cx - 5, cy - 6))
+        # KFC logo (real image, pre-scaled & circle-clipped)
+        logo = _get_kfc_sprite()
+        surf.blit(logo, (cx - logo.get_width() // 2, cy - logo.get_height() // 2))
 
 
 # Back-compat alias — some callers (e.g. snapshot/playtest scripts) still say Mushroom.
