@@ -206,16 +206,20 @@ class App:
 
     def _advance_past_stats(self):
         import sys
+        self._final_score = self.world.score
+        self._name_input_buf = ""
+        self._stats_t = 0.0
         if self.world.score > 0:
-            self._final_score = self.world.score
-            self._name_input_buf = ""
             self.state = STATE_NAMEENTRY
-            self._stats_t = 0.0
             if sys.platform == "emscripten":
                 self._start_name_entry = True  # triggers JS overlay via create_task
         else:
-            self.state = STATE_GAMEOVER
-            self._cooldown_t = 0.5
+            # Score 0: skip name entry, go straight to leaderboard
+            if sys.platform == "emscripten":
+                self.state = STATE_NAMEENTRY  # keeps world ticking while task runs
+                self._start_name_entry = True
+            else:
+                self._submit_name_native("")
 
     def _submit_name_native(self, name: str):
         """Finish native name-entry: save to local JSON, show leaderboard."""
@@ -239,7 +243,10 @@ class App:
     async def _on_name_submitted(self):
         try:
             from game import leaderboard
-            name = await leaderboard.open_name_entry()
+            if self._final_score > 0:
+                name = await leaderboard.open_name_entry()
+            else:
+                name = None
             if name:
                 await leaderboard.submit(name, self._final_score)
             self._lb_loading = True
