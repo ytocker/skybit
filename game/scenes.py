@@ -218,10 +218,20 @@ class App:
             self._cooldown_t = 0.5
 
     def _submit_name_native(self, name: str):
-        """Finish native name-entry: skip Supabase, go straight to leaderboard."""
-        self._lb_scores = []
+        """Finish native name-entry: save to local JSON, show leaderboard."""
+        from game import leaderboard
+        if name:
+            leaderboard._native_submit(name, self._final_score)
+        scores = leaderboard._native_fetch()
+        self._lb_scores = scores
         self._lb_loading = False
-        self._lb_player_rank = -1
+        if scores and name:
+            self._lb_player_rank = next(
+                (i for i, e in enumerate(scores) if e["score"] == self._final_score),
+                -1,
+            )
+        else:
+            self._lb_player_rank = -1
         self.hud.title_t = 0.0
         self.state = STATE_LEADERBOARD
         self._cooldown_t = 1.0
