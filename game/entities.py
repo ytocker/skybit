@@ -34,13 +34,17 @@ def _get_kfc_sprite() -> "pygame.Surface":
         import os
         r         = MUSHROOM_R + 2
         logo_size = int(r * 1.72)
-        path      = os.path.join(os.path.dirname(__file__), "assets", "kfc_logo.png")
-        try:
-            raw = pygame.image.load(path).convert_alpha()
-        except pygame.error:
-            raw = pygame.image.load(path)
-        logo      = pygame.transform.smoothscale(raw, (logo_size, logo_size))
-        # Clip to circle so logo corners don't bleed outside the white badge
+        path      = os.path.join(os.path.dirname(__file__), "assets", "kfc_logo.jpg")
+        raw = pygame.image.load(path)
+        # Crop to square (center crop on the wider axis)
+        rw, rh = raw.get_size()
+        side = min(rw, rh)
+        crop = pygame.Surface((side, side))
+        crop.blit(raw, (-(rw - side) // 2, -(rh - side) // 2))
+        scaled = pygame.transform.smoothscale(crop, (logo_size, logo_size))
+        # Convert to SRCALPHA so the circle mask can punch out corners
+        logo = pygame.Surface((logo_size, logo_size), pygame.SRCALPHA)
+        logo.blit(scaled, (0, 0))
         mask = pygame.Surface((logo_size, logo_size), pygame.SRCALPHA)
         pygame.draw.circle(mask, (255, 255, 255, 255),
                            (logo_size // 2, logo_size // 2), logo_size // 2)
