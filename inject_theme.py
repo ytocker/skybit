@@ -434,77 +434,277 @@ body   { background: #0d0820 !important; }
 <script>
 (function () {
     /* ── skyPlay: Web Audio synthesis ─────────────────────────────────────
-       Matches game/audio.py browser backend parameters exactly.          */
+       Mirrors the procedural++ toolkit in game/audio.py — band-limited
+       OscillatorNodes (sine/square/triangle), exponential gain envelope
+       via setTargetAtTime, vibrato via a modulator OscillatorNode wired to
+       the carrier's frequency, detune via osc.detune.value, and filtered
+       noise via AudioBufferSourceNode + BiquadFilterNode. Each named sound
+       composes one or more voice() / tone() / noise() calls so it matches
+       the same multi-voice spec the Python backend renders.                */
+
     var _ctx = null;
+    var _noiseBuf = null;            // shared 2-second white-noise buffer
+
     function getCtx() {
         if (!_ctx) _ctx = new (window.AudioContext || window.webkitAudioContext)();
         if (_ctx.state === 'suspended') _ctx.resume();
         return _ctx;
     }
-    function tone(ac, f0, f1, dur, type, vol, atk, rel, t0) {
-        var osc = ac.createOscillator(), g = ac.createGain();
-        osc.connect(g); g.connect(ac.destination);
-        osc.type = type;
-        osc.frequency.setValueAtTime(f0, t0);
-        if (f0 !== f1) osc.frequency.linearRampToValueAtTime(f1, t0 + dur);
+    function getNoiseBuf(ac) {
+        if (_noiseBuf) return _noiseBuf;
+        var n = ac.sampleRate * 2;
+        _noiseBuf = ac.createBuffer(1, n, ac.sampleRate);
+        var d = _noiseBuf.getChannelData(0);
+        // Deterministic LCG so renders are reproducible across reloads
+        var s = 0x12345678;
+        for (var i = 0; i < n; i++) {
+            s = (s * 1664525 + 1013904223) >>> 0;
+            d[i] = (s / 0x80000000) - 1.0;
+        }
+        return _noiseBuf;
+    }
+
+    /* Linear attack to vol over `atk`, then exponential decay with time
+       constant ~`dec` so the gain reaches ~0 by t0+dur. setTargetAtTime
+       uses tau = dec/3 to land near zero by the stop time.                 */
+    function applyEnv(g, vol, atk, dec, dur, t0) {
         g.gain.setValueAtTime(0, t0);
         g.gain.linearRampToValueAtTime(vol, t0 + atk);
-        g.gain.setValueAtTime(vol, t0 + dur - rel);
-        g.gain.linearRampToValueAtTime(0, t0 + dur);
-        osc.start(t0); osc.stop(t0 + dur);
+        g.gain.setTargetAtTime(0, t0 + atk, Math.max(0.001, dec / 3));
+        // Hard cut at end so notes don't bleed
+        g.gain.setValueAtTime(0, t0 + dur);
     }
+
+    /* tone() now: voice with optional pitch sweep, vibrato, detune, expdecay */
+    function tone(ac, opts) {
+        // opts: {start, dur, f0, f1, type, vol, atk, dec, vib, vibDepth, detune}
+        var t0 = opts.start;
+        var dur = opts.dur;
+        var f0 = opts.f0, f1 = (opts.f1 === undefined ? f0 : opts.f1);
+        var atk = opts.atk || 0.003;
+        var dec = (opts.dec === undefined ? dur * 0.5 : opts.dec);
+        var osc = ac.createOscillator(), g = ac.createGain();
+        osc.type = opts.type;
+        if (opts.detune) osc.detune.value = opts.detune;
+        osc.frequency.setValueAtTime(f0, t0);
+        if (f0 !== f1) osc.frequency.linearRampToValueAtTime(f1, t0 + dur);
+        osc.connect(g); g.connect(ac.destination);
+        if (opts.vib && opts.vibDepth) {
+            var lfo = ac.createOscillator(), lfoG = ac.createGain();
+            lfo.type = 'sine';
+            lfo.frequency.value = opts.vib;
+            // Depth in cents: 1200 cents = 1 octave. Map fraction → cents.
+            lfoG.gain.value = opts.vibDepth * 1200;
+            lfo.connect(lfoG); lfoG.connect(osc.detune);
+            lfo.start(t0); lfo.stop(t0 + dur);
+        }
+        applyEnv(g, opts.vol, atk, dec, dur, t0);
+        osc.start(t0); osc.stop(t0 + dur + 0.02);
+    }
+
+    /* Filtered white-noise voice. lp/hp are cutoff frequencies in Hz, or 0
+       for bypass. amHz/amDepth modulate amplitude (used for thunder).      */
+    function noise(ac, opts) {
+        // opts: {start, dur, vol, lp, hp, atk, dec, amHz, amDepth}
+        var t0 = opts.start;
+        var dur = opts.dur;
+        var atk = opts.atk || 0.001;
+        var dec = (opts.dec === undefined ? dur * 0.5 : opts.dec);
+        var src = ac.createBufferSource();
+        src.buffer = getNoiseBuf(ac);
+        src.loop = true;
+        // Random start offset so successive noises don't sound identical
+        src.loopStart = 0;
+        src.loopEnd = src.buffer.duration;
+        var node = src;
+        if (opts.lp) {
+            var lpf = ac.createBiquadFilter();
+            lpf.type = 'lowpass';
+            lpf.frequency.value = opts.lp;
+            lpf.Q.value = 0.5;
+            node.connect(lpf); node = lpf;
+        }
+        if (opts.hp) {
+            var hpf = ac.createBiquadFilter();
+            hpf.type = 'highpass';
+            hpf.frequency.value = opts.hp;
+            hpf.Q.value = 0.5;
+            node.connect(hpf); node = hpf;
+        }
+        var g = ac.createGain();
+        node.connect(g); g.connect(ac.destination);
+        applyEnv(g, opts.vol, atk, dec, dur, t0);
+        if (opts.amHz && opts.amDepth) {
+            var lfo = ac.createOscillator(), lfoG = ac.createGain();
+            lfo.type = 'sine';
+            lfo.frequency.value = opts.amHz;
+            lfoG.gain.value = opts.amDepth * opts.vol;
+            lfo.connect(lfoG); lfoG.connect(g.gain);
+            lfo.start(t0); lfo.stop(t0 + dur);
+        }
+        src.start(t0); src.stop(t0 + dur + 0.02);
+    }
+
+    /* Twin detuned-sine voice (for chorus thickness on coins, chords).     */
+    function twin(ac, base) {
+        var a = Object.assign({}, base, {detune: +5, vol: base.vol * 0.5});
+        var b = Object.assign({}, base, {detune: -5, vol: base.vol * 0.5});
+        tone(ac, a); tone(ac, b);
+    }
+
     window.skyPlay = function (name, volume) {
         try {
             var ac = getCtx(), t = ac.currentTime, v = volume || 0.5;
-            if      (name === 'flap')       { tone(ac,260,520,.07,'square',.25*v,.004,.05,t); }
-            else if (name === 'coin')       { tone(ac,880,1320,.10,'sine',.40*v,.004,.08,t); }
-            else if (name === 'coin_combo') { tone(ac,1175,1760,.13,'sine',.45*v,.003,.09,t); }
+
+            if (name === 'flap') {
+                noise(ac, {start: t, dur: 0.060, vol: 0.45*v, lp: 1500,
+                           atk: 0.002, dec: 0.025});
+                tone (ac, {start: t, dur: 0.080, f0: 180, f1: 90, type: 'sine',
+                           vol: 0.30*v, atk: 0.002, dec: 0.04});
+            }
+            else if (name === 'coin') {
+                twin(ac, {start: t, dur: 0.120, f0: 1320, type: 'sine',
+                          vol: 0.55*v, atk: 0.003, dec: 0.060});
+                tone(ac, {start: t,         dur: 0.120, f0: 1980, type: 'sine',
+                          vol: 0.22*v, atk: 0.003, dec: 0.060});
+                tone(ac, {start: t + 0.080, dur: 0.040, f0: 4400, type: 'sine',
+                          vol: 0.18*v, atk: 0.001, dec: 0.012});
+            }
+            else if (name === 'coin_combo') {
+                twin(ac, {start: t, dur: 0.140, f0: 1480, type: 'sine',
+                          vol: 0.58*v, atk: 0.003, dec: 0.075});
+                tone(ac, {start: t,         dur: 0.140, f0: 2220, type: 'sine',
+                          vol: 0.24*v, atk: 0.003, dec: 0.075});
+                tone(ac, {start: t,         dur: 0.060, f0: 880, f1: 2200,
+                          type: 'sine', vol: 0.22*v, atk: 0.001, dec: 0.030});
+                tone(ac, {start: t + 0.090, dur: 0.040, f0: 4900, type: 'sine',
+                          vol: 0.20*v, atk: 0.001, dec: 0.012});
+            }
             else if (name === 'coin_triple') {
-                tone(ac,880,880,.05,'sine',.35*v,.01,.02,t);
-                tone(ac,1175,1175,.06,'sine',.40*v,.01,.02,t+.05);
-                tone(ac,1568,1568,.08,'sine',.45*v,.01,.02,t+.11);
+                var step = function (s, d, root, vol) {
+                    twin(ac, {start: s, dur: d, f0: root, type: 'sine',
+                              vol: vol*0.55*v, atk: 0.003, dec: d*0.6});
+                    tone(ac, {start: s, dur: d, f0: root*1.5, type: 'sine',
+                              vol: vol*0.30*v, atk: 0.003, dec: d*0.55});
+                };
+                step(t,         0.060, 523, 1.00);
+                step(t + 0.060, 0.060, 659, 1.00);
+                step(t + 0.120, 0.120, 784, 1.18);
+                tone(ac, {start: t + 0.130, dur: 0.050, f0: 5200, type: 'sine',
+                          vol: 0.18*v, atk: 0.001, dec: 0.020});
             }
             else if (name === 'mushroom') {
-                tone(ac,523,523,.08,'triangle',.42*v,.01,.08,t);
-                tone(ac,659,659,.08,'triangle',.42*v,.01,.08,t+.08);
-                tone(ac,784,988,.14,'triangle',.50*v,.01,.08,t+.16);
+                var ms = function (s, d, f) {
+                    tone(ac, {start: s, dur: d, f0: f, type: 'triangle',
+                              vol: 0.52*v, atk: 0.004, dec: d*0.55});
+                };
+                ms(t,         0.060, 523);
+                ms(t + 0.060, 0.060, 659);
+                ms(t + 0.120, 0.060, 784);
+                // Sustained C-major triad on top
+                tone(ac, {start: t + 0.180, dur: 0.220, f0: 523, type: 'triangle',
+                          vol: 0.30*v, atk: 0.005, dec: 0.18, detune: +3});
+                tone(ac, {start: t + 0.180, dur: 0.220, f0: 523, type: 'triangle',
+                          vol: 0.30*v, atk: 0.005, dec: 0.18, detune: -3});
+                tone(ac, {start: t + 0.180, dur: 0.220, f0: 659, type: 'triangle',
+                          vol: 0.26*v, atk: 0.005, dec: 0.18});
+                tone(ac, {start: t + 0.180, dur: 0.220, f0: 784, type: 'triangle',
+                          vol: 0.26*v, atk: 0.005, dec: 0.18});
+                tone(ac, {start: t + 0.190, dur: 0.060, f0: 4700, type: 'sine',
+                          vol: 0.16*v, atk: 0.001, dec: 0.025});
             }
             else if (name === 'magnet') {
-                tone(ac,220,660,.10,'triangle',.40*v,.01,.08,t);
-                tone(ac,660,990,.12,'sine',.42*v,.01,.08,t+.10);
+                tone(ac, {start: t,         dur: 0.110, f0: 220, f1: 660,
+                          type: 'triangle', vol: 0.45*v,
+                          atk: 0.005, dec: 0.080,
+                          vib: 5, vibDepth: 0.030});
+                tone(ac, {start: t + 0.080, dur: 0.140, f0: 660, f1: 990,
+                          type: 'sine', vol: 0.42*v,
+                          atk: 0.005, dec: 0.090,
+                          vib: 7, vibDepth: 0.020});
+                tone(ac, {start: t + 0.120, dur: 0.080, f0: 1320, type: 'sine',
+                          vol: 0.18*v, atk: 0.002, dec: 0.05});
             }
             else if (name === 'slowmo') {
-                tone(ac,880,660,.10,'triangle',.38*v,.01,.08,t);
-                tone(ac,660,440,.10,'triangle',.40*v,.01,.08,t+.10);
-                tone(ac,440,220,.18,'sine',.45*v,.01,.08,t+.20);
+                tone(ac, {start: t,         dur: 0.220, f0: 880, f1: 440,
+                          type: 'triangle', vol: 0.50*v, atk: 0.005, dec: 0.16});
+                tone(ac, {start: t + 0.090, dur: 0.220, f0: 660, f1: 330,
+                          type: 'triangle', vol: 0.30*v, atk: 0.005, dec: 0.16});
+                tone(ac, {start: t + 0.180, dur: 0.220, f0: 440, f1: 220,
+                          type: 'sine',     vol: 0.20*v, atk: 0.005, dec: 0.16});
+                tone(ac, {start: t,         dur: 0.380, f0: 220, type: 'sine',
+                          vol: 0.18*v, atk: 0.020, dec: 0.30});
             }
             else if (name === 'thunder') {
-                tone(ac,80,60,.20,'triangle',.38*v,.01,.08,t);
-                tone(ac,60,50,.20,'triangle',.35*v,.01,.08,t+.20);
-                tone(ac,50,40,.40,'sine',.32*v,.01,.08,t+.40);
+                noise(ac, {start: t, dur: 0.700, vol: 0.55*v, lp: 120,
+                           atk: 0.030, dec: 0.55, amHz: 4.5, amDepth: 0.35});
+                tone (ac, {start: t, dur: 0.700, f0: 50, f1: 38, type: 'sine',
+                           vol: 0.35*v, atk: 0.030, dec: 0.55});
+                noise(ac, {start: t, dur: 0.080, vol: 0.30*v, lp: 2000,
+                           atk: 0.001, dec: 0.05});
             }
-            else if (name === 'death')    { tone(ac,330,90,.32,'square',.45*v,.005,.18,t); }
+            else if (name === 'death') {
+                noise(ac, {start: t,         dur: 0.080, vol: 0.45*v, lp: 2000,
+                           atk: 0.001, dec: 0.045});
+                tone (ac, {start: t,         dur: 0.220, f0: 330, f1: 90,
+                           type: 'square', vol: 0.40*v, atk: 0.004, dec: 0.16});
+                tone (ac, {start: t + 0.150, dur: 0.180, f0: 80, f1: 40,
+                           type: 'sine',   vol: 0.45*v, atk: 0.005, dec: 0.13});
+            }
             else if (name === 'gameover') {
-                tone(ac,523,523,.12,'triangle',.35*v,.01,.08,t);
-                tone(ac,440,440,.12,'triangle',.35*v,.01,.08,t+.12);
-                tone(ac,349,349,.14,'triangle',.38*v,.01,.08,t+.24);
-                tone(ac,262,262,.18,'triangle',.42*v,.01,.08,t+.38);
-            }
-            else if (name === 'grow') {
-                tone(ac,380,380,.07,'square',.40*v,.01,.08,t);
-                tone(ac,570,570,.07,'square',.42*v,.01,.08,t+.07);
-                tone(ac,760,950,.18,'triangle',.48*v,.01,.08,t+.14);
+                var go = function (s, d, f) {
+                    tone(ac, {start: s, dur: d, f0: f, type: 'triangle',
+                              vol: 0.45*v, atk: 0.004, dec: d*0.55});
+                };
+                go(t,         0.120, 523);
+                go(t + 0.120, 0.120, 440);
+                go(t + 0.240, 0.140, 349);
+                tone(ac, {start: t + 0.380, dur: 0.300, f0: 294, type: 'triangle',
+                          vol: 0.30*v, atk: 0.006, dec: 0.24, detune: +3});
+                tone(ac, {start: t + 0.380, dur: 0.300, f0: 294, type: 'triangle',
+                          vol: 0.30*v, atk: 0.006, dec: 0.24, detune: -3});
+                tone(ac, {start: t + 0.380, dur: 0.300, f0: 349, type: 'triangle',
+                          vol: 0.24*v, atk: 0.006, dec: 0.24});
+                tone(ac, {start: t + 0.380, dur: 0.300, f0: 440, type: 'triangle',
+                          vol: 0.20*v, atk: 0.006, dec: 0.24});
             }
             else if (name === 'poof') {
-                tone(ac,420,260,.03,'triangle',.58*v,.01,.08,t);
-                tone(ac,260,150,.05,'square',  .44*v,.01,.08,t+.03);
-                tone(ac,150, 65,.10,'sine',    .28*v,.01,.08,t+.08);
+                noise(ac, {start: t,         dur: 0.060, vol: 0.55*v, lp: 900,
+                           atk: 0.001, dec: 0.035});
+                tone (ac, {start: t + 0.010, dur: 0.140, f0: 420, f1: 180,
+                           type: 'triangle', vol: 0.48*v,
+                           atk: 0.002, dec: 0.090, vib: 8, vibDepth: 0.040});
+                tone (ac, {start: t + 0.020, dur: 0.120, f0: 130, f1: 70,
+                           type: 'sine', vol: 0.34*v, atk: 0.003, dec: 0.090});
             }
             else if (name === 'ghost') {
-                tone(ac,1200, 900,.12,'sine',    .30*v,.01,.08,t);
-                tone(ac, 900, 600,.12,'sine',    .28*v,.01,.08,t+.12);
-                tone(ac, 600, 800,.18,'triangle',.22*v,.01,.08,t+.24);
-                tone(ac, 800,1100,.22,'sine',    .26*v,.01,.08,t+.42);
+                tone (ac, {start: t,         dur: 0.520, f0: 800, type: 'sine',
+                           vol: 0.36*v, atk: 0.060, dec: 0.42,
+                           vib: 3.0, vibDepth: 0.040});
+                tone (ac, {start: t + 0.020, dur: 0.480, f0: 1200, type: 'sine',
+                           vol: 0.22*v, atk: 0.060, dec: 0.38,
+                           vib: 2.5, vibDepth: 0.025});
+                noise(ac, {start: t,         dur: 0.520, vol: 0.10*v, hp: 2500,
+                           atk: 0.080, dec: 0.40});
+            }
+            else if (name === 'grow') {
+                var gs = function (s, d, f) {
+                    tone(ac, {start: s, dur: d, f0: f, type: 'triangle',
+                              vol: 0.50*v, atk: 0.003, dec: d*0.55});
+                };
+                gs(t,         0.060, 523);
+                gs(t + 0.060, 0.060, 659);
+                gs(t + 0.120, 0.060, 784);
+                tone(ac, {start: t + 0.180, dur: 0.240, f0: 1046, type: 'triangle',
+                          vol: 0.32*v, atk: 0.004, dec: 0.18, detune: +4});
+                tone(ac, {start: t + 0.180, dur: 0.240, f0: 1046, type: 'triangle',
+                          vol: 0.32*v, atk: 0.004, dec: 0.18, detune: -4});
+                tone(ac, {start: t + 0.180, dur: 0.240, f0:  784, type: 'triangle',
+                          vol: 0.28*v, atk: 0.004, dec: 0.18});
+                tone(ac, {start: t + 0.180, dur: 0.240, f0: 1318, type: 'triangle',
+                          vol: 0.24*v, atk: 0.004, dec: 0.18});
+                tone(ac, {start: t + 0.190, dur: 0.060, f0: 5200, type: 'sine',
+                          vol: 0.18*v, atk: 0.001, dec: 0.025});
             }
         } catch (e) { console.warn('skyPlay error:', e); }
     };
