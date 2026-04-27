@@ -33,7 +33,7 @@ def _get_kfc_sprite() -> "pygame.Surface":
     if _kfc_sprite is None:
         import os
         r         = MUSHROOM_R + 2
-        logo_size = int(r * 1.72)
+        logo_size = int(r * 2)
         path      = os.path.join(os.path.dirname(__file__), "assets", "kfc_logo.jpg")
         raw = pygame.image.load(path)
         # Crop to square (center crop on the wider axis)
@@ -41,10 +41,13 @@ def _get_kfc_sprite() -> "pygame.Surface":
         side = min(rw, rh)
         crop = pygame.Surface((side, side))
         crop.blit(raw, (-(rw - side) // 2, -(rh - side) // 2))
-        scaled = pygame.transform.smoothscale(crop, (logo_size, logo_size))
+        # Scale 38% larger so the white outer ring is pushed outside the circle mask
+        zoomed_size = int(logo_size * 1.38)
+        scaled = pygame.transform.smoothscale(crop, (zoomed_size, zoomed_size))
         # Convert to SRCALPHA so the circle mask can punch out corners
         logo = pygame.Surface((logo_size, logo_size), pygame.SRCALPHA)
-        logo.blit(scaled, (0, 0))
+        offset = (logo_size - zoomed_size) // 2
+        logo.blit(scaled, (offset, offset))
         mask = pygame.Surface((logo_size, logo_size), pygame.SRCALPHA)
         pygame.draw.circle(mask, (255, 255, 255, 255),
                            (logo_size // 2, logo_size // 2), logo_size // 2)
@@ -361,9 +364,8 @@ class PowerUp:
         pygame.draw.circle(glow, (228, 0, 43, glow_a), (glow_r + 2, glow_r + 2), glow_r + 2)
         surf.blit(glow, (cx - glow_r - 2, cy - glow_r - 2))
 
-        # White circle background
-        pygame.draw.circle(surf, (40, 40, 60),   (cx, cy), r + 2)   # dark outline
-        pygame.draw.circle(surf, (255, 255, 255), (cx, cy), r + 1)
+        # Dark outline ring behind the logo
+        pygame.draw.circle(surf, (20, 15, 35), (cx, cy), r + 2)
 
         # KFC logo (real image, pre-scaled & circle-clipped)
         logo = _get_kfc_sprite()
