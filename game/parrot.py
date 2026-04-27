@@ -212,103 +212,78 @@ def get_parrot(frame_idx: int, tilt_deg: float) -> pygame.Surface:
 
 # ── Fried-chicken variant (KFC powerup) ──────────────────────────────────────
 
-_CRISPY_GOLD  = (205, 132,  38)   # deep golden-brown batter
-_CRISPY_DARK  = (142,  78,  14)   # shadow / skin crack lines
-_CRISPY_LIGHT = (242, 182,  68)   # breast highlight
-_CRISPY_SPOT  = (118,  60,  10)   # dark crispy patches
+_CRISPY_GOLD  = (210, 138,  42)
+_CRISPY_DARK  = (148,  82,  18)
+_CRISPY_LIGHT = (238, 178,  72)
+_CRISPY_SPOT  = (125,  68,  12)
 
 
 def _build_fried_wing(angle_deg):
-    """Stubby fried chicken wing — shorter and chubbier than the macaw wing."""
-    w = pygame.Surface((44, 44), pygame.SRCALPHA)
-    shadow = [(22, 22), (38, 13), (42, 26), (30, 38), (16, 34)]
-    pygame.draw.polygon(w, (0, 0, 0, 100), shadow)
-    pts = [(22, 20), (36, 12), (40, 25), (28, 36), (16, 32)]
+    w = pygame.Surface((50, 50), pygame.SRCALPHA)
+    pygame.draw.polygon(w, (0, 0, 0, 110),
+                        [(24, 26), (46, 14), (50, 30), (34, 44), (18, 40)])
+    pts = [(24, 24), (44, 13), (48, 28), (32, 42), (18, 36)]
     pygame.draw.polygon(w, _CRISPY_GOLD, pts)
-    pygame.draw.polygon(w, _CRISPY_DARK, [(22, 20), (28, 36), (16, 32)])  # underside
-    # Crispy brown patches
-    for px, py, pr in ((32, 17, 2), (38, 23, 2), (24, 30, 2)):
+    pygame.draw.polygon(w, _CRISPY_DARK, [(24, 24), (32, 42), (18, 36)])
+    for px, py, pr in ((36, 20, 2), (44, 22, 2), (28, 34, 2)):
         pygame.draw.circle(w, _CRISPY_SPOT, (px, py), pr)
-    # Skin lines
-    pygame.draw.line(w, _CRISPY_DARK,  (24, 21), (38, 16), 1)
-    pygame.draw.line(w, _CRISPY_DARK,  (26, 27), (40, 23), 1)
-    pygame.draw.line(w, _CRISPY_LIGHT, (23, 21), (37, 14), 1)
+    pygame.draw.line(w, _CRISPY_DARK, (26, 25), (42, 18), 2)
+    pygame.draw.line(w, _CRISPY_DARK, (28, 30), (44, 25), 2)
+    pygame.draw.line(w, _CRISPY_LIGHT, (25, 25), (41, 15), 1)
     return pygame.transform.rotate(w, angle_deg)
 
 
 def _build_fried_frame(wing_angle_deg):
-    """Whole fried Thanksgiving chicken — plump body, two drumstick legs, stubby wings."""
     surf = pygame.Surface((SPRITE_W, SPRITE_H), pygame.SRCALPHA)
 
-    # ── Rear / tail end — rounded bump on the left ───────────────────────────
-    _aaellipse(surf, _CRISPY_DARK,  ( 8, 36), 10,  9)   # shadow
-    _aaellipse(surf, _CRISPY_GOLD,  ( 7, 34),  9,  8)   # tail blob
-    pygame.draw.circle(surf, _CRISPY_SPOT, (5, 32), 2)
+    # Tail — golden-brown crispy wedges instead of flowing feathers
+    for i, c in enumerate([(148, 82, 18), (178, 108, 28), (208, 138, 42), (228, 162, 58)]):
+        pts = [(2 + i*3, 26 + i*2), (14 + i, 24 + i),
+               (20 + i, 30 + i*2), (6 + i*3, 36 + i*2)]
+        pygame.draw.polygon(surf, c, pts)
+    pygame.draw.line(surf, _CRISPY_DARK, (4, 27), (18, 31), 1)
+    pygame.draw.line(surf, _CRISPY_DARK, (6, 33), (20, 35), 1)
 
-    # ── Main body — large plump oval (the carcass) ───────────────────────────
-    _aaellipse(surf, (105, 55,  6),   (33, 34), 24, 17)  # deep shadow
-    _aaellipse(surf, _CRISPY_GOLD,    (32, 32), 22, 16)  # outer skin
-    _aaellipse(surf, _CRISPY_LIGHT,   (30, 27), 16, 10)  # breast highlight
-    _aaellipse(surf, (228, 165, 58),  (26, 38), 14,  8)  # lower belly warmth
-    _aaellipse(surf, _CRISPY_DARK,    (32, 43), 18,  6)  # bottom shadow
+    # Body shadow + base
+    _aaellipse(surf, (100, 55, 8),   (34, 35), 19, 14)
+    _aaellipse(surf, _CRISPY_GOLD,   (32, 32), 19, 14)
+    _aaellipse(surf, _CRISPY_LIGHT,  (30, 29), 13,  8)
+    _aaellipse(surf, (242, 190, 80), (28, 38), 12,  6)
+    for px, py, pr in ((26, 32, 2), (38, 28, 2), (32, 38, 2), (36, 34, 1)):
+        pygame.draw.circle(surf, _CRISPY_SPOT, (px, py), pr)
+    sheen = pygame.Surface((28, 6), pygame.SRCALPHA)
+    pygame.draw.ellipse(sheen, (255, 225, 155, 120), sheen.get_rect())
+    surf.blit(sheen, (22, 21))
 
-    # Crispy skin patches (batter spots)
-    for px, py, pr in ((18, 28, 3), (36, 25, 2), (42, 32, 3),
-                       (22, 38, 2), (38, 38, 2), (28, 42, 2), (30, 24, 2)):
+    # Wing (fried variant)
+    wing = _build_fried_wing(wing_angle_deg)
+    surf.blit(wing, wing.get_rect(center=(34, 28)).topleft)
+
+    # Head
+    _aaellipse(surf, (118, 65, 10),  (48, 23), 12, 11)
+    _aaellipse(surf, _CRISPY_GOLD,   (47, 21), 12, 11)
+    _aaellipse(surf, _CRISPY_LIGHT,  (44, 24),  4,  3)
+    _aaellipse(surf, (232, 172, 68), (46, 16),  7,  3)
+    for px, py, pr in ((50, 18, 2), (44, 22, 1)):
         pygame.draw.circle(surf, _CRISPY_SPOT, (px, py), pr)
 
-    # Skin surface lines (crackle texture)
-    pygame.draw.line(surf, _CRISPY_DARK, (14, 30), (22, 26), 1)
-    pygame.draw.line(surf, _CRISPY_DARK, (38, 26), (46, 30), 1)
-    pygame.draw.line(surf, _CRISPY_DARK, (16, 38), (24, 42), 1)
-    pygame.draw.line(surf, _CRISPY_DARK, (40, 38), (48, 34), 1)
+    # Round eyes (no sunglasses — it's a chicken now)
+    pygame.draw.circle(surf, WHITE,       (51, 20), 4)
+    pygame.draw.circle(surf, (15, 15, 25),(52, 20), 2)
+    pygame.draw.circle(surf, WHITE,       (53, 18), 1)   # glint
 
-    # Top breast sheen
-    sheen = pygame.Surface((30, 6), pygame.SRCALPHA)
-    pygame.draw.ellipse(sheen, (255, 230, 155, 110), sheen.get_rect())
-    surf.blit(sheen, (17, 20))
-
-    # ── Drumstick legs — two thick legs splayed outward at the bottom ────────
-    # Left leg: body root → lower-left → ball joint
-    pygame.draw.line(surf, _CRISPY_DARK,  (19, 46), ( 7, 56), 5)
-    pygame.draw.line(surf, _CRISPY_GOLD,  (18, 45), ( 6, 55), 4)
-    pygame.draw.line(surf, _CRISPY_LIGHT, (17, 44), ( 5, 54), 1)
-    pygame.draw.circle(surf, _CRISPY_GOLD, ( 6, 55), 5)
-    pygame.draw.circle(surf, _CRISPY_DARK, ( 6, 55), 5, 1)
-    pygame.draw.circle(surf, _CRISPY_SPOT, ( 5, 53), 2)   # crispy end
-
-    # Right leg: body root → lower-right → ball joint
-    pygame.draw.line(surf, _CRISPY_DARK,  (45, 46), (57, 56), 5)
-    pygame.draw.line(surf, _CRISPY_GOLD,  (46, 45), (58, 55), 4)
-    pygame.draw.line(surf, _CRISPY_LIGHT, (47, 44), (59, 54), 1)
-    pygame.draw.circle(surf, _CRISPY_GOLD, (58, 55), 5)
-    pygame.draw.circle(surf, _CRISPY_DARK, (58, 55), 5, 1)
-    pygame.draw.circle(surf, _CRISPY_SPOT, (59, 53), 2)
-
-    # Drumstick bone tip (white nub at the very end)
-    pygame.draw.circle(surf, WHITE, ( 6, 55), 2)
-    pygame.draw.circle(surf, WHITE, (58, 55), 2)
-
-    # ── Wing (stubby, animated) ───────────────────────────────────────────────
-    wing = _build_fried_wing(wing_angle_deg)
-    surf.blit(wing, wing.get_rect(center=(34, 25)).topleft)
-
-    # ── Head — small round bump at top-right (it's still a bird) ─────────────
-    _aaellipse(surf, (105, 55, 6),   (50, 17), 10, 9)
-    _aaellipse(surf, _CRISPY_GOLD,   (49, 15), 10, 9)
-    _aaellipse(surf, _CRISPY_LIGHT,  (46, 12),  6, 4)
-    pygame.draw.circle(surf, _CRISPY_SPOT, (52, 14), 2)
-
-    # Round eyes
-    pygame.draw.circle(surf, WHITE,        (52, 16), 3)
-    pygame.draw.circle(surf, (15, 15, 25), (53, 16), 2)
-    pygame.draw.circle(surf, WHITE,        (54, 14), 1)
-
-    # Beak (unchanged — chickens have beaks too)
-    beak_pts = [(55, 17), (61, 20), (58, 24), (52, 22)]
+    # Beak unchanged
+    beak_pts = [(55, 21), (61, 24), (58, 28), (52, 26)]
     pygame.draw.polygon(surf, BIRD_BEAK,   beak_pts)
     pygame.draw.polygon(surf, BIRD_BEAK_D, beak_pts, 1)
-    pygame.draw.line(surf, (255, 230, 150), (55, 18), (59, 20), 1)
+    pygame.draw.line(surf, (255, 230, 150), (55, 22), (59, 24), 1)
+    pygame.draw.line(surf, BIRD_BEAK_D,    (52, 24), (58, 25), 1)
+
+    # Drumstick legs
+    for lx, ly, ex, ey in ((28, 44, 24, 51), (34, 44, 38, 51)):
+        pygame.draw.line(surf, _CRISPY_DARK, (lx, ly), (ex, ey), 3)
+        pygame.draw.circle(surf, _CRISPY_GOLD, (ex, ey), 3)
+        pygame.draw.circle(surf, _CRISPY_DARK, (ex, ey), 3, 1)
 
     return surf
 
