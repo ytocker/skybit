@@ -11,6 +11,19 @@ from game.draw import (
     COIN_GOLD, COIN_DARK,
     WHITE, NEAR_BLACK,
 )
+from game import parrot
+
+_grow_parrot_hud: "pygame.Surface | None" = None
+
+def _get_grow_parrot_hud() -> "pygame.Surface":
+    global _grow_parrot_hud
+    if _grow_parrot_hud is None:
+        src = parrot.FRAMES[1]
+        target_w = 16
+        ratio = target_w / src.get_width()
+        target_h = int(src.get_height() * ratio)
+        _grow_parrot_hud = pygame.transform.smoothscale(src, (target_w, target_h))
+    return _grow_parrot_hud
 
 # ── Theme palette matching the HTML welcome screen ───────────────────────────
 _GOLD_BRIGHT   = (240, 192,  64)   # #f0c040
@@ -277,42 +290,40 @@ def _draw_buff_icon(surf, rect, kind):
             pygame.draw.circle(mg, (50, 110, 220, 255),  (ex + 1, gcy), 2)
         surf.blit(mg, (cx - gcx, cy - gcy - 2))
     elif kind == "grow":
-        # Parrot facing right with green sparkle rays around it ("powering up").
-        BIRD_BODY = (240,  55,  55)
-        BIRD_BELLY= (255, 130,  90)
-        BIRD_WING = ( 40, 100, 255)
-        BIRD_BEAK = (255, 195,  60)
-        BIRD_OUT  = ( 80,  10,  18)
-        SHADES    = ( 20,  18,  30)
-        RAY_HI    = ( 50, 220, 100)
-        RAY_OUT   = ( 28, 160,  70)
+        # Real in-game parrot in front of a tall green up-arrow backdrop.
+        GREEN_HI  = ( 50, 220, 100)
+        GREEN_OUT = ( 28, 160,  70)
 
-        # Eight short green rays around the bird
-        for i in range(8):
-            ang = i * (math.tau / 8) - math.pi / 2
-            x0 = cx + math.cos(ang) * 8.5
-            y0 = cy + math.sin(ang) * 8.5
-            x1 = cx + math.cos(ang) * 11.0
-            y1 = cy + math.sin(ang) * 11.0
-            pygame.draw.line(surf, RAY_OUT, (int(x0), int(y0)), (int(x1), int(y1)), 3)
-            pygame.draw.line(surf, RAY_HI,  (int(x0), int(y0)), (int(x1), int(y1)), 1)
+        head_w  = 13
+        shaft_w = 5
+        total_h = 19
+        head_h  = int(total_h * 0.42)
+        top_y    = cy - total_h // 2
+        head_bot = top_y + head_h
+        bot_y    = cy + total_h // 2
+        pts_out = [
+            (cx,                  top_y),
+            (cx + head_w // 2,    head_bot),
+            (cx + shaft_w // 2,   head_bot),
+            (cx + shaft_w // 2,   bot_y),
+            (cx - shaft_w // 2,   bot_y),
+            (cx - shaft_w // 2,   head_bot),
+            (cx - head_w // 2,    head_bot),
+        ]
+        pygame.draw.polygon(surf, GREEN_OUT, pts_out)
+        pts_in = [
+            (cx,                      top_y + 1),
+            (cx + head_w // 2 - 1,    head_bot - 1),
+            (cx + shaft_w // 2 - 1,   head_bot - 1),
+            (cx + shaft_w // 2 - 1,   bot_y - 1),
+            (cx - shaft_w // 2 + 1,   bot_y - 1),
+            (cx - shaft_w // 2 + 1,   head_bot - 1),
+            (cx - head_w // 2 + 1,    head_bot - 1),
+        ]
+        pygame.draw.polygon(surf, GREEN_HI, pts_in)
 
-        # Parrot body — round, facing right
-        pygame.draw.ellipse(surf, BIRD_OUT,  (cx - 6, cy - 4, 12, 9))
-        pygame.draw.ellipse(surf, BIRD_BODY, (cx - 5, cy - 3, 10, 7))
-        # Belly
-        pygame.draw.ellipse(surf, BIRD_BELLY, (cx - 2, cy, 6, 3))
-        # Tail wedge to the left
-        pygame.draw.polygon(surf, BIRD_OUT,
-                            [(cx - 5, cy - 1), (cx - 8, cy - 2), (cx - 8, cy + 2), (cx - 5, cy + 2)])
-        # Blue wing
-        pygame.draw.polygon(surf, BIRD_WING,
-                            [(cx, cy), (cx + 3, cy + 1), (cx, cy + 3)])
-        # Sunglasses bar
-        pygame.draw.rect(surf, SHADES, (cx, cy - 3, 5, 2))
-        # Beak
-        pygame.draw.polygon(surf, BIRD_BEAK,
-                            [(cx + 5, cy - 1), (cx + 8, cy), (cx + 5, cy + 2)])
+        bird = _get_grow_parrot_hud()
+        surf.blit(bird, (cx - bird.get_width() // 2, cy - bird.get_height() // 2))
 
 
 class PauseButton:

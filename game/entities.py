@@ -25,6 +25,20 @@ from game.draw import (
 from game import parrot
 from game.pillar_variants import draw_pillar_pair
 
+# ── GROW power-up parrot (scaled in-game sprite, cached) ─────────────────────
+_grow_parrot: "pygame.Surface | None" = None
+
+def _get_grow_parrot() -> "pygame.Surface":
+    global _grow_parrot
+    if _grow_parrot is None:
+        src = parrot.FRAMES[1]
+        target_w = 26
+        ratio = target_w / src.get_width()
+        target_h = int(src.get_height() * ratio)
+        _grow_parrot = pygame.transform.smoothscale(src, (target_w, target_h))
+    return _grow_parrot
+
+
 # ── KFC logo sprite (lazy-loaded once at first draw) ─────────────────────────
 _kfc_sprite: "pygame.Surface | None" = None
 
@@ -535,68 +549,46 @@ class PowerUp:
         cx = int(self.x)
         cy = int(self.y + math.sin(self.pulse * 1.2) * 2)
 
-        BIRD_BODY  = (240,  55,  55)
-        BIRD_BELLY = (255, 130,  90)
-        BIRD_BEAK  = (255, 195,  60)
-        BIRD_WING  = ( 40, 100, 255)
-        BIRD_OUT   = ( 80,  10,  18)
-        SHADES     = ( 20,  18,  30)
-        EYE_W      = (252, 252, 255)
-        RAY_HI     = ( 50, 220, 100)
-        RAY_OUT    = ( 28, 160,  70)
+        GREEN_HI  = ( 50, 220, 100)
+        GREEN_MID = ( 38, 190,  85)
+        GREEN_OUT = ( 28, 160,  70)
 
-        # Eight short green rays radiating outward — "powering up" sparkle.
-        # The pulse drives a length oscillation so the badge looks alive.
-        ray_pulse = 1.0 + 0.18 * math.sin(self.pulse * 2.6)
-        r0 = 14.0
-        r1 = 18.0 * ray_pulse
-        for i in range(8):
-            ang = i * (math.tau / 8) - math.pi / 2 + math.sin(self.pulse * 0.8) * 0.05
-            x0 = cx + math.cos(ang) * r0
-            y0 = cy + math.sin(ang) * r0
-            x1 = cx + math.cos(ang) * r1
-            y1 = cy + math.sin(ang) * r1
-            pygame.draw.line(surf, RAY_OUT, (int(x0), int(y0)), (int(x1), int(y1)), 4)
-            pygame.draw.line(surf, RAY_HI,  (int(x0), int(y0)), (int(x1), int(y1)), 2)
+        # ── Tall green block-arrow as the backdrop ──────────────────────────
+        head_w  = 22
+        shaft_w = 9
+        total_h = 32
+        head_h  = int(total_h * 0.42)
+        top_y    = cy - total_h // 2
+        head_bot = top_y + head_h
+        bot_y    = cy + total_h // 2
+        pts_out = [
+            (cx,                  top_y),
+            (cx + head_w // 2,    head_bot),
+            (cx + shaft_w // 2,   head_bot),
+            (cx + shaft_w // 2,   bot_y),
+            (cx - shaft_w // 2,   bot_y),
+            (cx - shaft_w // 2,   head_bot),
+            (cx - head_w // 2,    head_bot),
+        ]
+        pygame.draw.polygon(surf, GREEN_OUT, pts_out)
+        pts_in = [
+            (cx,                      top_y + 2),
+            (cx + head_w // 2 - 2,    head_bot - 1),
+            (cx + shaft_w // 2 - 1,   head_bot - 1),
+            (cx + shaft_w // 2 - 1,   bot_y - 1),
+            (cx - shaft_w // 2 + 1,   bot_y - 1),
+            (cx - shaft_w // 2 + 1,   head_bot - 1),
+            (cx - head_w // 2 + 2,    head_bot - 1),
+        ]
+        pygame.draw.polygon(surf, GREEN_HI, pts_in)
+        # Highlight band on the left edge of the shaft
+        pygame.draw.line(surf, GREEN_MID,
+                         (cx - shaft_w // 2 + 2, head_bot + 1),
+                         (cx - shaft_w // 2 + 2, bot_y - 2), 2)
 
-        # Parrot body — round, facing right. Belly is the orange splash on
-        # the lower-front; tail flares back to the LEFT.
-        body_rect = pygame.Rect(cx - 9, cy - 6, 18, 14)
-        pygame.draw.ellipse(surf, BIRD_OUT,  body_rect.inflate(2, 2))
-        pygame.draw.ellipse(surf, BIRD_BODY, body_rect)
-        pygame.draw.ellipse(surf, BIRD_BELLY,
-                            pygame.Rect(cx - 4, cy + 1, 11, 6))
-        # Tail — left-pointing wedge
-        tail = [(cx - 8, cy - 1), (cx - 12, cy - 3), (cx - 13, cy + 3), (cx - 8, cy + 2)]
-        pygame.draw.polygon(surf, BIRD_OUT, tail)
-        pygame.draw.polygon(surf, BIRD_BODY,
-                            [(cx - 8, cy), (cx - 11, cy - 1), (cx - 11, cy + 2), (cx - 8, cy + 1)])
-        # Wing — blue triangle on the side
-        wing = [(cx - 2, cy), (cx + 6, cy + 2), (cx - 1, cy + 6)]
-        pygame.draw.polygon(surf, BIRD_OUT, wing)
-        pygame.draw.polygon(surf, BIRD_WING,
-                            [(cx - 1, cy + 1), (cx + 4, cy + 2), (cx - 1, cy + 5)])
-        # Aviator sunglasses bar — black with two tiny pupil dots
-        pygame.draw.rect(surf, SHADES, (cx + 1, cy - 5, 8, 4), border_radius=1)
-        pygame.draw.circle(surf, EYE_W, (cx + 3, cy - 3), 1)
-        pygame.draw.circle(surf, EYE_W, (cx + 7, cy - 3), 1)
-        # Beak — short hooked macaw beak pointing right-down
-        beak_o = [
-            (cx + 8,  cy + 0),
-            (cx + 12, cy + 2),
-            (cx + 11, cy + 5),
-            (cx + 9,  cy + 5),
-            (cx + 7,  cy + 3),
-        ]
-        pygame.draw.polygon(surf, BIRD_OUT, beak_o)
-        beak_in = [
-            (cx + 9,  cy + 1),
-            (cx + 11, cy + 2),
-            (cx + 10, cy + 4),
-            (cx + 9,  cy + 4),
-            (cx + 8,  cy + 3),
-        ]
-        pygame.draw.polygon(surf, BIRD_BEAK, beak_in)
+        # ── Real in-game parrot, scaled down, on top of the arrow ───────────
+        bird = _get_grow_parrot()
+        surf.blit(bird, (cx - bird.get_width() // 2, cy - bird.get_height() // 2))
 
 
 # Back-compat alias — some callers (e.g. snapshot/playtest scripts) still say Mushroom.
