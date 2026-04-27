@@ -484,16 +484,6 @@ class PowerUp:
         pygame.draw.rect(g, BODY, (1, gcy, GW - 2, body_y2 - gcy))
         pygame.draw.polygon(g, BODY, scallop)
 
-        # Right-side depth shading
-        sh2 = pygame.Surface((GW, GH), pygame.SRCALPHA)
-        pygame.draw.circle(sh2, (130, 175, 240, 55), (gcx + 5, gcy + 2), 11)
-        g.blit(sh2, (0, 0))
-
-        # Left-side highlight
-        hi = pygame.Surface((GW, GH), pygame.SRCALPHA)
-        pygame.draw.circle(hi, (255, 255, 255, 70), (gcx - 5, gcy - 5), 8)
-        g.blit(hi, (0, 0))
-
         # Eyes: white → iris → pupil → specular dot
         for ex in (gcx - 5, gcx + 5):
             ey = gcy - 1
