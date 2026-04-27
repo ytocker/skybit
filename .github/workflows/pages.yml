@@ -48,10 +48,12 @@ jobs:
           from pathlib import Path
           p = Path("build/web/index.html")
           html = p.read_text()
-          sw = '<script>if("serviceWorker"in navigator){navigator.serviceWorker.register("coi-serviceworker.js");}</script>'
+          # coepCredentialless=true matches Netlify's "credentialless" COEP so
+          # pygbag's CDN package fetches (pygame-web.github.io) are not blocked.
+          sw = '<script>self.coi={coepCredentialless:true};if("serviceWorker"in navigator){navigator.serviceWorker.register("coi-serviceworker.js");}</script>'
           html = html.replace("<head>", "<head>\n" + sw, 1)
           p.write_text(html)
-          print("✓ coi-serviceworker registered")
+          print("✓ coi-serviceworker registered (credentialless COEP)")
           PY
 
       - name: Upload Pages artifact
