@@ -37,64 +37,59 @@ jobs:
         run: python inject_theme.py
 
       - name: Write minimal COOP/COEP service worker
-        # GitHub Pages can't set HTTP headers, so we use a service worker instead.
-        # We write our own minimal SW rather than using coi-serviceworker.js from
-        # CDN because that library adds a controllerchange listener that reloads the
-        # page every time the SW updates — causing an infinite reload loop on the
-        # second visit. Our SW only reloads once, guarded by crossOriginIsolated.
-        run: |
-          cat > build/web/coi-sw.js << 'SWEOF'
-          // Minimal COOP/COEP service worker for GitHub Pages.
-          // Uses "credentialless" COEP (matches Netlify config) so pygbag's CDN
-          // package fetches from pygame-web.github.io are not blocked.
+        # GitHub Pages can't set HTTP headers. A service worker injects them instead.
+        # SW only intercepts 'navigate' requests (the HTML page itself). All other
+        # fetches — pygbag WASM, CDN Python packages, assets — pass through without
+        # any interference so they can't cause hangs.
+        # Registration script logic:
+        #   1. Already cross-origin isolated? → exit (SW already working, no reload).
+        #   2. Already reloaded once this session? → exit (prevents loops).
+        #   3. Otherwise: register SW, wait for it to control the page, reload once.
+        run: python3 - <<'PY'
+          from pathlib import Path
+
+          Path("build/web/coi-sw.js").write_text("""\
           self.addEventListener('install', () => self.skipWaiting());
           self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
           self.addEventListener('fetch', e => {
-            // Chrome bug: 'only-if-cached' + cross-origin = TypeError
-            if (e.request.cache === 'only-if-cached' && e.request.mode !== 'same-origin') return;
-            if (!e.request.url.startsWith('http')) return;
+            // Only patch the top-level HTML document — every other fetch passes through.
+            if (e.request.mode !== 'navigate') return;
             e.respondWith(
-              fetch(e.request).then(res => {
-                if (!res || res.status === 0) return res;
-                const h = new Headers(res.headers);
-                h.set('Cross-Origin-Embedder-Policy', 'credentialless');
-                h.set('Cross-Origin-Opener-Policy', 'same-origin');
-                return new Response(res.body, {status: res.status, statusText: res.statusText, headers: h});
-              }).catch(() => fetch(e.request))
+              fetch(e.request)
+                .then(res => {
+                  const h = new Headers(res.headers);
+                  h.set('Cross-Origin-Embedder-Policy', 'credentialless');
+                  h.set('Cross-Origin-Opener-Policy', 'same-origin');
+                  return new Response(res.body, {status: res.status, statusText: res.statusText, headers: h});
+                })
+                .catch(() => fetch(e.request))
             );
           });
-          SWEOF
+          """)
 
-          python3 - <<'PY'
-          from pathlib import Path
+          reg = """<script>
+          (function () {
+            if (!('serviceWorker' in navigator)) return;
+            if (self.crossOriginIsolated) return;
+            if (sessionStorage.getItem('_coi')) return;
+            navigator.serviceWorker.register('coi-sw.js').then(function () {
+              var onCtrl = function () {
+                navigator.serviceWorker.removeEventListener('controllerchange', onCtrl);
+                sessionStorage.setItem('_coi', '1');
+                location.reload();
+              };
+              navigator.serviceWorker.controller
+                ? onCtrl()
+                : navigator.serviceWorker.addEventListener('controllerchange', onCtrl);
+            });
+          }());
+          </script>"""
+
           p = Path("build/web/index.html")
           html = p.read_text()
-          # Guard: if the page is already cross-origin isolated (SW already active),
-          # skip registration entirely — no reload, no loop. Only register + reload
-          # once on the very first visit when isolation isn't yet in place.
-          sw = """<script>
-          (function(){
-            if(!('serviceWorker' in navigator)) return;
-            if(self.crossOriginIsolated) return;
-            navigator.serviceWorker.register('coi-sw.js').then(function(reg){
-              function reload(){
-                if(sessionStorage.getItem('_coi')) return;
-                sessionStorage.setItem('_coi','1');
-                location.reload();
-              }
-              if(reg.installing){
-                reg.installing.addEventListener('statechange',function(e){
-                  if(e.target.state==='activated') reload();
-                });
-              } else if(!navigator.serviceWorker.controller){
-                reload();
-              }
-            });
-          })();
-          </script>"""
-          html = html.replace("<head>", "<head>\n" + sw, 1)
+          html = html.replace("<head>", "<head>\n" + reg, 1)
           p.write_text(html)
-          print("✓ custom coi-sw.js written and registered")
+          print("coi-sw.js written and registered")
           PY
 
       - name: Upload Pages artifact
