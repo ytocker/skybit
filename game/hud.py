@@ -640,6 +640,62 @@ class HUD:
         _pill_btn(surf, (W // 2, H - 72), "TAP TO RETRY", size=19, alpha=btn_alpha)
         _draw_mountain_silhouette(surf, alpha=160)
 
+    def draw_name_entry(self, surf, dt, buf: str):
+        self.title_t += dt
+        dim = pygame.Surface((W, H), pygame.SRCALPHA)
+        dim.fill((8, 3, 26, 240))
+        surf.blit(dim, (0, 0))
+
+        _draw_overlay_stars(surf, self._stars, self.title_t)
+
+        # Title
+        _outlined_text(surf, "ENTER YOUR NAME", (W // 2, H // 2 - 118),
+                       size=24, px=2, shadow_offset=(2, 3))
+
+        # Subtitle
+        sf = _font(12, False)
+        sub = sf.render("U P  T O  1 6  C H A R A C T E R S", True, _GOLD_MUTED)
+        sub.set_alpha(170)
+        surf.blit(sub, sub.get_rect(center=(W // 2, H // 2 - 86)))
+
+        # Input field
+        fw, fh = 284, 54
+        fx, fy = W // 2 - fw // 2, H // 2 - 48
+        field = pygame.Surface((fw, fh), pygame.SRCALPHA)
+        pygame.draw.rect(field, (26, 15, 56, 255), (0, 0, fw, fh), border_radius=14)
+        pygame.draw.rect(field, (*_ORANGE_BORDER, 220), (0, 0, fw, fh),
+                         border_radius=14, width=2)
+        # Inner highlight line at top
+        pygame.draw.line(field, (255, 200, 100, 40), (14, 3), (fw - 14, 3))
+        surf.blit(field, (fx, fy))
+
+        # Typed text + blinking cursor
+        cursor = "|" if int(self.title_t * 2) % 2 == 0 else ""
+        tf = _font(26, True)
+        display = buf + cursor
+        txt = tf.render(display if display else cursor, True, _GOLD_BRIGHT)
+        if not buf and not cursor:
+            placeholder = _font(18, False).render("type your name…", True, _GOLD_MUTED)
+            placeholder.set_alpha(100)
+            surf.blit(placeholder, placeholder.get_rect(center=(W // 2, fy + fh // 2)))
+        else:
+            surf.blit(txt, txt.get_rect(center=(W // 2, fy + fh // 2)))
+
+        # Submit button (only active once something is typed)
+        if buf.strip():
+            alpha = int(190 + math.sin(self.title_t * 3.5) * 60)
+            _pill_btn(surf, (W // 2, H // 2 + 34), "SUBMIT  ·  ENTER", size=17, alpha=alpha)
+        else:
+            _pill_btn(surf, (W // 2, H // 2 + 34), "SUBMIT  ·  ENTER", size=17, alpha=80)
+
+        # Skip hint
+        hf = _font(12, False)
+        hint = hf.render("ESC to skip", True, _GOLD_MUTED)
+        hint.set_alpha(110)
+        surf.blit(hint, hint.get_rect(center=(W // 2, H // 2 + 78)))
+
+        _draw_mountain_silhouette(surf, alpha=160)
+
     def draw_leaderboard(self, surf, dt, scores: list, player_rank: int,
                          loading: bool, cooldown: float):
         self.title_t += dt

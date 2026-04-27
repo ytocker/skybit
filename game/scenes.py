@@ -52,6 +52,7 @@ class App:
         self._start_name_entry = False
         self._final_score = 0
         self._name_task = None  # strong ref prevents GC killing the task mid-flight
+        self._name_input_buf = ""  # native name-entry text buffer
 
     # ── helpers ─────────────────────────────────────────────────────────────
 
@@ -139,7 +140,7 @@ class App:
         elif e.type == pygame.MOUSEBUTTONDOWN:
             if now - self._last_finger_t < self._finger_dedup_window:
                 return  # this MOUSEBUTTONDOWN is a touch echo — ignore
-        # non name-entry states
+        import sys as _sys
         if e.type == pygame.KEYDOWN:
             if e.key == pygame.K_p:
                 self._toggle_pause()
@@ -147,8 +148,19 @@ class App:
             if e.key == pygame.K_ESCAPE:
                 if self.state in (STATE_PLAY, STATE_PAUSE):
                     self._toggle_pause()
+                elif self.state == STATE_NAMEENTRY and _sys.platform != "emscripten":
+                    self._submit_name_native("")  # ESC = skip
                 else:
                     self._running = False
+                return
+            # Native name-entry keyboard: intercept before flap routing
+            if self.state == STATE_NAMEENTRY and _sys.platform != "emscripten":
+                if e.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                    self._submit_name_native(self._name_input_buf.strip())
+                elif e.key == pygame.K_BACKSPACE:
+                    self._name_input_buf = self._name_input_buf[:-1]
+                elif e.unicode and e.unicode.isprintable() and len(self._name_input_buf) < 16:
+                    self._name_input_buf += e.unicode
                 return
             if e.key in (pygame.K_SPACE, pygame.K_UP, pygame.K_w):
                 self._flap_input()
@@ -194,14 +206,25 @@ class App:
 
     def _advance_past_stats(self):
         import sys
-        if self.world.score > 0 and sys.platform == "emscripten":
+        if self.world.score > 0:
             self._final_score = self.world.score
+            self._name_input_buf = ""
             self.state = STATE_NAMEENTRY
             self._stats_t = 0.0
-            self._start_name_entry = True
+            if sys.platform == "emscripten":
+                self._start_name_entry = True  # triggers JS overlay via create_task
         else:
             self.state = STATE_GAMEOVER
             self._cooldown_t = 0.5
+
+    def _submit_name_native(self, name: str):
+        """Finish native name-entry: skip Supabase, go straight to leaderboard."""
+        self._lb_scores = []
+        self._lb_loading = False
+        self._lb_player_rank = -1
+        self.hud.title_t = 0.0
+        self.state = STATE_LEADERBOARD
+        self._cooldown_t = 1.0
 
     async def _on_name_submitted(self):
         try:
@@ -350,7 +373,9 @@ class App:
         elif self.state == STATE_STATS:
             self.hud.draw_stats(self.screen, self.world, 1 / 60, self._stats_t)
         elif self.state == STATE_NAMEENTRY:
-            pass  # JS overlay renders on top of the canvas
+            import sys as _sys
+            if _sys.platform != "emscripten":
+                self.hud.draw_name_entry(self.screen, 1 / 60, self._name_input_buf)
         elif self.state == STATE_LEADERBOARD:
             self.hud.draw_leaderboard(
                 self.screen, 1 / 60,
