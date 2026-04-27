@@ -1,399 +1,207 @@
-"""KFC powerup — 5 design variants. Run from repo root.
-Produces screenshots/kfc_v1.png … kfc_v5.png
+"""
+Faithful KFC logo prototype — rendered at large preview size and game sprite size.
+
+Real logo facts (2018 current design):
+  - Red trapezoidal badge (wider top, narrower bottom — bucket silhouette)
+  - Three VERTICAL stripes: narrow red left | wide white center | narrow red right
+  - Colonel Sanders: bold black-and-white line art portrait
+      white pompadour hair, round black-framed glasses, white goatee (pointed),
+      black bow tie (two triangles), red apron at bottom
+  - "KFC" bold text BELOW the badge (not inside it)
+  - Brand red: #E4002B = (228, 0, 43)
 """
 import os, math
 os.environ["SDL_AUDIODRIVER"] = "dummy"
-os.environ["SDL_VIDEODRIVER"] = "dummy"
+os.environ["SDL_VIDEODRIVER"] = "offscreen"
+
 import pygame
 pygame.init()
 
-OUT = "screenshots"
-os.makedirs(OUT, exist_ok=True)
+RED   = (228,  0,  43)   # KFC #E4002B
+BLACK = (  0,  0,   0)
+WHITE = (255, 255, 255)
+BG    = ( 15,  10,  30)  # dark game background
 
-KR  = (244,   0,  39)   # KFC brand red
-KRD = (120,   0,  20)   # dark red
-K   = ( 14,  14,  14)   # near-black
-W   = (255, 255, 255)   # white
-S   = (255, 232, 205)   # skin tone
-H   = (245, 245, 245)   # hair white (slightly warm)
-G   = (228, 175,  45)   # gold (for V4 trim)
-BG  = ( 12,   8,  38)   # game dark background
+os.makedirs("screenshots", exist_ok=True)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Each draw_vN(surf, cx, cy, sz, pulse) paints one sprite.
-# sz ≈ MUSHROOM_R (half-size). All coords relative to (cx, cy).
-# ─────────────────────────────────────────────────────────────────────────────
+# ── Colonel Sanders portrait ──────────────────────────────────────────────────
 
-def _shadow(surf, cx, cy, sz):
-    sh = pygame.Surface((sz * 3, 6), pygame.SRCALPHA)
-    pygame.draw.ellipse(sh, (0, 0, 0, 65), sh.get_rect())
-    surf.blit(sh, (cx - sz * 3 // 2, cy + sz + 1))
-
-def _colonel(surf, cx, cy, sz, hair_top_y, white_l, white_r):
-    """Draw Colonel Sanders elements inside the white zone.
-    hair_top_y: y of the very top of the white area.
-    white_l/white_r: x bounds of white zone.
+def draw_colonel(surf, cx, top_y, badge_h, white_w):
     """
-    zone_w = white_r - white_l
-    fc_x = (white_l + white_r) // 2          # face center x
-    hair_h = max(3, sz // 3)
+    Simplified Colonel Sanders — white oval head/hair block, round glasses,
+    goatee, bow tie.  Rendered as bold black-on-white line art.
+    """
+    lw = max(1, badge_h // 42)
 
-    # White hair — swept-up arc
-    pygame.draw.ellipse(surf, H,
-        (white_l + 1, hair_top_y,
-         zone_w - 2, hair_h * 2))
+    # Combined head+hair oval occupies upper ~65% of badge
+    head_w  = int(white_w * 0.70)
+    head_h  = int(badge_h  * 0.62)
+    head_cy = top_y + int(badge_h * 0.32)
+    hr      = pygame.Rect(cx - head_w//2, head_cy - head_h//2, head_w, head_h)
 
-    # Face oval (skin)
-    fy = hair_top_y + hair_h + max(2, sz // 4)
-    frx = max(3, zone_w // 4)
-    fry = max(4, sz // 3)
-    pygame.draw.ellipse(surf, S,
-        (fc_x - frx, fy - fry, frx * 2, fry * 2))
+    # Hair region = top 36% of the oval; face = remainder
+    hair_line_y = head_cy - head_h//2 + int(head_h * 0.36)
 
-    # Glasses — two black circles + bridge
-    gr  = max(1, frx // 2)
-    g_y = fy - 1
-    pygame.draw.circle(surf, K, (fc_x - gr - 1, g_y), gr + 1)
-    pygame.draw.circle(surf, K, (fc_x + gr + 1, g_y), gr + 1)
-    # Lens shine (tiny white arc inside each lens)
-    pygame.draw.circle(surf, (90, 90, 90), (fc_x - gr - 2, g_y - 1), max(1, gr - 1))
-    pygame.draw.circle(surf, (90, 90, 90), (fc_x + gr,     g_y - 1), max(1, gr - 1))
+    # Draw white oval (covers both hair and face zones)
+    pygame.draw.ellipse(surf, WHITE, hr)
+    pygame.draw.ellipse(surf, BLACK, hr, lw)
+
+    # Width of oval at hair_line_y (for the dividing line endpoints)
+    dy = abs(hair_line_y - head_cy) / (head_h / 2)
+    if dy < 1.0:
+        hw_at_line = int((head_w / 2) * math.sqrt(max(0.0, 1.0 - dy * dy)))
+        pygame.draw.line(surf, BLACK,
+                         (cx - hw_at_line, hair_line_y),
+                         (cx + hw_at_line, hair_line_y), lw)
+
+    # Small pompadour bump on top of oval (swept-up white hair)
+    bump_r = max(2, int(head_w * 0.22))
+    bump_cy = head_cy - head_h//2 - bump_r//3
+    bump_cx = cx + int(head_w * 0.06)   # slightly off-center (swept to right)
+    pygame.draw.circle(surf, WHITE, (bump_cx, bump_cy), bump_r)
+    pygame.draw.circle(surf, BLACK, (bump_cx, bump_cy), bump_r, lw)
+
+    # ── Glasses ───────────────────────────────────────────────────────────────
+    face_zone_h = head_h - int(head_h * 0.36)      # height below hair_line
+    eye_r   = max(2, int(head_w * 0.105))
+    eye_y   = hair_line_y + int(face_zone_h * 0.20)
+    eye_gap = int(head_w * 0.19)
+    eye_lx  = cx - eye_gap
+    eye_rx  = cx + eye_gap
+    for ex in (eye_lx, eye_rx):
+        pygame.draw.circle(surf, WHITE, (ex, eye_y), eye_r)
+        pygame.draw.circle(surf, BLACK, (ex, eye_y), eye_r, max(1, int(eye_r * 0.42)))
     # Bridge
-    pygame.draw.line(surf, K, (fc_x - 1, g_y), (fc_x + 1, g_y), 1)
+    pygame.draw.line(surf, BLACK,
+                     (eye_lx + eye_r, eye_y), (eye_rx - eye_r, eye_y), lw)
+    # Temple arms
+    pygame.draw.line(surf, BLACK,
+                     (eye_lx - eye_r, eye_y), (cx - head_w//2 + lw + 1, eye_y), lw)
+    pygame.draw.line(surf, BLACK,
+                     (eye_rx + eye_r, eye_y), (cx + head_w//2 - lw - 1, eye_y), lw)
 
-    # Goatee — pointed white triangle below chin
-    chin_y = fy + fry
-    gt_h   = max(3, sz // 4)
-    pygame.draw.polygon(surf, H,
-        [(fc_x - gt_h + 1, chin_y),
-         (fc_x + gt_h - 1, chin_y),
-         (fc_x,            chin_y + gt_h)])
-    # Subtle goatee outline so it shows on white background
-    pygame.draw.polygon(surf, (195, 190, 185),
-        [(fc_x - gt_h + 1, chin_y),
-         (fc_x + gt_h - 1, chin_y),
-         (fc_x,            chin_y + gt_h)], 1)
+    # ── Goatee ────────────────────────────────────────────────────────────────
+    mouth_y     = hair_line_y + int(face_zone_h * 0.60)
+    goatee_bot  = hair_line_y + int(face_zone_h * 0.86)
+    goatee_hw   = max(2, int(head_w * 0.13))
+    pygame.draw.polygon(surf, WHITE,
+                        [(cx, goatee_bot), (cx - goatee_hw, mouth_y), (cx + goatee_hw, mouth_y)])
+    pygame.draw.polygon(surf, BLACK,
+                        [(cx, goatee_bot), (cx - goatee_hw, mouth_y), (cx + goatee_hw, mouth_y)], lw)
 
-    # Bow tie — two filled black triangles + centre knot
-    bt_y  = chin_y - 2
-    bt_hw = max(3, frx - 1)
-    bt_hh = max(2, sz // 7)
-    pygame.draw.polygon(surf, K,
-        [(fc_x - 1, bt_y),
-         (fc_x - bt_hw, bt_y - bt_hh),
-         (fc_x - bt_hw, bt_y + bt_hh)])
-    pygame.draw.polygon(surf, K,
-        [(fc_x + 1, bt_y),
-         (fc_x + bt_hw, bt_y - bt_hh),
-         (fc_x + bt_hw, bt_y + bt_hh)])
-    pygame.draw.circle(surf, K, (fc_x, bt_y), max(1, bt_hh // 2))
-
-
-def _kfc_text(surf, cx, bottom_y, zone_w):
-    """Render tiny 'KFC' label centred at cx, above bottom_y."""
-    fnt = pygame.font.Font(None, max(10, zone_w // 3))
-    lbl = fnt.render("KFC", True, K)
-    surf.blit(lbl, (cx - lbl.get_width() // 2,
-                    bottom_y - lbl.get_height()))
+    # ── Bow tie ───────────────────────────────────────────────────────────────
+    tie_cy = hair_line_y + int(face_zone_h * 0.73)
+    tie_hw = max(2, int(head_w * 0.19))
+    tie_hh = max(2, int(face_zone_h * 0.09))
+    knot_r = max(1, tie_hh // 2)
+    pygame.draw.polygon(surf, BLACK,
+                        [(cx, tie_cy), (cx - tie_hw, tie_cy - tie_hh), (cx - tie_hw, tie_cy + tie_hh)])
+    pygame.draw.polygon(surf, BLACK,
+                        [(cx, tie_cy), (cx + tie_hw, tie_cy - tie_hh), (cx + tie_hw, tie_cy + tie_hh)])
+    pygame.draw.circle(surf, BLACK, (cx, tie_cy), knot_r)
 
 
-# ── V1: Faithful Trapezoid Badge ─────────────────────────────────────────────
-def draw_v1(surf, cx, cy, sz, pulse=0.0):
-    _shadow(surf, cx, cy, sz)
+# ── KFC badge ─────────────────────────────────────────────────────────────────
 
-    tw = sz + 2          # top half-width
-    bw = sz - 3          # bottom half-width
-    bh = sz + 1          # half-height
-    pts = [(cx-tw, cy-bh), (cx+tw, cy-bh),
-           (cx+bw, cy+bh), (cx-bw, cy+bh)]
+def draw_kfc_badge(surf, cx, cy, badge_h):
+    """
+    Draw the KFC logo badge centered at (cx, cy) with given height.
+    Correct structure: red trapezoid | white center | red side stripes | Colonel portrait | KFC text below.
+    """
+    lw      = max(1, badge_h // 42)
+    top_w   = badge_h                  # roughly square at top
+    bot_w   = int(badge_h * 0.58)     # narrower base (bucket silhouette)
+    top_y   = cy - badge_h // 2
+    bot_y   = cy + badge_h // 2
 
-    # Red fill + dark outline
-    pygame.draw.polygon(surf, KRD, [(p[0]+1, p[1]+1) for p in pts])
-    pygame.draw.polygon(surf, KR,  pts)
+    side_px = max(2, int(top_w * 0.17))   # each red side stripe
 
-    # Side red stripes (narrow) — draw white centre over the red
-    stripe = max(3, sz // 5)
-    wl = cx - tw + stripe
-    wr = cx + tw - stripe
-    wp = [(wl, cy-bh+1), (wr, cy-bh+1),
-          (wr - (tw-bw)*stripe//sz, cy+bh-1),
-          (wl + (tw-bw)*stripe//sz, cy+bh-1)]
-    pygame.draw.polygon(surf, W, wp)
-
-    # Colonel Sanders in white zone
-    _colonel(surf, cx, cy, sz, cy - bh + 1, wl, wr)
-
-    # "KFC" label at badge bottom
-    _kfc_text(surf, cx, cy + bh - 1, wr - wl)
-
-
-# ── V2: Circle Medallion ─────────────────────────────────────────────────────
-def draw_v2(surf, cx, cy, sz, pulse=0.0):
-    _shadow(surf, cx, cy, sz)
-
-    # Pulsing aura
-    pa = max(0, int(30 + 20 * math.sin(pulse * 2)))
-    aura = pygame.Surface(((sz+6)*2, (sz+6)*2), pygame.SRCALPHA)
-    pygame.draw.circle(aura, (*KR, pa), (sz+6, sz+6), sz+6)
-    surf.blit(aura, (cx-sz-6, cy-sz-6))
-
-    # Red circle + dark outline
-    pygame.draw.circle(surf, KRD, (cx, cy), sz + 1)
-    pygame.draw.circle(surf, KR,  (cx, cy), sz)
-
-    # White upper face zone
-    face_h = sz + sz // 2
-    pygame.draw.ellipse(surf, W,
-        (cx - sz, cy - sz, sz * 2, face_h))
-
-    # Colonel face
-    _colonel(surf, cx, cy, sz, cy - sz + 1, cx - sz + 2, cx + sz - 2)
-
-    # Red bottom arc with "KFC"
-    pygame.draw.ellipse(surf, KR,
-        (cx - sz, cy + sz // 3, sz * 2, sz + sz // 2))
-    fnt = pygame.font.Font(None, max(10, sz // 2 + 2))
-    lbl = fnt.render("KFC", True, W)
-    surf.blit(lbl, (cx - lbl.get_width() // 2, cy + sz // 2))
-
-
-# ── V3: Bold Chunky Icon ──────────────────────────────────────────────────────
-def draw_v3(surf, cx, cy, sz, pulse=0.0):
-    _shadow(surf, cx, cy, sz)
-
-    tw = sz + 3
-    bw = sz - 2
-    bh = sz + 2
-    pts = [(cx-tw, cy-bh), (cx+tw, cy-bh),
-           (cx+bw, cy+bh), (cx-bw, cy+bh)]
-    pygame.draw.polygon(surf, KRD, [(p[0]+1, p[1]+1) for p in pts])
-    pygame.draw.polygon(surf, KR,  pts)
-
-    # Wider white zone (bold look = more face room)
-    stripe = max(2, sz // 6)
-    wl = cx - tw + stripe
-    wr = cx + tw - stripe
-    wp = [(wl, cy-bh+1), (wr, cy-bh+1),
-          (wr - (tw-bw)*stripe//sz, cy+bh-1),
-          (wl + (tw-bw)*stripe//sz, cy+bh-1)]
-    pygame.draw.polygon(surf, W, wp)
-
-    # Hair (larger bump)
-    zw = wr - wl
-    pygame.draw.ellipse(surf, H,
-        (wl + 1, cy - bh + 1, zw - 2, sz // 2 + 4))
-
-    # Face
-    fc_x = cx
-    fy = cy - sz // 5
-    frx = max(4, zw // 4 + 1)
-    fry = max(5, sz // 3 + 1)
-    pygame.draw.ellipse(surf, S, (fc_x-frx, fy-fry, frx*2, fry*2))
-
-    # THICK glasses (2px outline)
-    gr = max(2, frx // 2)
-    g_y = fy - 1
-    pygame.draw.circle(surf, K, (fc_x - gr - 1, g_y), gr + 1, 2)
-    pygame.draw.circle(surf, K, (fc_x + gr + 1, g_y), gr + 1, 2)
-    pygame.draw.line(surf, K, (fc_x - 1, g_y), (fc_x + 1, g_y), 2)
-
-    # Prominent goatee
-    chin_y = fy + fry
-    gt_h   = max(5, sz // 3)
-    pygame.draw.polygon(surf, H,
-        [(fc_x - gt_h, chin_y),
-         (fc_x + gt_h, chin_y),
-         (fc_x, chin_y + gt_h + 2)])
-    pygame.draw.polygon(surf, (185, 180, 175),
-        [(fc_x - gt_h, chin_y),
-         (fc_x + gt_h, chin_y),
-         (fc_x, chin_y + gt_h + 2)], 1)
-
-    # THICK bow tie
-    bt_y  = chin_y - 2
-    bt_hw = max(4, frx)
-    bt_hh = max(3, sz // 6)
-    pygame.draw.polygon(surf, K,
-        [(fc_x - 1, bt_y),
-         (fc_x - bt_hw - 1, bt_y - bt_hh - 1),
-         (fc_x - bt_hw - 1, bt_y + bt_hh + 1)])
-    pygame.draw.polygon(surf, K,
-        [(fc_x + 1, bt_y),
-         (fc_x + bt_hw + 1, bt_y - bt_hh - 1),
-         (fc_x + bt_hw + 1, bt_y + bt_hh + 1)])
-    pygame.draw.circle(surf, K, (fc_x, bt_y), max(2, bt_hh // 2 + 1))
-
-    _kfc_text(surf, cx, cy + bh - 1, wr - wl)
-
-
-# ── V4: Heraldic Shield + Gold trim ──────────────────────────────────────────
-def draw_v4(surf, cx, cy, sz, pulse=0.0):
-    _shadow(surf, cx, cy, sz + 1)
-
-    # Pulsing gold aura
-    pa = max(0, int(28 + 20 * math.sin(pulse * 1.8)))
-    aura = pygame.Surface(((sz+6)*2, (sz+6)*2), pygame.SRCALPHA)
-    pygame.draw.circle(aura, (*G, pa), (sz+6, sz+6), sz+6)
-    surf.blit(aura, (cx-sz-6, cy-sz-6))
-
-    sw  = sz + 2
-    sh  = sz + 3
-    shield = [
-        (cx - sw, cy - sh),
-        (cx + sw, cy - sh),
-        (cx + sw, cy + 1),
-        (cx,      cy + sh + 2),
-        (cx - sw, cy + 1),
+    # Outer red trapezoid
+    outer = [
+        (cx - top_w//2, top_y),
+        (cx + top_w//2, top_y),
+        (cx + bot_w//2, bot_y),
+        (cx - bot_w//2, bot_y),
     ]
-    pygame.draw.polygon(surf, KRD, [(p[0]+1, p[1]+1) for p in shield])
-    pygame.draw.polygon(surf, KR,  shield)
-    pygame.draw.polygon(surf, G,   shield, 2)  # gold trim
 
-    # White inner field
-    m = 3
-    inner = [
-        (cx - sw + m, cy - sh + m),
-        (cx + sw - m, cy - sh + m),
-        (cx + sw - m, cy + 1 - m // 2),
-        (cx,          cy + sh + 2 - m),
-        (cx - sw + m, cy + 1 - m // 2),
+    # White center trapezoid (inset by side_px on each side)
+    wt_w = top_w - 2 * side_px
+    wb_w = max(2, bot_w - 2 * side_px)
+    white = [
+        (cx - wt_w//2, top_y),
+        (cx + wt_w//2, top_y),
+        (cx + wb_w//2, bot_y),
+        (cx - wb_w//2, bot_y),
     ]
-    pygame.draw.polygon(surf, W, inner)
 
-    # Colonel face spanning the white inner field
-    il = cx - sw + m + 1
-    ir = cx + sw - m - 1
-    top_y = cy - sh + m
+    # Red apron — bottom 20% of the white zone (Colonel's red shirt visible)
+    t = 0.80   # fraction from top where apron starts
+    apron_top_y  = top_y + int(badge_h * t)
+    apron_top_hw = int((wt_w // 2) * (1 - t) + (wb_w // 2) * t)
+    apron = [
+        (cx - apron_top_hw, apron_top_y),
+        (cx + apron_top_hw, apron_top_y),
+        (cx + wb_w // 2,    bot_y),
+        (cx - wb_w // 2,    bot_y),
+    ]
 
-    zw = ir - il
-    fc_x = cx
-    hair_h = max(3, sz // 3)
-    pygame.draw.ellipse(surf, H,
-        (il + 1, top_y, zw - 2, hair_h * 2))
+    # Drop shadow
+    sh = pygame.Surface((top_w + 12, 16), pygame.SRCALPHA)
+    pygame.draw.ellipse(sh, (0, 0, 0, 70), sh.get_rect())
+    surf.blit(sh, (cx - top_w // 2 - 6, bot_y + 6))
 
-    fy = top_y + hair_h + max(2, sz // 5)
-    frx = max(3, zw // 5)
-    fry = max(4, sz // 3)
-    pygame.draw.ellipse(surf, S, (fc_x-frx, fy-fry, frx*2, fry*2))
+    # 1. Red outer badge
+    pygame.draw.polygon(surf, RED, outer)
+    # 2. White center stripe
+    pygame.draw.polygon(surf, WHITE, white)
+    # 3. Red apron
+    pygame.draw.polygon(surf, RED, apron)
+    # 4. Colonel portrait
+    draw_colonel(surf, cx, top_y, badge_h, wt_w)
+    # 5. Outlines
+    pygame.draw.polygon(surf, BLACK, outer,  lw)
+    pygame.draw.polygon(surf, BLACK, white,  max(1, lw - 1))
+    pygame.draw.line(surf, BLACK,
+                     (cx - apron_top_hw, apron_top_y),
+                     (cx + apron_top_hw, apron_top_y), max(1, lw - 1))
 
-    gr  = max(1, frx // 2)
-    g_y = fy - 1
-    pygame.draw.circle(surf, K, (fc_x - gr - 1, g_y), gr + 1)
-    pygame.draw.circle(surf, K, (fc_x + gr + 1, g_y), gr + 1)
-    pygame.draw.line(surf, K, (fc_x - 1, g_y), (fc_x + 1, g_y), 1)
-
-    chin_y = fy + fry
-    gt_h   = max(3, sz // 4)
-    pygame.draw.polygon(surf, H,
-        [(fc_x - gt_h + 1, chin_y),
-         (fc_x + gt_h - 1, chin_y),
-         (fc_x,            chin_y + gt_h)])
-    pygame.draw.polygon(surf, (195, 190, 185),
-        [(fc_x - gt_h + 1, chin_y),
-         (fc_x + gt_h - 1, chin_y),
-         (fc_x,            chin_y + gt_h)], 1)
-
-    bt_y  = chin_y - 2
-    bt_hw = max(3, frx - 1)
-    bt_hh = max(2, sz // 7)
-    pygame.draw.polygon(surf, K,
-        [(fc_x - 1, bt_y), (fc_x - bt_hw, bt_y - bt_hh), (fc_x - bt_hw, bt_y + bt_hh)])
-    pygame.draw.polygon(surf, K,
-        [(fc_x + 1, bt_y), (fc_x + bt_hw, bt_y - bt_hh), (fc_x + bt_hw, bt_y + bt_hh)])
-    pygame.draw.circle(surf, K, (fc_x, bt_y), max(1, bt_hh // 2))
+    # 6. "KFC" bold text below badge
+    fs = max(10, int(badge_h * 0.22))
+    try:
+        font = pygame.font.SysFont("Arial Black", fs, bold=True)
+    except Exception:
+        font = pygame.font.SysFont(None, fs + 6, bold=True)
+    txt = font.render("KFC", True, RED)
+    surf.blit(txt, (cx - txt.get_width() // 2, bot_y + lw + 4))
 
 
-# ── V5: Retro Horizontal Stripe ───────────────────────────────────────────────
-def draw_v5(surf, cx, cy, sz, pulse=0.0):
-    _shadow(surf, cx, cy, sz)
+# ── Render ────────────────────────────────────────────────────────────────────
 
-    bw = sz + 2
-    bh = sz + 2
-    rect = pygame.Rect(cx - bw, cy - bh, bw * 2, bh * 2)
-    br   = 5
+W, H = 700, 320
+canvas = pygame.Surface((W, H))
+canvas.fill(BG)
 
-    # White base
-    pygame.draw.rect(surf, KRD, rect.inflate(2, 2), border_radius=br + 1)
-    pygame.draw.rect(surf, W,   rect,               border_radius=br)
+# Large preview (left half)
+LARGE_H = 220
+draw_kfc_badge(canvas, 175, 148, LARGE_H)
 
-    # Horizontal red/white stripes on bottom half
-    n_stripes = 5
-    stripe_start = cy
-    stripe_end   = cy + bh - 1
-    sh = max(1, (stripe_end - stripe_start) // n_stripes)
-    for i in range(n_stripes):
-        sy = stripe_start + i * sh
-        c  = KR if i % 2 == 0 else W
-        sr = pygame.Rect(cx - bw + 1, sy, (bw - 1) * 2, sh + 1)
-        pygame.draw.rect(surf, c, sr.clip(rect.inflate(-2, -2)))
+# Game-size badge zoomed x6 (right half)
+GAME_H = 32
+ZOOM   = 6
+ss = pygame.Surface((GAME_H * 2 + 10, GAME_H * 2 + 36), pygame.SRCALPHA)
+ss.fill(BG)
+draw_kfc_badge(ss, GAME_H + 5, GAME_H + 6, GAME_H)
+zoomed = pygame.transform.scale_by(ss, ZOOM)
+canvas.blit(zoomed, (380, H // 2 - zoomed.get_height() // 2))
 
-    # White top half (colonel area)
-    top_rect = pygame.Rect(cx - bw + 1, cy - bh + 1, (bw - 1) * 2, bh)
-    pygame.draw.rect(surf, W, top_rect)
+# Labels
+lf = pygame.font.SysFont(None, 22)
+canvas.blit(lf.render("Preview (large)", True, (180, 180, 200)), (110, 14))
+canvas.blit(lf.render(f"Game sprite x{ZOOM}",  True, (180, 180, 200)), (470, 14))
+pygame.draw.line(canvas, (50, 50, 80), (360, 10), (360, H - 10), 1)
 
-    # Colonel face in upper half
-    _colonel(surf, cx, cy, sz,
-             cy - bh + 2, cx - bw + 3, cx + bw - 3)
-
-    # "KFC" in the stripe area (white text on red stripe)
-    fnt = pygame.font.Font(None, max(10, sz // 2 + 2))
-    lbl = fnt.render("KFC", True, W)
-    surf.blit(lbl, (cx - lbl.get_width() // 2,
-                    stripe_start + sh // 2 - lbl.get_height() // 2))
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Render each variant into its own PNG
-# ─────────────────────────────────────────────────────────────────────────────
-VARIANTS = [
-    ("V1 — Faithful Trapezoid Badge   (red|white|red stripes)", draw_v1, "kfc_v1.png"),
-    ("V2 — Circle Medallion           (coin-style)",            draw_v2, "kfc_v2.png"),
-    ("V3 — Bold Chunky Icon           (thick outlines)",        draw_v3, "kfc_v3.png"),
-    ("V4 — Heraldic Shield + Gold     (crest style)",           draw_v4, "kfc_v4.png"),
-    ("V5 — Retro Horizontal Stripes   (apron style)",           draw_v5, "kfc_v5.png"),
-]
-
-SZ     = 16          # sprite half-size  (matches MUSHROOM_R + 2)
-ZOOM   = 4           # scale factor for visibility
-SP_W   = (SZ * 2 + 8) * ZOOM   # sprite cell width  after zoom
-SP_H   = (SZ * 2 + 12) * ZOOM  # sprite cell height after zoom
-N_COL  = 3           # sprites per row
-GAP    = 10
-PW     = N_COL * SP_W + (N_COL - 1) * GAP + 30
-PH     = SP_H + 50
-
-PULSES = [0.0, math.pi * 0.6, math.pi * 1.4]   # 3 animation phases
-
-for title, fn, fname in VARIANTS:
-    panel = pygame.Surface((PW, PH))
-    panel.fill(BG)
-    for gy in range(12, PH, 24):
-        for gx in range(12, PW, 24):
-            pygame.draw.circle(panel, (22, 16, 52), (gx, gy), 1)
-
-    hdr = pygame.font.Font(None, 18)
-    lbl = hdr.render(title, True, (200, 175, 115))
-    panel.blit(lbl, (PW // 2 - lbl.get_width() // 2, 7))
-
-    for col, pulse in enumerate(PULSES):
-        # Scratch surface — big enough for sprite + drop shadow
-        scratch = pygame.Surface((SZ * 2 + 8, SZ * 2 + 12), pygame.SRCALPHA)
-        fn(scratch, SZ + 4, SZ + 4, SZ, pulse)
-        zoomed = pygame.transform.scale(
-            scratch, (scratch.get_width() * ZOOM, scratch.get_height() * ZOOM))
-
-        x = 15 + col * (SP_W + GAP)
-        y = 28
-        panel.blit(zoomed, (x, y))
-
-        # Small pulse label
-        sub = hdr.render(f"phase {col+1}/3", True, (110, 100, 75))
-        panel.blit(sub, (x + SP_W // 2 - sub.get_width() // 2, y + SP_H + 2))
-
-    out = os.path.join(OUT, fname)
-    pygame.image.save(panel, out)
-    print(f"  saved {fname}")
-
+out = "screenshots/kfc_faithful.png"
+pygame.image.save(canvas, out)
+print(f"  saved {out}")
 pygame.quit()
-print("Done.")
