@@ -36,24 +36,65 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: python inject_theme.py
 
-      - name: Add coi-serviceworker (GitHub Pages COOP/COEP shim)
-        # GitHub Pages doesn't support custom HTTP headers, but WASM SharedArrayBuffer
-        # requires Cross-Origin-Embedder-Policy + Cross-Origin-Opener-Policy.
-        # coi-serviceworker.js adds those headers via a service worker instead.
+      - name: Write minimal COOP/COEP service worker
+        # GitHub Pages can't set HTTP headers, so we use a service worker instead.
+        # We write our own minimal SW rather than using coi-serviceworker.js from
+        # CDN because that library adds a controllerchange listener that reloads the
+        # page every time the SW updates — causing an infinite reload loop on the
+        # second visit. Our SW only reloads once, guarded by crossOriginIsolated.
         run: |
-          curl -sL \
-            "https://raw.githubusercontent.com/gzuidhof/coi-serviceworker/master/coi-serviceworker.js" \
-            -o build/web/coi-serviceworker.js
+          cat > build/web/coi-sw.js << 'SWEOF'
+          // Minimal COOP/COEP service worker for GitHub Pages.
+          // Uses "credentialless" COEP (matches Netlify config) so pygbag's CDN
+          // package fetches from pygame-web.github.io are not blocked.
+          self.addEventListener('install', () => self.skipWaiting());
+          self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
+          self.addEventListener('fetch', e => {
+            // Chrome bug: 'only-if-cached' + cross-origin = TypeError
+            if (e.request.cache === 'only-if-cached' && e.request.mode !== 'same-origin') return;
+            if (!e.request.url.startsWith('http')) return;
+            e.respondWith(
+              fetch(e.request).then(res => {
+                if (!res || res.status === 0) return res;
+                const h = new Headers(res.headers);
+                h.set('Cross-Origin-Embedder-Policy', 'credentialless');
+                h.set('Cross-Origin-Opener-Policy', 'same-origin');
+                return new Response(res.body, {status: res.status, statusText: res.statusText, headers: h});
+              }).catch(() => fetch(e.request))
+            );
+          });
+          SWEOF
+
           python3 - <<'PY'
           from pathlib import Path
           p = Path("build/web/index.html")
           html = p.read_text()
-          # coepCredentialless=true matches Netlify's "credentialless" COEP so
-          # pygbag's CDN package fetches (pygame-web.github.io) are not blocked.
-          sw = '<script>self.coi={coepCredentialless:true};if("serviceWorker"in navigator){navigator.serviceWorker.register("coi-serviceworker.js");}</script>'
+          # Guard: if the page is already cross-origin isolated (SW already active),
+          # skip registration entirely — no reload, no loop. Only register + reload
+          # once on the very first visit when isolation isn't yet in place.
+          sw = """<script>
+          (function(){
+            if(!('serviceWorker' in navigator)) return;
+            if(self.crossOriginIsolated) return;
+            navigator.serviceWorker.register('coi-sw.js').then(function(reg){
+              function reload(){
+                if(sessionStorage.getItem('_coi')) return;
+                sessionStorage.setItem('_coi','1');
+                location.reload();
+              }
+              if(reg.installing){
+                reg.installing.addEventListener('statechange',function(e){
+                  if(e.target.state==='activated') reload();
+                });
+              } else if(!navigator.serviceWorker.controller){
+                reload();
+              }
+            });
+          })();
+          </script>"""
           html = html.replace("<head>", "<head>\n" + sw, 1)
           p.write_text(html)
-          print("✓ coi-serviceworker registered (credentialless COEP)")
+          print("✓ custom coi-sw.js written and registered")
           PY
 
       - name: Upload Pages artifact
