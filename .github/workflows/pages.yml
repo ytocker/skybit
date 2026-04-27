@@ -1,0 +1,71 @@
+name: Deploy to GitHub Pages (leaderboard branch)
+
+on:
+  push:
+    branches: [v1_leaderboard_feature]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pygbag
+        run: pip install pygame 'pygbag>=0.9'
+
+      - name: Build WASM bundle
+        run: python -m pygbag --build main.py
+
+      - name: Inject theme and Supabase leaderboard
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: python inject_theme.py
+
+      - name: Add coi-serviceworker (GitHub Pages COOP/COEP shim)
+        # GitHub Pages doesn't support custom HTTP headers, but WASM SharedArrayBuffer
+        # requires Cross-Origin-Embedder-Policy + Cross-Origin-Opener-Policy.
+        # coi-serviceworker.js adds those headers via a service worker instead.
+        run: |
+          curl -sL \
+            "https://raw.githubusercontent.com/gzuidhof/coi-serviceworker/master/coi-serviceworker.js" \
+            -o build/web/coi-serviceworker.js
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("build/web/index.html")
+          html = p.read_text()
+          sw = '<script>if("serviceWorker"in navigator){navigator.serviceWorker.register("coi-serviceworker.js");}</script>'
+          html = html.replace("<head>", "<head>\n" + sw, 1)
+          p.write_text(html)
+          print("✓ coi-serviceworker registered")
+          PY
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
