@@ -147,5 +147,31 @@ for kind, cx in (("triple", 55), ("magnet", 145), ("slowmo", 235), ("kfc", 325))
 pygame.image.save(pu_panel, os.path.join(OUT_DIR, "08_powerups.png"))
 print("  saved 08_powerups.png")
 
+# ── KFC fried-chicken parrot in flight ───────────────────────────────────────
+from game import parrot as _parrot
+from game.entities import Bird
+
+kfc_panel = pygame.Surface((W, H))
+draw_bg(kfc_panel, phase=0.72)
+
+bird = Bird()
+bird.x, bird.y = W * 0.38, H * 0.44
+bird.kfc_active = True
+bird.frame_t = 0.0
+
+lf3 = pygame.font.Font(None, 22)
+kfc_lbl = lf3.render("KFC MODE — fried chicken parrot", True, (200, 180, 120))
+kfc_panel.blit(kfc_lbl, (W//2 - kfc_lbl.get_width()//2, 12))
+
+# Draw all 4 wing frames across the screen
+for fi in range(4):
+    bx = int(W * 0.15 + fi * W * 0.22)
+    by = int(H * 0.48)
+    frame = _parrot.KFC_FRAMES[fi]
+    kfc_panel.blit(frame, (bx - frame.get_width()//2, by - frame.get_height()//2))
+
+pygame.image.save(kfc_panel, os.path.join(OUT_DIR, "09_kfc_chicken.png"))
+print("  saved 09_kfc_chicken.png")
+
 pygame.quit()
 print("Done —", OUT_DIR)
