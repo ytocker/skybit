@@ -238,20 +238,17 @@ class App:
             scores = await leaderboard.fetch_top10()
             self._lb_scores = scores
             self._lb_loading = False
-            if scores:
+            if scores and name:
                 self._lb_player_rank = next(
                     (i for i, e in enumerate(scores) if e["score"] == self._final_score),
                     -1,
                 )
-                self.hud.title_t = 0.0
-                self.state = STATE_LEADERBOARD
-                self._cooldown_t = 1.0
-            else:
-                self.state = STATE_GAMEOVER
-                self._cooldown_t = 0.5
         except Exception:
-            self.state = STATE_GAMEOVER
-            self._cooldown_t = 0.5
+            self._lb_loading = False
+        # Always show the leaderboard screen regardless of scores or skip
+        self.hud.title_t = 0.0
+        self.state = STATE_LEADERBOARD
+        self._cooldown_t = 1.0
 
     # ── render ──────────────────────────────────────────────────────────────
 

@@ -96,6 +96,51 @@ def _draw_overlay_stars(surf, stars, t):
         surf.blit(s, (x - r - 1, y - r - 1))
 
 
+def _draw_trophy(surf, cx, cy, size):
+    """Gold procedural trophy icon. `size` is approximate half-height."""
+    s = size
+    g = pygame.Surface((s * 2 + 4, s * 2 + 4), pygame.SRCALPHA)
+    gc = (s + 2, s + 2)
+    GOLD  = (240, 192,  64, 255)
+    DARK  = (140,  90,   8, 255)
+    WHITE = (255, 248, 200, 180)
+
+    # Cup body — rounded trapezoid
+    cup_pts = [
+        (gc[0] - s,     gc[1] - s + 2),
+        (gc[0] + s,     gc[1] - s + 2),
+        (gc[0] + s - 3, gc[1] + 2),
+        (gc[0] - s + 3, gc[1] + 2),
+    ]
+    pygame.draw.polygon(g, DARK, [(x+1, y+1) for x, y in cup_pts])
+    pygame.draw.polygon(g, GOLD, cup_pts)
+    # Cup rim highlight
+    pygame.draw.line(g, WHITE, (gc[0] - s + 2, gc[1] - s + 3),
+                     (gc[0] + s - 2, gc[1] - s + 3), 1)
+    # Handles — small arcs on each side
+    for side in (-1, 1):
+        hx = gc[0] + side * (s - 1)
+        pygame.draw.arc(g, GOLD,
+                        (hx - 4 if side == 1 else hx,
+                         gc[1] - s + 4, 6, s - 2),
+                        math.pi * 0.25, math.pi * 0.75 if side == -1 else math.pi * 1.75,
+                        2)
+    # Stem
+    stem_x = gc[0] - 2
+    stem_y = gc[1] + 2
+    pygame.draw.rect(g, DARK,  (stem_x,     stem_y + 1, 5, s // 2 + 1))
+    pygame.draw.rect(g, GOLD,  (stem_x + 1, stem_y,     3, s // 2))
+    # Base
+    base_y = gc[1] + 2 + s // 2
+    pygame.draw.rect(g, DARK,  (gc[0] - s + 2, base_y + 1, (s - 1) * 2, 4))
+    pygame.draw.rect(g, GOLD,  (gc[0] - s + 2, base_y,     (s - 1) * 2, 3))
+    # Foot
+    pygame.draw.rect(g, DARK,  (gc[0] - s + 1, base_y + 4, (s - 1) * 2 + 2, 3))
+    pygame.draw.rect(g, GOLD,  (gc[0] - s + 1, base_y + 3, (s - 1) * 2 + 2, 3))
+
+    surf.blit(g, (cx - s - 2, cy - s - 2))
+
+
 def _draw_mountain_silhouette(surf, alpha=200):
     """Mountain silhouettes at the bottom — matches the welcome-screen SVG."""
     mtn = pygame.Surface((W, H), pygame.SRCALPHA)
@@ -669,17 +714,15 @@ class HUD:
         pygame.draw.line(field, (255, 200, 100, 40), (14, 3), (fw - 14, 3))
         surf.blit(field, (fx, fy))
 
-        # Typed text + blinking cursor
-        cursor = "|" if int(self.title_t * 2) % 2 == 0 else ""
+        # Typed text — no cursor
         tf = _font(26, True)
-        display = buf + cursor
-        txt = tf.render(display if display else cursor, True, _GOLD_BRIGHT)
-        if not buf and not cursor:
+        if buf:
+            txt = tf.render(buf, True, _GOLD_BRIGHT)
+            surf.blit(txt, txt.get_rect(center=(W // 2, fy + fh // 2)))
+        else:
             placeholder = _font(18, False).render("type your name…", True, _GOLD_MUTED)
             placeholder.set_alpha(100)
             surf.blit(placeholder, placeholder.get_rect(center=(W // 2, fy + fh // 2)))
-        else:
-            surf.blit(txt, txt.get_rect(center=(W // 2, fy + fh // 2)))
 
         # Submit button (only active once something is typed)
         if buf.strip():
@@ -703,16 +746,12 @@ class HUD:
         dim.fill((0, 0, 20, 200))
         surf.blit(dim, (0, 0))
 
-        # Header with red outline
-        title = "GLOBAL TOP 10"
-        f_hdr = _font(30, True)
-        img_gold = f_hdr.render(title, True, UI_GOLD)
-        img_out  = f_hdr.render(title, True, UI_RED)
-        r_hdr = img_gold.get_rect(center=(W // 2, 46))
-        for ox, oy in ((-3, 0), (3, 0), (0, -3), (0, 3)):
-            surf.blit(img_out, (r_hdr.x + ox, r_hdr.y + oy))
-        surf.blit(img_gold, r_hdr.topleft)
-        _text(surf, "W O R L D W I D E", (W // 2, 72), size=12, color=UI_CREAM, shadow=False)
+        # Header: trophy icon — "TOP 10" — trophy icon
+        _outlined_text(surf, "TOP 10", (W // 2, 46), size=32, px=3)
+        for side in (-1, 1):
+            tx = W // 2 + side * 88
+            ty = 46
+            _draw_trophy(surf, tx, ty, 18)
 
         card_x, card_w = 14, W - 28
 
