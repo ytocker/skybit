@@ -152,63 +152,52 @@ class Coin:
         r = COIN_R
         rx = max(1, int(abs(cos_s) * r))
 
-        # Drop shadow
-        sh = pygame.Surface((rx * 2 + 10, 6), pygame.SRCALPHA)
-        pygame.draw.ellipse(sh, (0, 0, 0, 55), sh.get_rect())
-        surf.blit(sh, (cx - rx - 5, cy + r + 1))
+        # Drop shadow beneath the coin
+        sh = pygame.Surface((rx * 2 + 8, 7), pygame.SRCALPHA)
+        pygame.draw.ellipse(sh, (0, 0, 0, 70), sh.get_rect())
+        surf.blit(sh, (cx - rx - 4, cy + r))
 
-        # Tight warm glow — just enough to lift it off the background
-        blit_glow(surf, cx, cy, r + 3, (255, 200, 20), 35)
+        # Additive gold glow halo — pulses with float phase
+        glow_a = int(55 + 20 * math.sin(self.float_t * 2.2))
+        blit_glow(surf, cx, cy, r + 7, COIN_GOLD, glow_a)
 
-        if abs(cos_s) <= 0.30:
-            pygame.draw.ellipse(surf, COIN_DARK, (cx-rx-1, cy-r, (rx+1)*2, r*2))
-            pygame.draw.ellipse(surf, COIN_GOLD,  (cx-rx,   cy-r,  rx*2,    r*2))
+        if abs(cos_s) <= 0.35:
+            # Edge-on sliver — thin gold bar, still glows
+            pygame.draw.ellipse(surf, COIN_DARK,
+                                (cx - rx - 1, cy - r, (rx + 1) * 2, r * 2))
+            pygame.draw.ellipse(surf, COIN_GOLD,
+                                (cx - rx, cy - r, rx * 2, r * 2))
             return
 
-        # 1. Dark rim
+        # Dark rim → rich gold body
         pygame.draw.ellipse(surf, COIN_DARK,
-                            (cx-rx-1, cy-r-1, (rx+1)*2+2, (r+1)*2))
-        # 2. Gold body
-        pygame.draw.ellipse(surf, COIN_GOLD, (cx-rx, cy-r, rx*2, r*2))
-        # 3. Bright inner zone for 3-D depth
+                            (cx - rx - 1, cy - r - 1, (rx + 1) * 2, (r + 1) * 2))
+        pygame.draw.ellipse(surf, COIN_GOLD,
+                            (cx - rx, cy - r, rx * 2, r * 2))
+
+        # Bright inner zone for 3-D depth
         if rx > 5:
-            ir = max(2, rx - 3)
+            ir = max(2, rx - 4)
             pygame.draw.ellipse(surf, COIN_LIGHT,
-                                (cx-ir, cy-r+3, ir*2, (r-3)*2))
+                                (cx - ir, cy - r + 3, ir * 2, r * 2 - 6))
 
-        # Large specular crescent — upper-left, scales with cos_s
-        if abs(cos_s) > 0.4 and rx > 4:
-            spec_a = min(255, int(180 + 70 * abs(cos_s)))
-            spec_w = max(3, int(rx * 0.65))
-            spec_h = max(3, int(r * 0.42))
-            spec = pygame.Surface((spec_w*2, spec_h*2), pygame.SRCALPHA)
-            pygame.draw.ellipse(spec, (255, 255, 240, spec_a), spec.get_rect())
-            surf.blit(spec, (cx - spec_w//2 - rx//2 - 1, cy - r + 1))
+        # Specular crescent — upper-left highlight, sweeps with spin phase
+        if abs(cos_s) > 0.45 and rx > 4:
+            spec_w = max(2, int(rx * 0.55))
+            spec_h = max(2, r // 3)
+            spec = pygame.Surface((spec_w * 2, spec_h * 2), pygame.SRCALPHA)
+            spec_a = int(160 + 80 * abs(cos_s))
+            pygame.draw.ellipse(spec, (255, 255, 220, spec_a), spec.get_rect())
+            surf.blit(spec, (cx - spec_w // 2 - rx // 3, cy - r + 2))
 
-        # Embossed parrot (face-on only)
+        # Embossed parrot silhouette — only when mostly face-on
         if abs(cos_s) > 0.75:
-            em = (145, 88, 0)
-            pygame.draw.ellipse(surf, em, (cx-2, cy-1, 7, 5))
-            pygame.draw.circle(surf, em, (cx-1, cy-3), 3)
-            pygame.draw.polygon(surf, em,
-                                [(cx-3,cy-3),(cx-6,cy-2),(cx-3,cy-1)])
-            pygame.draw.circle(surf, COIN_GOLD, (cx, cy-4), 1)
-
-        # 4-point sparkle flash at upper-right edge, cycles with float_t
-        shimmer_t = (self.float_t * 1.4) % math.tau
-        if shimmer_t < 0.85:
-            sa = int(230 * math.sin(shimmer_t * math.pi / 0.85))
-            spx = cx + int(rx * 0.65)
-            spy = cy - int(r * 0.65)
-            sp = pygame.Surface((12, 12), pygame.SRCALPHA)
-            m = 6
-            c4 = (255, 255, 240, sa)
-            pygame.draw.line(sp, c4, (m, m-5), (m, m+5), 1)
-            pygame.draw.line(sp, c4, (m-5, m), (m+5, m), 1)
-            pygame.draw.line(sp, (255,255,255,sa//2), (m-3,m-3),(m+3,m+3), 1)
-            pygame.draw.line(sp, (255,255,255,sa//2), (m+3,m-3),(m-3,m+3), 1)
-            pygame.draw.circle(sp, (255,255,255,sa), (m,m), 2)
-            surf.blit(sp, (spx-m, spy-m))
+            emboss = (140, 85, 0)
+            pygame.draw.ellipse(surf, emboss, (cx - 2, cy - 1, 7, 5))
+            pygame.draw.circle(surf, emboss, (cx - 1, cy - 3), 3)
+            pygame.draw.polygon(surf, emboss,
+                                [(cx - 3, cy - 3), (cx - 6, cy - 2), (cx - 3, cy - 1)])
+            pygame.draw.circle(surf, COIN_GOLD, (cx, cy - 4), 1)
 
 
 # ── PowerUp ──────────────────────────────────────────────────────────────────
@@ -241,211 +230,197 @@ class PowerUp:
     def _draw_mushroom(self, surf):
         cx = int(self.x)
         cy = int(self.y + math.sin(self.pulse * 0.9) * 2.0)
-        r = MUSHROOM_R
 
-        # Bottom drop shadow
-        sh_w = r * 3
-        sh = pygame.Surface((sh_w, 8), pygame.SRCALPHA)
-        pygame.draw.ellipse(sh, (0, 0, 0, 80), sh.get_rect())
-        surf.blit(sh, (cx - sh_w // 2, cy + r + 4))
+        # Pulsing red glow halo
+        glow_a = int(55 + 25 * math.sin(self.pulse))
+        blit_glow(surf, cx, cy - MUSHROOM_R // 2, MUSHROOM_R + 9, (220, 30, 40), glow_a)
 
-        # 3 orbiting pink sparkle dots
+        # 3 orbiting sparkle dots
         for i in range(3):
             ang = self.pulse * 1.4 + i * (math.tau / 3)
-            ox = int(math.cos(ang) * (r + 6))
-            oy = int(math.sin(ang) * (r + 3))
-            sp_a = max(50, int(155 + 80 * math.sin(ang * 2)))
+            ox = int(math.cos(ang) * (MUSHROOM_R + 7))
+            oy = int(math.sin(ang) * (MUSHROOM_R + 4))
+            sp_a = max(60, int(180 + 70 * math.sin(ang * 2)))
             sp = pygame.Surface((6, 6), pygame.SRCALPHA)
-            pygame.draw.circle(sp, (255, 160, 180, sp_a), (3, 3), 3)
+            pygame.draw.circle(sp, (255, 210, 210, sp_a), (3, 3), 3)
             surf.blit(sp, (cx + ox - 3, cy + oy - 3))
 
-        # Stem
-        stem = pygame.Rect(cx - 7, cy + 2, 14, 12)
-        rounded_rect(surf, stem, 4, MUSH_STEM, 255)
-        pygame.draw.line(surf, (255, 255, 230), (cx - 4, cy + 4), (cx - 4, cy + 12), 2)
-        pygame.draw.line(surf, (180, 155, 115), (cx + 3, cy + 4), (cx + 3, cy + 12), 1)
+        # Stem with vivid highlight
+        stem = pygame.Rect(cx - 7, cy, 14, 13)
+        rounded_rect(surf, stem, 5, MUSH_STEM, 255)
+        pygame.draw.line(surf, (255, 255, 230), (cx - 4, cy + 2), (cx - 4, cy + 11), 2)
+        pygame.draw.line(surf, (200, 180, 145), (cx + 3, cy + 2), (cx + 3, cy + 11), 1)
+        # Stem base shadow
+        sh = pygame.Surface((16, 4), pygame.SRCALPHA)
+        pygame.draw.ellipse(sh, (0, 0, 0, 120), sh.get_rect())
+        surf.blit(sh, (cx - 8, cy + 11))
 
-        # Cap: thick dark outline → vivid red body → bright top arc
-        cap_rect = pygame.Rect(cx - r - 1, cy - r + 2, (r + 1) * 2, r + 5)
-        pygame.draw.ellipse(surf, (80, 4, 8),    cap_rect.inflate(4, 4))  # blackest outer rim
-        pygame.draw.ellipse(surf, (160, 10, 18), cap_rect.inflate(2, 2))  # crimson outline
-        pygame.draw.ellipse(surf, MUSH_CAP,      cap_rect)                 # vivid red
+        # Cap shadow (under)
+        cap_rect = pygame.Rect(cx - MUSHROOM_R - 1, cy - MUSHROOM_R + 2, (MUSHROOM_R + 1) * 2, MUSHROOM_R + 5)
+        sh = pygame.Surface((cap_rect.width + 8, 8), pygame.SRCALPHA)
+        pygame.draw.ellipse(sh, (0, 0, 0, 130), sh.get_rect())
+        surf.blit(sh, (cap_rect.x - 4, cy - 2))
 
-        # Bright highlight arc at top of cap
-        hi = pygame.Rect(cap_rect.x + 2, cap_rect.y + 1, cap_rect.width - 4, 8)
+        # Cap base (deep crimson outline) then vivid red
+        pygame.draw.ellipse(surf, (130, 10, 20), cap_rect.inflate(2, 2))
+        pygame.draw.ellipse(surf, MUSH_CAP,     cap_rect)
+        # Upper highlight arc (hot pink / orange)
+        hi = pygame.Rect(cap_rect.x + 3, cap_rect.y + 2, cap_rect.width - 6, 7)
         pygame.draw.ellipse(surf, MUSH_CAP2, hi)
+        # Specular sheen (sweeps left-right with pulse)
+        sheen_x_off = int(math.sin(self.pulse * 1.3) * 4)
+        sh2 = pygame.Surface((cap_rect.width - 14, 4), pygame.SRCALPHA)
+        sh2_a = int(180 + 70 * math.sin(self.pulse * 1.3))
+        pygame.draw.ellipse(sh2, (255, 235, 225, sh2_a), sh2.get_rect())
+        surf.blit(sh2, (cap_rect.x + 7 + sheen_x_off, cap_rect.y + 3))
 
-        # Sweeping specular sheen
-        sheen_x = int(math.sin(self.pulse * 1.3) * 4)
-        sh2_a = min(255, int(150 + 80 * math.sin(self.pulse * 1.3)))
-        sh2 = pygame.Surface((cap_rect.width - 12, 4), pygame.SRCALPHA)
-        pygame.draw.ellipse(sh2, (255, 240, 220, sh2_a), sh2.get_rect())
-        surf.blit(sh2, (cap_rect.x + 6 + sheen_x, cap_rect.y + 3))
-
-        # White spots — larger with pink border and bright center
+        # Spots with a soft ring so they read clearly
         for sx, sy, sr in ((cx - 7, cy - 5, 3),
                            (cx + 6, cy - 7, 4),
                            (cx + 2, cy + 1, 3),
                            (cx - 3, cy + 2, 2)):
-            pygame.draw.circle(surf, (240, 185, 200), (sx, sy), sr + 2)  # pink border
-            pygame.draw.circle(surf, MUSH_SPOT,       (sx, sy), sr + 1)  # white fill
-            pygame.draw.circle(surf, (255, 255, 255), (sx, sy), max(1, sr - 1))  # bright center
+            pygame.draw.circle(surf, (220, 190, 200), (sx, sy), sr + 1)
+            pygame.draw.circle(surf, MUSH_SPOT,       (sx, sy), sr)
 
     def _draw_magnet(self, surf):
         cx = int(self.x)
         cy = int(self.y + math.sin(self.pulse * 1.1) * 2.0)
-        r = MUSHROOM_R
 
-        # Bottom drop shadow
-        sh_w = r * 3
-        sh = pygame.Surface((sh_w, 8), pygame.SRCALPHA)
-        pygame.draw.ellipse(sh, (0, 0, 0, 80), sh.get_rect())
-        surf.blit(sh, (cx - sh_w // 2, cy + r + 2))
+        # Pulsing electric-blue glow
+        glow_a = int(60 + 28 * math.sin(self.pulse))
+        blit_glow(surf, cx, cy, MUSHROOM_R + 8, (80, 160, 255), glow_a)
 
-        # 4 orbiting blue-white charged-particle dots (counter-clockwise)
+        # 4 orbiting charged-particle dots (counter-clockwise)
         for i in range(4):
             ang = -self.pulse * 1.6 + i * (math.tau / 4)
-            ox = int(math.cos(ang) * (r + 6))
-            oy = int(math.sin(ang) * (r + 3))
-            sp_a = max(60, int(160 + 80 * math.cos(ang * 2)))
-            sp = pygame.Surface((6, 6), pygame.SRCALPHA)
-            pygame.draw.circle(sp, (155, 210, 255, sp_a), (3, 3), 3)
-            surf.blit(sp, (cx + ox - 3, cy + oy - 3))
+            ox = int(math.cos(ang) * (MUSHROOM_R + 6))
+            oy = int(math.sin(ang) * (MUSHROOM_R + 3))
+            sp_a = max(80, int(180 + 70 * math.cos(ang * 2)))
+            sp = pygame.Surface((5, 5), pygame.SRCALPHA)
+            pygame.draw.circle(sp, (180, 220, 255, sp_a), (2, 2), 2)
+            surf.blit(sp, (cx + ox - 2, cy + oy - 2))
 
-        # Horseshoe U — chrome body with classic RED/BLUE pole tips
-        body_rect = pygame.Rect(cx - r, cy - r + 2, r * 2, r * 2)
-
-        # Dark shadow behind U
-        pygame.draw.arc(surf, (10, 10, 25), body_rect.inflate(6, 6),
-                        math.pi, 2 * math.pi, r + 2)
-        # Chrome outer ring
-        pygame.draw.arc(surf, (140, 148, 165), body_rect.inflate(2, 2),
-                        math.pi, 2 * math.pi, r)
-        # Bright chrome fill
-        pygame.draw.arc(surf, (210, 218, 235), body_rect,
-                        math.pi, 2 * math.pi, r - 2)
-        # Specular highlight stripe
-        inner = body_rect.inflate(-6, -6)
-        pygame.draw.arc(surf, (245, 248, 255), inner,
-                        math.pi * 1.1, math.pi * 1.9, 2)
-
-        # Legs — chrome rectangles with shadow outline
+        # Backing shadow
+        sh = pygame.Surface((MUSHROOM_R * 3, 10), pygame.SRCALPHA)
+        pygame.draw.ellipse(sh, (0, 0, 0, 130), sh.get_rect())
+        surf.blit(sh, (cx - sh.get_width() // 2, cy + MUSHROOM_R - 2))
+        # Horseshoe U — draw an outer red arc, inner cutout, then two silver tips
+        # Outer red body: two overlapping thick arcs forming a U.
+        body_rect = pygame.Rect(cx - MUSHROOM_R, cy - MUSHROOM_R + 2,
+                                MUSHROOM_R * 2, MUSHROOM_R * 2)
+        # Red outer
+        pygame.draw.arc(surf, (160, 10, 20), body_rect.inflate(2, 2),
+                        math.pi, 2 * math.pi, MUSHROOM_R)
+        pygame.draw.arc(surf, (220, 30, 40), body_rect,
+                        math.pi, 2 * math.pi, MUSHROOM_R - 2)
+        # Inner white stripe
+        inner = body_rect.inflate(-10, -10)
+        pygame.draw.arc(surf, WHITE, inner,
+                        math.pi, 2 * math.pi, 3)
+        # Close off the two legs with short red rectangles so it reads as a U
         leg_y = cy + 2
-        leg_h = 11
-        for lx in (cx - r, cx + r - 7):
-            pygame.draw.rect(surf, (20, 20, 40), (lx - 1, leg_y - 1, 9, leg_h + 2))
-            pygame.draw.rect(surf, (210, 218, 235), (lx, leg_y, 7, leg_h))
-            pygame.draw.rect(surf, (245, 248, 255), (lx + 1, leg_y + 1, 2, leg_h - 3))
+        pygame.draw.rect(surf, (220, 30, 40), (cx - MUSHROOM_R + 1, leg_y, 5, 10))
+        pygame.draw.rect(surf, (220, 30, 40), (cx + MUSHROOM_R - 6, leg_y, 5, 10))
+        # Silver tips on each leg end
+        pygame.draw.rect(surf, (220, 220, 235), (cx - MUSHROOM_R + 1, leg_y + 6, 5, 5))
+        pygame.draw.rect(surf, (220, 220, 235), (cx + MUSHROOM_R - 6, leg_y + 6, 5, 5))
+        # Dark rim on silver tips
+        pygame.draw.rect(surf, (80, 80, 100), (cx - MUSHROOM_R + 1, leg_y + 6, 5, 5), 1)
+        pygame.draw.rect(surf, (80, 80, 100), (cx + MUSHROOM_R - 6, leg_y + 6, 5, 5), 1)
 
-        # Classic magnet pole tips: RED left, BLUE right
-        tip_h = 5
-        pygame.draw.rect(surf, (220, 22, 22), (cx - r, leg_y + leg_h - tip_h, 7, tip_h))
-        pygame.draw.rect(surf, (255, 85, 85), (cx - r + 1, leg_y + leg_h - tip_h + 1, 5, 1))
-        pygame.draw.rect(surf, (22, 55, 220), (cx + r - 7, leg_y + leg_h - tip_h, 7, tip_h))
-        pygame.draw.rect(surf, (85, 140, 255), (cx + r - 6, leg_y + leg_h - tip_h + 1, 5, 1))
-
-        # Electric arc between tips — animated zigzag
-        tip_lx = cx - r + 3
-        tip_rx = cx + r - 4
-        tip_y  = leg_y + leg_h - 1
+        # Electric arc between the two tips — animated zigzag
+        tip_lx = cx - MUSHROOM_R + 3
+        tip_rx = cx + MUSHROOM_R - 3
+        tip_y  = leg_y + 8
+        mid_x  = (tip_lx + tip_rx) // 2
         arc_pts = [
             (tip_lx, tip_y),
             (tip_lx + (tip_rx - tip_lx) // 3,
-             tip_y - int(5 * math.sin(self.pulse * 9.0))),
-            ((tip_lx + tip_rx) // 2,
+             tip_y - int(5 * math.sin(self.pulse * 9.0 + 0.0))),
+            (mid_x,
              tip_y + int(5 * math.sin(self.pulse * 9.0 + 1.0))),
             (tip_lx + 2 * (tip_rx - tip_lx) // 3,
              tip_y - int(5 * math.sin(self.pulse * 9.0 + 2.0))),
             (tip_rx, tip_y),
         ]
-        pygame.draw.lines(surf, (60, 130, 255), False, arc_pts, 2)
-        pygame.draw.lines(surf, (200, 230, 255), False, arc_pts, 1)
-
-        # Spark blips at tip ends
+        pygame.draw.lines(surf, (100, 180, 255), False, arc_pts, 2)
+        pygame.draw.lines(surf, (220, 240, 255), False, arc_pts, 1)
+        # Tip glow blips
         for tx, ty in ((tip_lx, tip_y), (tip_rx, tip_y)):
             blip = pygame.Surface((8, 8), pygame.SRCALPHA)
-            ba = max(80, min(255, int(130 + 100 * math.sin(self.pulse * 9))))
-            pygame.draw.circle(blip, (180, 215, 255, ba), (4, 4), 4)
-            surf.blit(blip, (tx - 4, ty - 4))
+            pygame.draw.circle(blip, (200, 230, 255, 180), (4, 4), 4)
+            surf.blit(blip, (tx - 4, ty - 4), special_flags=pygame.BLEND_ADD)
 
     def _draw_slowmo(self, surf):
         cx = int(self.x)
         cy = int(self.y + math.sin(self.pulse * 0.8) * 2.0)
-        r = MUSHROOM_R
 
-        # Bottom drop shadow
-        sh_w = r * 3
-        sh = pygame.Surface((sh_w, 8), pygame.SRCALPHA)
-        pygame.draw.ellipse(sh, (0, 0, 0, 80), sh.get_rect())
-        surf.blit(sh, (cx - sh_w // 2, cy + r + 4))
+        # Pulsing deep-purple glow
+        glow_a = int(70 + 35 * math.sin(self.pulse))
+        blit_glow(surf, cx, cy, MUSHROOM_R + 10, (150, 70, 255), glow_a)
 
-        # Thin expanding ring pulse — stroke only, not a filled blob
-        ring_frac = self.pulse % 1.0
-        ring_r = int(r + 3 + 7 * ring_frac)
-        ring_a = int(65 * (1.0 - ring_frac))
+        # Expanding ring pulse — a faint second ring at larger radius
+        ring_r = int(MUSHROOM_R + 6 + 8 * (self.pulse % 1.0))
+        ring_a = int(90 * (1.0 - (self.pulse % 1.0)))
         ring = pygame.Surface((ring_r * 2 + 4, ring_r * 2 + 4), pygame.SRCALPHA)
-        pygame.draw.circle(ring, (170, 90, 255, ring_a),
+        pygame.draw.circle(ring, (180, 100, 255, ring_a),
                            (ring_r + 2, ring_r + 2), ring_r, 2)
         surf.blit(ring, (cx - ring_r - 2, cy - ring_r - 2))
 
-        # Hourglass triangles with shadow offset
-        hw = r - 1
-        hh = r - 1
-        top_tri = [(cx - hw, cy - hh), (cx + hw, cy - hh), (cx, cy)]
-        bot_tri = [(cx - hw, cy + hh), (cx + hw, cy + hh), (cx, cy)]
+        # Hourglass body: two triangles joined at a pinch
+        top = [(cx - MUSHROOM_R + 2, cy - MUSHROOM_R + 1),
+               (cx + MUSHROOM_R - 2, cy - MUSHROOM_R + 1),
+               (cx, cy)]
+        bot = [(cx - MUSHROOM_R + 2, cy + MUSHROOM_R - 1),
+               (cx + MUSHROOM_R - 2, cy + MUSHROOM_R - 1),
+               (cx, cy)]
+        pygame.draw.polygon(surf, (60, 20, 90), [(p[0] - 1, p[1] - 1) for p in top] + [top[2]])
+        pygame.draw.polygon(surf, (140, 70, 210), top)
+        pygame.draw.polygon(surf, (60, 20, 90), [(p[0] - 1, p[1] + 1) for p in bot] + [bot[2]])
+        pygame.draw.polygon(surf, (140, 70, 210), bot)
 
-        for tri in (top_tri, bot_tri):
-            pygame.draw.polygon(surf, (30, 8, 55), [(p[0]+1, p[1]+1) for p in tri])
-        pygame.draw.polygon(surf, (105, 42, 175), top_tri)
-        pygame.draw.polygon(surf, (105, 42, 175), bot_tri)
+        # Inner highlights on hourglass faces
+        hi_top = [(cx - MUSHROOM_R + 5, cy - MUSHROOM_R + 3),
+                  (cx + MUSHROOM_R - 7, cy - MUSHROOM_R + 3),
+                  (cx - 1, cy - 3)]
+        pygame.draw.polygon(surf, (180, 110, 255), hi_top)
 
-        # Lighter highlight on top face, darker on bottom
-        hi_top = [(cx - hw + 4, cy - hh + 2), (cx + hw - 6, cy - hh + 2), (cx - 1, cy - 3)]
-        pygame.draw.polygon(surf, (155, 82, 238), hi_top)
+        # Sand stream — falling dots that animate with pulse
+        for dot_y in range(cy - MUSHROOM_R + 5, cy - 1, 4):
+            dot_a = int(200 * (1.0 - abs(dot_y - cy) / MUSHROOM_R))
+            d = pygame.Surface((3, 3), pygame.SRCALPHA)
+            pygame.draw.circle(d, (255, 235, 160, dot_a), (1, 1), 1)
+            offset = int(2 * math.sin(self.pulse * 6 + dot_y))
+            surf.blit(d, (cx + offset - 1, dot_y))
 
-        # Crisp outline edges
-        pygame.draw.lines(surf, (55, 15, 95), True, top_tri, 1)
-        pygame.draw.lines(surf, (55, 15, 95), True, bot_tri, 1)
-
-        # Animated sand dots falling from pinch toward bottom bulge
-        sand_phase = (self.pulse * 2.5) % 1.0
-        for i in range(4):
-            frac = (sand_phase + i * 0.25) % 1.0
-            dot_y = int(cy + 2 + frac * (hh - 5))
-            dot_a = int(210 * math.sin(frac * math.pi))
-            d = pygame.Surface((4, 4), pygame.SRCALPHA)
-            pygame.draw.circle(d, (255, 240, 150, dot_a), (2, 2), 2)
-            surf.blit(d, (cx - 2, dot_y - 2))
+        # Sparkle at the pinch point
+        pinch_a = int(180 + 70 * math.sin(self.pulse * 8))
+        p_sp = pygame.Surface((6, 6), pygame.SRCALPHA)
+        pygame.draw.circle(p_sp, (255, 255, 200, pinch_a), (3, 3), 3)
+        surf.blit(p_sp, (cx - 3, cy - 3), special_flags=pygame.BLEND_ADD)
 
         # Wooden end caps
-        cap_w = hw * 2 + 4
-        pygame.draw.rect(surf, (80, 40, 15),
-                         (cx - hw - 2, cy - hh - 4, cap_w, 6))
-        pygame.draw.rect(surf, (150, 88, 42),
-                         (cx - hw - 1, cy - hh - 3, cap_w - 2, 3))
-        pygame.draw.rect(surf, (80, 40, 15),
-                         (cx - hw - 2, cy + hh - 2, cap_w, 6))
-        pygame.draw.rect(surf, (150, 88, 42),
-                         (cx - hw - 1, cy + hh - 1, cap_w - 2, 3))
+        pygame.draw.rect(surf, (120, 60, 30),
+                         (cx - MUSHROOM_R, cy - MUSHROOM_R - 2, MUSHROOM_R * 2, 4))
+        pygame.draw.rect(surf, (120, 60, 30),
+                         (cx - MUSHROOM_R, cy + MUSHROOM_R - 2, MUSHROOM_R * 2, 4))
+        pygame.draw.rect(surf, (180, 110, 60),
+                         (cx - MUSHROOM_R + 1, cy - MUSHROOM_R - 1, MUSHROOM_R * 2 - 2, 2))
 
-        # Clock face on lower glass — small circle with rotating hands
-        fc_r = max(4, r // 3)
-        fc_x, fc_y = cx, cy + hh // 2
-        pygame.draw.circle(surf, (22, 8, 48), (fc_x, fc_y), fc_r)
-        pygame.draw.circle(surf, (85, 45, 148), (fc_x, fc_y), fc_r, 1)
-        h_ang = self.pulse * 0.4 - math.pi / 2
-        m_ang = self.pulse * 2.0 - math.pi / 2
-        hl = max(2, fc_r - 2)
-        ml = max(3, fc_r - 1)
-        pygame.draw.line(surf, (195, 158, 255),
-                         (fc_x, fc_y),
-                         (fc_x + int(math.cos(h_ang) * hl),
-                          fc_y + int(math.sin(h_ang) * hl)), 2)
-        pygame.draw.line(surf, (230, 215, 255),
-                         (fc_x, fc_y),
-                         (fc_x + int(math.cos(m_ang) * ml),
-                          fc_y + int(math.sin(m_ang) * ml)), 1)
-        pygame.draw.circle(surf, WHITE, (fc_x, fc_y), 2)
+        # Rotating clock hands on the lower glass face
+        hand_cx, hand_cy = cx, cy + MUSHROOM_R // 2
+        h_ang = self.pulse * 0.5 - math.pi / 2
+        m_ang = self.pulse * 2.2 - math.pi / 2
+        h_len, m_len = 4, 6
+        pygame.draw.line(surf, (210, 180, 255),
+                         (hand_cx, hand_cy),
+                         (hand_cx + int(math.cos(h_ang) * h_len),
+                          hand_cy + int(math.sin(h_ang) * h_len)), 2)
+        pygame.draw.line(surf, (240, 220, 255),
+                         (hand_cx, hand_cy),
+                         (hand_cx + int(math.cos(m_ang) * m_len),
+                          hand_cy + int(math.sin(m_ang) * m_len)), 1)
+        pygame.draw.circle(surf, WHITE, (hand_cx, hand_cy), 2)
 
 
 # Back-compat alias — some callers (e.g. snapshot/playtest scripts) still say Mushroom.
