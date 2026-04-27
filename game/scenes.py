@@ -242,6 +242,26 @@ class App:
             tint.fill((140, 70, 210, 28))
             self.screen.blit(tint, (0, 0))
 
+        # KFC mode: warm amber tint
+        if self.world.kfc_timer > 0:
+            tint = pygame.Surface((W, H), pygame.SRCALPHA)
+            tint.fill((210, 120, 10, 20))
+            self.screen.blit(tint, (0, 0))
+
+        # Ghost mode: cool blue-white tint + pulsing wisp ring around the bird
+        if self.world.ghost_timer > 0:
+            tint = pygame.Surface((W, H), pygame.SRCALPHA)
+            tint.fill((140, 180, 255, 18))
+            self.screen.blit(tint, (0, 0))
+            pulse = 0.55 + 0.45 * math.sin(self._cloud_phase * 5.0)
+            rad = int(28 + 10 * pulse)
+            ring = pygame.Surface((rad * 2 + 4, rad * 2 + 4), pygame.SRCALPHA)
+            pygame.draw.circle(ring, (160, 200, 255, int(70 * pulse)),
+                               (rad + 2, rad + 2), rad, 3)
+            self.screen.blit(ring,
+                             (self.world.bird.x + sx - rad - 2,
+                              self.world.bird.y + sy - rad - 2))
+
         # Magnet radius — faint red ring around the bird so the pull zone is legible
         if self.world.magnet_timer > 0:
             from game.config import MAGNET_RADIUS

@@ -36,6 +36,7 @@ MAGNET_RADIUS      = 82.0
 SLOWMO_DURATION    = 3.0
 SLOWMO_SCALE       = 0.5
 KFC_DURATION       = 8.0
+GHOST_DURATION     = 4.0
 COMBO_WINDOW       = 1.6
 
 # Spawn weights for power-up kinds. Must sum to anything — they're
@@ -45,6 +46,7 @@ POWERUP_WEIGHTS    = (
     ("slowmo", 25),
     ("magnet", 15),
     ("kfc",     3),
+    ("ghost",  10),
 )
 
 SAVE_FILE = "skybit_save.json"

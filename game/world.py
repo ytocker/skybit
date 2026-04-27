@@ -14,7 +14,7 @@ from game.config import (
     BIRD_X, BIRD_R, COIN_R, MUSHROOM_R,
     MUSHROOM_CHANCE, MUSHROOM_COOLDOWN,
     TRIPLE_DURATION, MAGNET_DURATION, MAGNET_RADIUS,
-    SLOWMO_DURATION, SLOWMO_SCALE, KFC_DURATION,
+    SLOWMO_DURATION, SLOWMO_SCALE, KFC_DURATION, GHOST_DURATION,
     POWERUP_WEIGHTS, COMBO_WINDOW,
     COIN_RUSH_INTERVAL, COIN_RUSH_GAP_BOOST, COIN_RUSH_COINS,
 )
@@ -56,6 +56,7 @@ class World:
         self.magnet_timer = 0.0
         self.slowmo_timer = 0.0
         self.kfc_timer    = 0.0
+        self.ghost_timer  = 0.0
         self.mushroom_cooldown = 0.0
 
         # Coin-rush counter: increments each spawn; every Nth pipe is a rush.
@@ -66,7 +67,7 @@ class World:
         self.pillars_passed = 0
         self.time_alive = 0.0
         self.near_misses = 0
-        self.powerups_picked = {"triple": 0, "magnet": 0, "slowmo": 0, "kfc": 0}
+        self.powerups_picked = {"triple": 0, "magnet": 0, "slowmo": 0, "kfc": 0, "ghost": 0}
         # Transient flag so near-miss detection fires once per pillar.
         self._near_miss_flags: dict[int, bool] = {}
 
@@ -171,30 +172,66 @@ class World:
                 self.coins.append(Coin(cx + dx, gy + dy))
 
     def _spawn_rush_coins(self, pipe: Pipe):
-        """Dense sinusoidal arc of ~COIN_RUSH_COINS coins across the gap."""
+        """Dense coin formation across the gap — random variant each rush."""
         cx = pipe.x + PIPE_W + PIPE_SPACING * 0.45
         gy = pipe.gap_y
         span = PIPE_SPACING * 0.85
-        amp = min(pipe.gap_h * 0.35, 70)
+        amp = min(pipe.gap_h * 0.32, 65)
         n = COIN_RUSH_COINS
-        # Random sine phase + wavelength so consecutive rushes don't all feel
-        # the same.
-        phase = random.uniform(0, math.tau)
-        waves = random.uniform(1.0, 1.6)
-        for i in range(n):
-            t = i / (n - 1)
-            x = cx - span / 2 + span * t
-            y = gy + math.sin(phase + waves * math.pi * 2 * t) * amp
-            self.coins.append(Coin(x, y))
+
+        variant = random.choice(("wave", "s_curve", "chevron", "oval", "double_arc"))
+
+        if variant == "wave":
+            phase = random.uniform(0, math.tau)
+            waves = random.uniform(1.0, 1.6)
+            for i in range(n):
+                t = i / (n - 1)
+                x = cx - span / 2 + span * t
+                y = gy + math.sin(phase + waves * math.tau * t) * amp
+                self.coins.append(Coin(x, y))
+
+        elif variant == "s_curve":
+            phase = random.choice((0.0, math.pi))
+            for i in range(n):
+                t = i / (n - 1)
+                x = cx - span / 2 + span * t
+                y = gy + math.sin(phase + 3 * math.pi * t) * amp * 0.75
+                self.coins.append(Coin(x, y))
+
+        elif variant == "chevron":
+            flip = random.choice((1, -1))
+            for i in range(n):
+                t = i / (n - 1)
+                tri = 2.0 * abs(2.0 * t - 1.0) - 1.0
+                x = cx - span / 2 + span * t
+                y = gy + flip * amp * tri
+                self.coins.append(Coin(x, y))
+
+        elif variant == "oval":
+            for i in range(n):
+                theta = i / n * math.tau
+                x = cx + math.cos(theta) * span * 0.32
+                y = gy + math.sin(theta) * amp * 0.65
+                self.coins.append(Coin(x, y))
+
+        elif variant == "double_arc":
+            half = n // 2
+            rest = n - half
+            for i in range(half):
+                t = i / max(half - 1, 1)
+                x = cx - span / 2 + span * t
+                y = gy - amp * 0.4 + math.sin(math.pi * t) * amp * 0.3
+                self.coins.append(Coin(x, y))
+            for i in range(rest):
+                t = i / max(rest - 1, 1)
+                x = cx - span / 2 + span * t
+                y = gy + amp * 0.4 - math.sin(math.pi * t) * amp * 0.3
+                self.coins.append(Coin(x, y))
 
     def _announce_rush(self, pipe: Pipe):
-        """'COIN RUSH!' float text + a burst of gold sparkles when a rush
-        pipe enters from the right edge."""
+        """Gold sparkle burst when a rush pipe enters from the right edge."""
         x = pipe.x - 20
         y = pipe.gap_y
-        self.float_texts.append(FloatText(
-            "COIN RUSH!", x, y - 40, UI_GOLD, size=26, life=1.6, vy=-28,
-        ))
         for _ in range(22):
             ang = random.uniform(0, math.tau)
             spd = random.uniform(60, 220)
@@ -333,9 +370,12 @@ class World:
                 self.slowmo_timer = max(0.0, self.slowmo_timer - dt)
             if self.kfc_timer > 0:
                 self.kfc_timer = max(0.0, self.kfc_timer - dt)
-                if self.kfc_timer == 0:          # just expired — poof back
+                if self.kfc_timer == 0:
                     self._spawn_poof(self.bird.x, self.bird.y)
             self.bird.kfc_active = self.kfc_timer > 0
+            if self.ghost_timer > 0:
+                self.ghost_timer = max(0.0, self.ghost_timer - dt)
+            self.bird.ghost_active = self.ghost_timer > 0
             if self.mushroom_cooldown > 0:
                 self.mushroom_cooldown -= dt
             if self.combo_timer > 0:
@@ -398,6 +438,8 @@ class World:
         if by + BIRD_R > GROUND_Y or by - BIRD_R < 0:
             self._die()
             return
+        if self.ghost_timer > 0:
+            return  # phase through pipes while ghost is active
         for p in self.pipes:
             if p.collides_circle(bx, by, BIRD_R - 2):
                 self._die()
@@ -524,6 +566,8 @@ class World:
             self._activate_slowmo(m)
         elif m.kind == "kfc":
             self._activate_kfc(m)
+        elif m.kind == "ghost":
+            self._activate_ghost(m)
 
     def _pickup_burst(self, m, colors, n=30, speed_hi=320, grav=150):
         for _ in range(n):
@@ -578,6 +622,33 @@ class World:
         self._pickup_burst(m, ((210, 138, 42), (238, 178, 72), (148, 82, 18), WHITE), n=28)
         self.float_texts.append(FloatText(
             "FINGER LICKIN'!", m.x, m.y - 22, (230, 160, 40), size=22, life=1.6, vy=-28,
+        ))
+
+    def _activate_ghost(self, m):
+        GHOST_BLUE  = (140, 180, 255)
+        GHOST_WHITE = (210, 225, 255)
+        self.ghost_timer = GHOST_DURATION
+        self.bird.ghost_active = True
+        self.shake_mag = max(self.shake_mag, 2.0)
+        self.shake_t   = max(self.shake_t,   0.2)
+        audio.play_ghost()
+        self._pickup_burst(m, (GHOST_BLUE, GHOST_WHITE, (180, 200, 255)),
+                           n=28, speed_hi=260, grav=120)
+        # Wisp orbit particles at bird position
+        for i in range(10):
+            ang = i / 10 * math.tau
+            spd = random.uniform(40, 90)
+            self.particles.append(Particle(
+                self.bird.x + math.cos(ang) * 20,
+                self.bird.y + math.sin(ang) * 20,
+                math.cos(ang) * spd, math.sin(ang) * spd - 30,
+                random.uniform(0.4, 0.8),
+                random.randint(2, 4),
+                random.choice((GHOST_BLUE, GHOST_WHITE)),
+                gravity=60,
+            ))
+        self.float_texts.append(FloatText(
+            "GHOST!", m.x, m.y - 22, (180, 210, 255), size=24, life=1.3, vy=-30,
         ))
 
     def _spawn_poof(self, x, y):

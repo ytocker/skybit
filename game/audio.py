@@ -104,6 +104,7 @@ if _IS_BROWSER:
     def play_death() -> None:         _play("death", 0.75)
     def play_gameover() -> None:      _play("gameover", 0.70)
     def play_poof() -> None:          _play("poof", 0.88)
+    def play_ghost() -> None:         _play("ghost", 0.70)
 
 
 # ── Native backend (pygame.mixer + synthesized WAV) ──────────────────────────
@@ -244,6 +245,13 @@ else:
                     (0.05, 260, 150, "square",   0.44),
                     (0.10, 150,  65, "sine",     0.28),
                 ]))
+            _sounds["ghost"] = pygame.mixer.Sound(
+                buffer=_synth_sequence([
+                    (0.12, 1200, 900,  "sine",     0.30),
+                    (0.12,  900, 600,  "sine",     0.28),
+                    (0.18,  600, 800,  "triangle", 0.22),
+                    (0.22,  800, 1100, "sine",     0.26),
+                ]))
         except pygame.error:
             _sounds.clear()
             _mixer_ok = False
@@ -275,3 +283,4 @@ else:
     def play_death() -> None:         _play("death", 0.75)
     def play_gameover() -> None:      _play("gameover", 0.70)
     def play_poof() -> None:          _play("poof", 0.88)
+    def play_ghost() -> None:         _play("ghost", 0.70)

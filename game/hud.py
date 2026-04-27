@@ -4,7 +4,7 @@ import os
 import random
 import pygame
 
-from game.config import W, H, TRIPLE_DURATION, MAGNET_DURATION, SLOWMO_DURATION, KFC_DURATION
+from game.config import W, H, TRIPLE_DURATION, MAGNET_DURATION, SLOWMO_DURATION, KFC_DURATION, GHOST_DURATION
 from game.draw import (
     rounded_rect, rounded_rect_grad, lerp_color,
     UI_SCORE, UI_GOLD, UI_ORANGE, UI_SHADOW, UI_CREAM, UI_RED,
@@ -190,6 +190,14 @@ def _draw_buff_icon(surf, rect, kind):
         pygame.draw.rect(surf, (220, 35, 22),
                          (cx - bw - 1, cy - bh - 2, (bw + 1) * 2, 3),
                          border_radius=1)
+    elif kind == "ghost":
+        orb = pygame.Surface((18, 18), pygame.SRCALPHA)
+        pygame.draw.circle(orb, (210, 225, 255, 200), (9, 9), 7)
+        pygame.draw.circle(orb, (240, 248, 255, 230), (9, 9), 5)
+        pygame.draw.circle(orb, (255, 255, 255, 160), (7, 7), 2)
+        surf.blit(orb, (cx - 9, cy - 9))
+        for ex in (cx - 3, cx + 3):
+            pygame.draw.circle(surf, (50, 55, 90), (ex, cy - 1), 2)
 
 
 class PauseButton:
@@ -433,6 +441,8 @@ class HUD:
             active.append(("slowmo", world.slowmo_timer, SLOWMO_DURATION))
         if world.kfc_timer > 0:
             active.append(("kfc", world.kfc_timer, KFC_DURATION))
+        if world.ghost_timer > 0:
+            active.append(("ghost", world.ghost_timer, GHOST_DURATION))
         if active:
             slot_w, slot_h = 28, 32
             gap = 6

@@ -331,3 +331,30 @@ def get_fried_parrot(frame_idx: int, tilt_deg: float) -> pygame.Surface:
         s = pygame.transform.rotozoom(KFC_FRAMES[frame_idx], key[1], 1.0)
         _kfc_rot_cache[key] = s
     return s
+
+
+# ── Ghost variant ─────────────────────────────────────────────────────────────
+
+def _build_ghost_frame(src: pygame.Surface) -> pygame.Surface:
+    """Return a faded blue-white tinted copy of src using BLEND_RGBA_MULT."""
+    ghost = src.copy()
+    mult = pygame.Surface(ghost.get_size(), pygame.SRCALPHA)
+    mult.fill((195, 215, 255, 145))   # R×0.76, G×0.84, B full, A×0.57
+    ghost.blit(mult, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    return ghost
+
+
+GHOST_FRAMES: list[pygame.Surface] = [_build_ghost_frame(f) for f in FRAMES]
+
+_ghost_cache: dict = {}
+
+
+def get_ghost_parrot(frame_idx: int, tilt_deg: float) -> pygame.Surface:
+    """Return rotated ghost parrot, cached by (frame, rounded-angle)."""
+    frame_idx = frame_idx % len(GHOST_FRAMES)
+    key = (frame_idx, int(round(tilt_deg / 3.0)) * 3)
+    s = _ghost_cache.get(key)
+    if s is None:
+        s = pygame.transform.rotozoom(GHOST_FRAMES[frame_idx], key[1], 1.0)
+        _ghost_cache[key] = s
+    return s

@@ -80,6 +80,7 @@ class Bird:
         self.frame_t = 0.0
         self.flap_boost = 0.0
         self.kfc_active = False
+        self.ghost_active = False
 
     @property
     def tilt_deg(self):
@@ -109,6 +110,8 @@ class Bird:
         frame_idx = int(self.frame_t) % len(parrot.FRAMES)
         if self.kfc_active:
             img = parrot.get_fried_parrot(frame_idx, self.tilt_deg)
+        elif self.ghost_active:
+            img = parrot.get_ghost_parrot(frame_idx, self.tilt_deg)
         else:
             img = parrot.get_parrot(frame_idx, self.tilt_deg)
         r = img.get_rect(center=(self.x + shake_x, self.y + shake_y))
@@ -240,6 +243,8 @@ class PowerUp:
             self._draw_slowmo(surf)
         elif self.kind == "kfc":
             self._draw_kfc(surf)
+        elif self.kind == "ghost":
+            self._draw_ghost(surf)
 
     # ── sprite variants ─────────────────────────────────────────────────────
     def _draw_mushroom(self, surf):
@@ -283,34 +288,94 @@ class PowerUp:
 
     def _draw_magnet(self, surf):
         cx = int(self.x)
-        cy = int(self.y)
-        # Backing shadow
-        sh = pygame.Surface((MUSHROOM_R * 3, 10), pygame.SRCALPHA)
+        cy = int(self.y + math.sin(self.pulse * 1.1) * 3)   # float bob
+
+        outer_r = 13
+        inner_r = 6
+        arch_cy = cy - 3
+        leg_bot = cy + 12
+
+        # Drop shadow
+        sh = pygame.Surface((outer_r * 3, 8), pygame.SRCALPHA)
         pygame.draw.ellipse(sh, (0, 0, 0, 130), sh.get_rect())
-        surf.blit(sh, (cx - sh.get_width() // 2, cy + MUSHROOM_R - 2))
-        # Horseshoe U — draw an outer red arc, inner cutout, then two silver tips
-        # Outer red body: two overlapping thick arcs forming a U.
-        body_rect = pygame.Rect(cx - MUSHROOM_R, cy - MUSHROOM_R + 2,
-                                MUSHROOM_R * 2, MUSHROOM_R * 2)
-        # Red outer
-        pygame.draw.arc(surf, (160, 10, 20), body_rect.inflate(2, 2),
-                        math.pi, 2 * math.pi, MUSHROOM_R)
-        pygame.draw.arc(surf, (220, 30, 40), body_rect,
-                        math.pi, 2 * math.pi, MUSHROOM_R - 2)
-        # Inner white stripe
-        inner = body_rect.inflate(-10, -10)
-        pygame.draw.arc(surf, WHITE, inner,
-                        math.pi, 2 * math.pi, 3)
-        # Close off the two legs with short red rectangles so it reads as a U
-        leg_y = cy + 2
-        pygame.draw.rect(surf, (220, 30, 40), (cx - MUSHROOM_R + 1, leg_y, 5, 10))
-        pygame.draw.rect(surf, (220, 30, 40), (cx + MUSHROOM_R - 6, leg_y, 5, 10))
-        # Silver tips on each leg end
-        pygame.draw.rect(surf, (220, 220, 235), (cx - MUSHROOM_R + 1, leg_y + 6, 5, 5))
-        pygame.draw.rect(surf, (220, 220, 235), (cx + MUSHROOM_R - 6, leg_y + 6, 5, 5))
-        # Dark rim on silver tips
-        pygame.draw.rect(surf, (80, 80, 100), (cx - MUSHROOM_R + 1, leg_y + 6, 5, 5), 1)
-        pygame.draw.rect(surf, (80, 80, 100), (cx + MUSHROOM_R - 6, leg_y + 6, 5, 5), 1)
+        surf.blit(sh, (cx - outer_r - outer_r // 2, leg_bot + 4))
+
+        # Electric-blue additive glow halo
+        glow_a = int(65 + 35 * math.sin(self.pulse * 1.4))
+        glow_r = outer_r + 7 + int(2 * math.sin(self.pulse))
+        aura = pygame.Surface(((glow_r + 2) * 2, (glow_r + 2) * 2), pygame.SRCALPHA)
+        pygame.draw.circle(aura, (55, 160, 255, glow_a),
+                           (glow_r + 2, glow_r + 2), glow_r + 2)
+        surf.blit(aura, (cx - glow_r - 2, arch_cy - glow_r - 2),
+                  special_flags=pygame.BLEND_ADD)
+
+        # Build the horseshoe on an SRCALPHA scratch surface so the hollow
+        # can be punched cleanly with alpha=0 overdraw.
+        sz  = 42
+        scx = sz // 2
+        scy = outer_r + 4
+
+        scratch = pygame.Surface((sz, sz), pygame.SRCALPHA)
+
+        # Dark shadow rim
+        pygame.draw.circle(scratch, (80, 5, 8), (scx, scy), outer_r + 2)
+        pygame.draw.rect(scratch, (80, 5, 8),
+                         (scx - outer_r - 2, scy,
+                          (outer_r + 2) * 2, leg_bot - arch_cy + 4))
+
+        # Vivid crimson body
+        RED_HI = (235, 35, 45)
+        pygame.draw.circle(scratch, RED_HI, (scx, scy), outer_r + 1)
+        pygame.draw.rect(scratch, RED_HI,
+                         (scx - outer_r - 1, scy,
+                          (outer_r + 1) * 2, leg_bot - arch_cy + 3))
+
+        # Specular sheen across arch top
+        sheen = pygame.Surface((outer_r * 2 - 2, outer_r - 1), pygame.SRCALPHA)
+        pygame.draw.ellipse(sheen, (255, 160, 165, 140), sheen.get_rect())
+        scratch.blit(sheen, (scx - outer_r + 1, 3))
+
+        # Highlight rings
+        pygame.draw.circle(scratch, (255, 95, 95), (scx, scy), inner_r + 1, 2)
+        pygame.draw.circle(scratch, (255, 85, 85), (scx, scy), outer_r, 2)
+
+        # Punch inner hollow
+        pygame.draw.circle(scratch, (0, 0, 0, 0), (scx, scy), inner_r)
+        # Punch gap between legs
+        pygame.draw.rect(scratch, (0, 0, 0, 0),
+                         (scx - inner_r, scy, inner_r * 2, sz - scy))
+
+        surf.blit(scratch, (cx - scx, arch_cy - scy))
+
+        # Chrome pole tips
+        left_cx  = cx - inner_r - (outer_r - inner_r) // 2
+        right_cx = cx + inner_r + (outer_r - inner_r) // 2
+        arm_w    = outer_r - inner_r
+        for tip_cx in (left_cx, right_cx):
+            pygame.draw.rect(surf, (40, 42, 60),
+                             (tip_cx - arm_w // 2 - 1, leg_bot - 4, arm_w + 2, 9),
+                             border_radius=4)
+            pygame.draw.rect(surf, (195, 210, 232),
+                             (tip_cx - arm_w // 2,     leg_bot - 3, arm_w,     7),
+                             border_radius=3)
+            pygame.draw.rect(surf, (238, 246, 255),
+                             (tip_cx - arm_w // 2 + 1, leg_bot - 3, arm_w - 2, 3),
+                             border_radius=2)
+
+        # Animated lightning arc between poles
+        arc_y0  = leg_bot + 6
+        arc_pts = [(left_cx, arc_y0)]
+        for i in range(1, 6):
+            t = i / 6
+            x = int(left_cx + (right_cx - left_cx) * t)
+            y = int(arc_y0 + math.sin(self.pulse * 11 + i * 1.7) * 4)
+            arc_pts.append((x, y))
+        arc_pts.append((right_cx, arc_y0))
+        arc_surf = pygame.Surface((right_cx - left_cx + 8, 16), pygame.SRCALPHA)
+        shifted = [(p[0] - left_cx + 4, p[1] - arc_y0 + 4) for p in arc_pts]
+        if len(shifted) >= 2:
+            pygame.draw.lines(arc_surf, (100, 195, 255, 200), False, shifted, 2)
+        surf.blit(arc_surf, (left_cx - 4, arc_y0 - 4))
 
     def _draw_slowmo(self, surf):
         cx = int(self.x)
@@ -360,6 +425,46 @@ class PowerUp:
         # KFC logo (real image, pre-scaled & circle-clipped)
         logo = _get_kfc_sprite()
         surf.blit(logo, (cx - logo.get_width() // 2, cy - logo.get_height() // 2))
+
+    def _draw_ghost(self, surf):
+        cx = int(self.x)
+        # Wafting bob: slightly irregular so it feels supernatural
+        cy = int(self.y + math.sin(self.pulse * 0.85) * 3.5
+                        + math.sin(self.pulse * 1.9) * 1.5)
+        r  = MUSHROOM_R + 1
+
+        # Drop shadow
+        sh = pygame.Surface((r * 3, 7), pygame.SRCALPHA)
+        pygame.draw.ellipse(sh, (0, 0, 0, 70), sh.get_rect())
+        surf.blit(sh, (cx - r - r // 2, cy + r + 4))
+
+        # Pulsing blue additive glow
+        glow_a = int(55 + 40 * math.sin(self.pulse * 2.2))
+        glow_r = r + 6 + int(3 * math.sin(self.pulse * 1.3))
+        aura = pygame.Surface(((glow_r + 2) * 2, (glow_r + 2) * 2), pygame.SRCALPHA)
+        pygame.draw.circle(aura, (130, 180, 255, glow_a),
+                           (glow_r + 2, glow_r + 2), glow_r + 2)
+        surf.blit(aura, (cx - glow_r - 2, cy - glow_r - 2),
+                  special_flags=pygame.BLEND_ADD)
+
+        # Main orb body (pale blue-white, SRCALPHA so it blends softly)
+        orb = pygame.Surface((r * 2 + 2, r * 2 + 2), pygame.SRCALPHA)
+        pygame.draw.circle(orb, (210, 225, 255, 210), (r + 1, r + 1), r)
+        pygame.draw.circle(orb, (240, 248, 255, 240), (r + 1, r + 1), r - 3)
+        # Specular
+        pygame.draw.circle(orb, (255, 255, 255, 180), (r - 2, r - 4), 4)
+        surf.blit(orb, (cx - r - 1, cy - r - 1))
+
+        # Wispy tail — 3 bumps below the orb
+        for i, (dx, size) in enumerate(((-5, 5), (0, 6), (5, 5))):
+            bob = math.sin(self.pulse * 2.5 + i * 1.2) * 2
+            pygame.draw.circle(surf, (210, 225, 255, 180),
+                               (cx + dx, int(cy + r + 3 + bob)), size)
+
+        # Hollow dark eyes
+        for ex in (cx - 4, cx + 4):
+            pygame.draw.circle(surf, (50, 55, 90), (ex, cy - 2), 3)
+            pygame.draw.circle(surf, (30, 35, 70), (ex, cy - 2), 2)
 
 
 # Back-compat alias — some callers (e.g. snapshot/playtest scripts) still say Mushroom.
