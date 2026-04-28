@@ -157,7 +157,21 @@ def draw_pair(surf, cx, cy, t=0.0):
     surf.blit(right, right.get_rect(center=(cx + 2, cy)))
 
 
-# ── V5 — KFC carton ──────────────────────────────────────────────────────────
+# ── V5 — Tilted single fry (single fry from PAIR, keeping the angle) ────────
+
+def draw_tilted(surf, cx, cy, t=0.0):
+    """Single straight-cut fry tilted +22° — same angle as the left fry
+    in PAIR but on its own. Dynamic, casual feel."""
+    f = _make_single_fry()
+    rot = pygame.transform.rotate(f, 22)
+    # Drop shadow under the fry
+    sh = pygame.Surface((20, 5), pygame.SRCALPHA)
+    pygame.draw.ellipse(sh, (0, 0, 0, 140), sh.get_rect())
+    surf.blit(sh, (cx - 10, cy + 8))
+    surf.blit(rot, rot.get_rect(center=(cx, cy)))
+
+
+# ── V6 — KFC carton ──────────────────────────────────────────────────────────
 
 def draw_carton(surf, cx, cy, t=0.0):
     """Mini red KFC-style carton with three fry tops poking out."""
@@ -208,5 +222,6 @@ VARIANTS = [
     ("CRINKLE",  draw_crinkle),
     ("WEDGE",    draw_wedge),
     ("PAIR",     draw_pair),
+    ("TILTED",   draw_tilted),
     ("CARTON",   draw_carton),
 ]
