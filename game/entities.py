@@ -213,9 +213,19 @@ class Coin:
         self.spin = (self.spin + dt * self.SPIN_RATE) % math.tau
         self.float_t += dt
 
-    def draw(self, surf):
+    def draw(self, surf, kfc_active=False):
         cx = int(self.x)
         cy = int(self.y + math.sin(self.float_t * 2.2) * 2)
+
+        # During KFC: coins look like a tilted french fry instead of a gold
+        # disc. The fry uses the same footprint as the coin so collisions
+        # stay aligned, but it doesn't spin (fries don't really spin like
+        # a disc — they just bob).
+        if kfc_active:
+            from game.kfc_fries import draw_tilted
+            draw_tilted(surf, cx, cy, t=self.float_t)
+            return
+
         cos_s = math.cos(self.spin)
         r = COIN_R
         rx = max(1, int(abs(cos_s) * r))

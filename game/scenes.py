@@ -334,8 +334,9 @@ class App:
         # behind the coins + bird — same layer a real foreground has.
         self.world.weather.draw(self.screen)
 
+        kfc_active = self.world.bird.kfc_active
         for c in self.world.coins:
-            c.draw(self.screen)
+            c.draw(self.screen, kfc_active=kfc_active)
         for m in self.world.powerups:
             m.draw(self.screen)
 
