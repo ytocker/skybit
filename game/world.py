@@ -554,11 +554,13 @@ class World:
             FloatText(label, coin.x, coin.y - text_y_offset, color,
                       size=size, life=0.9))
 
-        # Pick the richest available audio cue for this pickup.
+        # Pick the richest available audio cue for this pickup. Pass the
+        # current combo length so each consecutive coin in a streak plays
+        # one semitone higher than the last (capped at +12 / one octave).
         if value == 3:
-            audio.play_coin_triple()
+            audio.play_coin_triple(self.combo)
         elif self.combo >= 3:
-            audio.play_coin_combo()
+            audio.play_coin_combo(self.combo)
         else:
             audio.play_coin()
 
