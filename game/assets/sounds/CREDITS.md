@@ -1,46 +1,49 @@
 # Skybit sound effect credits
 
-All audio in this directory is sourced from **Kenney.nl** game audio packs,
-which are released under the **Creative Commons Zero (CC0 1.0 Universal)**
-license — public domain dedication, no attribution required. We're listing
-the sources here as a courtesy and to make audit / replacement easy.
+All 13 SFX events in this directory are **procedurally synthesised** from
+waveform primitives — sine, square, triangle, sawtooth, and a one-pole
+low-passed white-noise generator — using only Python's `wave`, `struct`,
+`array`, `math`, and `random` modules. There are no external assets and
+no licensed third-party audio.
 
-License: <https://creativecommons.org/publicdomain/zero/1.0/>
+The synthesis recipes live in [`tools/synth_sounds.py`](../../../tools/synth_sounds.py)
+in the repository root. Run
+
+```
+python tools/synth_sounds.py
+```
+
+to regenerate every OGG in this directory. The script is idempotent —
+re-running just overwrites cleanly.
 
 ## Per-event mapping
 
-| Event       | Source pack             | Source file / processing                                      |
-|-------------|-------------------------|---------------------------------------------------------------|
-| flap        | Kenney RPG Audio        | `cloth_4.ogg` trimmed to 200ms, fade-out                      |
-| coin        | Kenney Digital Audio    | `pep_sound_5.ogg` trimmed to 200ms, fade-out                  |
-| coin_combo  | Kenney Digital Audio    | `pep_sound_5.ogg` (full ~570ms)                               |
-| coin_triple | Kenney Digital Audio    | `pep_sound_5.ogg` + same one octave up (sparkly chime, 200ms) |
-| mushroom    | Kenney Music Jingles    | `Steel/jingles_steel_5.ogg`                                   |
-| magnet      | Kenney Digital Audio    | `phaser_up_2.ogg`                    |
-| slowmo      | Kenney Digital Audio    | `phaser_down_2.ogg`                  |
-| thunder     | Kenney Digital Audio    | `low_three_tone.ogg`                 |
-| death       | Kenney Impact Sounds    | `impact_soft_heavy_002.ogg`          |
-| gameover    | Kenney Music Jingles    | `8-Bit/jingles_nes_15.ogg`           |
-| poof        | Kenney Impact Sounds    | `impact_wood_medium_000.ogg`         |
-| ghost       | Kenney Digital Audio    | `phase_jump_2.ogg`                   |
-| grow        | Kenney Digital Audio    | `power_up_8.ogg`                     |
-
-## Pack URLs
-
-- Kenney Interface Sounds: <https://kenney.nl/assets/interface-sounds>
-- Kenney Music Jingles:    <https://kenney.nl/assets/music-jingles>
-- Kenney Digital Audio:    <https://kenney.nl/assets/digital-audio>
-- Kenney Impact Sounds:    <https://kenney.nl/assets/impact-sounds>
+| Event       | Waveform(s)        | Description                                                    |
+|-------------|--------------------|----------------------------------------------------------------|
+| flap        | square             | 60 ms sweep 320 → 560 Hz, low volume (plays constantly)        |
+| coin        | triangle           | Two-note ascending chime — B5 (60 ms) → E6 (80 ms)             |
+| coin_combo  | triangle           | Same shape as coin, perfect-fifth higher (F#6 → B6)            |
+| coin_triple | sine               | Major arpeggio A5/C#6/E6 + 30 ms sparkle E6 → G6 tail          |
+| mushroom    | square + triangle  | 6-note "got item!" fanfare, last note has +12 cent vibrato     |
+| magnet      | triangle + square  | 3-stage rising sweep 220 → 880 → 1320 Hz + 1760 Hz ping        |
+| slowmo      | triangle           | Descending phrase 880 → 220 Hz, tape-stretch vibrato on tail   |
+| grow        | square + tri+noise | 350 ms inflate sweep → 30 ms gap → pop (tri + noise burst)     |
+| ghost       | square (ring-mod)  | 5.5 Hz ring modulation depth 0.4 over 440 → 660 → 440 Hz curve |
+| poof        | noise + triangle   | LP-noise burst at 2.5 kHz + 1760 → 880 Hz tonal nucleus        |
+| thunder     | triangle + noise   | 60 Hz LFO triangle + 200 Hz low-passed noise tail              |
+| death       | square             | 4-note descent A4 → G4 → E4 → B3 with B3 → F#3 bend            |
+| gameover    | triangle + square  | 5-note descent C5 → C4, C-minor resolution with 100 ms fade    |
 
 ## Processing applied to every file
 
-Each source file was passed through ffmpeg with:
+After synthesis, each WAV is piped through ffmpeg with:
 
 ```
-silenceremove=start_periods=1:start_silence=0.05:start_threshold=-45dB
-loudnorm=I=-16:LRA=11:TP=-1.5
+silenceremove=start_periods=1:start_silence=0.005:start_threshold=-60dB
+loudnorm=I=-16:LRA=7:tp=-2
 libvorbis -q:a 4 -ac 1 -ar 44100
 ```
 
-→ leading silence trimmed, loudness normalized to ~-16 LUFS (no event
-clips when they overlap), encoded to OGG Vorbis quality 4 mono 44.1 kHz.
+→ leading silence trimmed, loudness normalised to -16 LUFS so events
+don't clip when they overlap, then encoded to OGG Vorbis quality 4 mono
+44.1 kHz to match what `pygame.mixer` opens at runtime.
