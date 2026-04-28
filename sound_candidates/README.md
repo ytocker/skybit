@@ -1,216 +1,179 @@
-# Skybit sound candidates — review & pick
+# Skybit sound candidates — ARCADE FUN palette
 
-This directory holds **5 candidate sounds per game event** so you can listen to
-each one in your audio player and tell me which to ship. All files are CC0 from
-[Kenney.nl](https://kenney.nl) (Music Jingles, Digital Audio, Impact Sounds,
-Interface Sounds, RPG Audio packs), trimmed of leading silence and normalized
-to ~-16 LUFS so volume is consistent across candidates.
+5 candidates per game event, all CC0 from [Kenney.nl](https://kenney.nl).
+Direction: **wacky, punchy, dopaminergic**. Mario coin chimes, Sonic ring zings,
+NES "got item!" fanfares, cartoon boings, comic fail stings. Sounds that make a
+player smile.
 
-**How to review:**
-1. Open each `<event>/` folder
-2. Listen to `1_*.ogg` through `5_*.ogg`
-3. Tell me your pick per event (e.g. "flap=2, coin=4, ...")
-4. I swap the chosen files into `game/assets/sounds/` and ship
+All trimmed of leading silence and normalized to ~-16 LUFS so volumes are
+comparable across candidates.
 
-**Aesthetic target across all 13 sounds:** *cute, pleasant, casual-mobile*. Like
-Crossy Road / Stack / Mini Metro feels — warm, friendly, fatigue-free even
-after hundreds of plays. Never harsh, never piercing, never aggressive.
+**How to review:** play each `<event>/N_*.ogg` (1–5), reply with picks
+("flap=2, coin=4, …"). I swap chosen files into `game/assets/sounds/`,
+delete this folder, ship.
 
 ---
 
-## Per-event design briefs
+## Per-event design briefs (FUN axis)
 
-### `flap` — wing flap (every input — most-played sound!)
-**Should evoke:** A soft little "pf" or "tap". Tiny, organic, imperceptibly
-short. The kind of sound you don't consciously notice but feels right with
-each tap.
-**Should NOT be:** A button click, a sharp tick, anything with treble bite, or
-anything over ~120 ms. Every harsh tone here multiplies into fatigue across
-hundreds of taps per session.
+### `flap` — wing flap on every input
+**Demonstrate:** A bouncy, goofy little blip — *"boop!"*. Should feel like a
+Mario jump tone, not a UI click. Quick, playful, organic-feeling pitch.
 
-| # | File | What it is |
+| # | File | Vibe |
 |---|---|---|
-| 1 | `click_001` | Soft tactile UI click |
-| 2 | `click_005` | Slightly muted variant of the above |
-| 3 | `tick_001` | Quick "tk" tick |
-| 4 | `pluck_001` | Short string pluck (could read as a wing twitch) |
-| 5 | `cloth_2` | Fabric whoosh from RPG audio (most "wing-like") |
+| 1 | `pep_1` | Cute synth boop |
+| 2 | `pep_3` | Lower boop variant |
+| 3 | `zap_1` | Quick zap-zing |
+| 4 | `high_up` | Bright rising chirp |
+| 5 | `pluck_001` | Synth pluck |
 
-### `coin` — coin pickup (frequent reward)
-**Should evoke:** Sweet, satisfying micro-reward — *"yes, got one!"* — single
-warm chime in the mid-high range. Pizzicato pluck or soft mallet bell. Like
-Mario coin's *intent* without copying its execution.
-**Should NOT be:** Mechanical / clinking metal-coin sounds (those feel cheap
-and tinny), anything in the piercing 3-4 kHz range, anything over ~250 ms.
+### `coin` — coin pickup (most-played reward)
+**Demonstrate:** The classic two-note Mario-coin chime. *"ding-DING!"*. Bouncy,
+bright, instantly satisfying.
 
-| # | File | What it is |
+| # | File | Vibe |
 |---|---|---|
-| 1 | `pizzi_0` | Warm pizzicato pluck, mid pitch |
-| 2 | `pizzi_3` | Pizzicato, slightly different pitch |
-| 3 | `pizzi_5` | Pizzicato, brighter |
-| 4 | `pizzi_8` | Pizzicato, longer ring |
-| 5 | `steel_0` | Steel chime — different timbre family |
+| 1 | `two_tone_1` | Two-note arcade chime |
+| 2 | `two_tone_2` | Different intervals |
+| 3 | `zap_two_tone` | Punchier two-note zap |
+| 4 | `zap_two_tone_2` | Brighter zap variant |
+| 5 | `nes_0` | NES short jingle |
 
-### `coin_combo` — combo pickup (rarer, slightly bigger reward)
-**Should evoke:** Sibling of `coin` but brighter / higher / fuller — like *"got
-another one, even better!"*. Should still be a single-note feel.
-**Should NOT be:** Different family from `coin` — it should feel like the same
-instrument, just pitched up.
+### `coin_combo` — combo pickup
+**Demonstrate:** Sibling of coin, more excited / brighter / a third note.
+*"ding-ding-DING!"*
 
-| # | File | What it is |
+| # | File | Vibe |
 |---|---|---|
-| 1 | `pizzi_2` | Higher pizzicato |
-| 2 | `pizzi_4` | Bright pizzicato run |
-| 3 | `pizzi_7` | Longer ringing pizzicato |
-| 4 | `pizzi_11` | Pizzicato with a grace note |
-| 5 | `steel_5` | Bright steel chime |
+| 1 | `pep_5` | Cute pep boop |
+| 2 | `nes_1` | NES bright phrase |
+| 3 | `nes_2` | NES alt phrase |
+| 4 | `three_tone_1` | Three-note arcade run |
+| 5 | `zap_three_tone_up` | Three-note zap up |
 
-### `coin_triple` — triple-multiplier coin (rare, biggest single reward)
-**Should evoke:** *"WOW!"* moment — short cheerful chime cluster, a small
-twinkly arpeggio that signals something special.
-**Should NOT be:** Generic — this is the rarest coin event so it should be
-clearly *different* from `coin` / `coin_combo`.
+### `coin_triple` — triple-multiplier coin (rare jackpot)
+**Demonstrate:** *"YOU ROCK!"* triumphant cluster. NES-style fanfare burst.
 
-| # | File | What it is |
+| # | File | Vibe |
 |---|---|---|
-| 1 | `pizzi_6` | Pizzicato cluster / grace notes |
-| 2 | `pizzi_10` | Multi-note pizzicato run |
-| 3 | `pizzi_15` | Twinkly pizzicato phrase |
-| 4 | `steel_3` | Steel chime arpeggio |
-| 5 | `steel_15` | Long ringing steel phrase |
+| 1 | `nes_3` | NES triumphant phrase |
+| 2 | `nes_4` | Alt NES triumphant |
+| 3 | `nes_5` | Longer NES win |
+| 4 | `nes_8` | NES quick arpeggio |
+| 5 | `three_tone_2` | Three-tone arcade variant |
 
 ### `mushroom` — TRIPLE 3X power-up
-**Should evoke:** *"Power up acquired!"* — short joyful jingle, ascending
-flutter or chord. Victory-feel without being over-the-top.
-**Should NOT be:** Anything aggressive or dramatic — this is a hyper-casual
-power-up, not a boss-defeat fanfare.
+**Demonstrate:** NES "got item!" fanfare. Mario power-up energy. Joyful.
 
-| # | File | What it is |
+| # | File | Vibe |
 |---|---|---|
-| 1 | `pizzi_12` | Cheerful pizzicato phrase |
-| 2 | `pizzi_15` | Twinkly pizzicato |
-| 3 | `steel_5` | Bright steel fanfare |
-| 4 | `steel_8` | Warm steel ascending |
-| 5 | `nes_3` | NES-style "got item" jingle |
+| 1 | `nes_10` | Quick NES fanfare |
+| 2 | `nes_11` | Longer "got item" |
+| 3 | `nes_12` | Triumphant NES |
+| 4 | `nes_13` | Multi-note fanfare |
+| 5 | `nes_16` | Short NES sting |
 
-### `magnet` — MAGNET power-up (pulls coins toward bird)
-**Should evoke:** Magical/charging-up rising sweep — *"power flowing in"*.
-Slight magnetic-buzz quality is good. Should suggest energy gathering.
-**Should NOT be:** Aggressive sci-fi laser. Wants to feel friendly-magical.
+### `magnet` — MAGNET power-up (pulls coins)
+**Demonstrate:** Wacky charging-up — like a vacuum cleaner switching on.
+Rising goofy sweep.
 
-| # | File | What it is |
+| # | File | Vibe |
 |---|---|---|
-| 1 | `phaser_up_2` | Smooth rising sweep |
-| 2 | `phaser_up_5` | Faster rising sweep |
-| 3 | `power_up_3` | Multi-stage power-up rise |
-| 4 | `power_up_5` | Quick power-up zip |
-| 5 | `power_up_11` | Cheerful power-up phrase |
+| 1 | `phaser_up_2` | Smooth rising phaser |
+| 2 | `phaser_up_4` | Faster phaser zip |
+| 3 | `phaser_up_7` | Different phaser flavor |
+| 4 | `power_up_5` | Quick power-up pep |
+| 5 | `power_up_11` | Cheerful charge-up |
 
-### `slowmo` — SLOWMO power-up (slows time)
-**Should evoke:** Time-warp, dreamy descending — like the world is slowing
-down. A gentle drop in pitch / energy.
-**Should NOT be:** Death-march doom. Should feel cool, not alarming.
+### `slowmo` — SLOWMO power-up
+**Demonstrate:** Cartoon "wahhhhh" descent — like a tape player slowing down.
+Goofy, NOT scary.
 
-| # | File | What it is |
+| # | File | Vibe |
 |---|---|---|
-| 1 | `phaser_down_2` | Smooth descending sweep |
-| 2 | `phaser_down_3` | Slower descending sweep |
+| 1 | `phaser_down_2` | Smooth descending |
+| 2 | `phaser_down_3` | Slower descending |
 | 3 | `low_down` | Low descending tone |
-| 4 | `phase_jump_4` | Wobbly phase shift |
-| 5 | `pizzi_16` | Descending pizzicato |
+| 4 | `phase_jump_4` | Wobbly jump-down |
+| 5 | `zap_three_tone_down` | Three-tone zap down |
 
-### `poof` — KFC power-up start (and its expiry)
-**Should evoke:** Cartoonish "POOF!" — a quick puff of smoke, *appearing /
-disappearing*. Light, comical wood-block tap or short impact.
-**Should NOT be:** Heavy thud — this is a transformation puff, not an explosion.
+### `poof` — KFC power-up start/expiry
+**Demonstrate:** Silly cartoon puff — *"poof!"* / *"boing!"*. Light, comical.
 
-| # | File | What it is |
+| # | File | Vibe |
 |---|---|---|
-| 1 | `wood_medium_000` | Hollow wood tap |
-| 2 | `wood_light_000` | Lighter wood tap |
-| 3 | `soft_medium_001` | Soft padded thud |
-| 4 | `plank_medium_002` | Thicker plank knock |
-| 5 | `pluck_002` | UI pluck (more cartoonish) |
+| 1 | `pep_2` | Goofy pep boop |
+| 2 | `pep_4` | Higher pep boop |
+| 3 | `zap_1` | Quick zap |
+| 4 | `low_random` | Wacky low burble |
+| 5 | `phase_jump_2` | Cartoon phase jump |
 
 ### `ghost` — GHOST power-up (phase through pipes)
-**Should evoke:** Ethereal *"woooo"* — otherworldly, slightly spooky but cute.
-Suggests becoming intangible / phasing out of physical reality.
-**Should NOT be:** Scary horror — Skybit ghost is friendly-cute.
+**Demonstrate:** Wobbly cartoon "wooo" with personality. Slightly spooky-cute.
 
-| # | File | What it is |
+| # | File | Vibe |
 |---|---|---|
 | 1 | `phase_jump_1` | Sci-fi phase warble |
-| 2 | `phase_jump_2` | Ethereal phase shift |
-| 3 | `phaser_up_1` | Long airy rise |
-| 4 | `low_three_tone` | Three-tone descending mystic |
-| 5 | `space_trash_1` | Wobbly atmospheric |
+| 2 | `phase_jump_3` | Different phase shift |
+| 3 | `phase_jump_5` | Faster phase jump |
+| 4 | `space_trash_1` | Wobbly atmospheric |
+| 5 | `low_three_tone` | Three-tone mystic |
 
 ### `grow` — GROW power-up (bird becomes 2× size)
-**Should evoke:** *"Puffing up / inflating"* — ascending tone ladder or rising
-sweep that feels like getting bigger.
-**Should NOT be:** Same as `magnet` — should feel more triumphant / final.
+**Demonstrate:** Comic balloon-inflating rise. *"poof! BIGGER!"*. Triumphant
+ascending sweep.
 
-| # | File | What it is |
+| # | File | Vibe |
 |---|---|---|
 | 1 | `power_up_3` | Multi-stage rise |
-| 2 | `power_up_4` | Bright ascending phrase |
-| 3 | `power_up_8` | Quick punchy power-up |
-| 4 | `power_up_11` | Cheerful ascending |
-| 5 | `phaser_up_3` | Smooth rise with slide |
+| 2 | `power_up_8` | Quick punchy power |
+| 3 | `power_up_9` | Rising arcade power |
+| 4 | `power_up_12` | Longer power-up phrase |
+| 5 | `phaser_up_3` | Rising phaser sweep |
 
 ### `thunder` — storm biome ambient cue
-**Should evoke:** Distant rumble — atmospheric, low-frequency, NOT
-attention-stealing. Just a weather flavor accent.
-**Should NOT be:** Loud or scary — it's background atmosphere.
+**Demonstrate:** Synth low rumble — atmospheric, not scary. Background flavor.
 
-*Caveat: Kenney doesn't have great real-thunder samples. These are all
-synthesized low rumbles from the Digital Audio pack. Best of bad options.
-We could also keep this one procedural if none feel right.*
+*Best of available; Kenney doesn't have great real thunder.*
 
-| # | File | What it is |
+| # | File | Vibe |
 |---|---|---|
 | 1 | `low_random` | Random low burble |
-| 2 | `low_three_tone` | Three-tone deep descent |
-| 3 | `low_down` | Low descending tone |
-| 4 | `space_trash_2` | Atmospheric clattering |
-| 5 | `space_trash_3` | Different atmospheric texture |
+| 2 | `low_down` | Low descending tone |
+| 3 | `low_three_tone` | Three-tone deep |
+| 4 | `space_trash_2` | Atmospheric clatter |
+| 5 | `zap_2` | Long zap |
 
 ### `death` — bird hits a pillar
-**Should evoke:** Soft *"oof"* / fail moment. You'll die a LOT in this game so
-this MUST be playful, not punishing. Cartoon thud or sad blip.
-**Should NOT be:** Aggressive crash, dramatic gong, anything frightening. Cute
-fail energy.
+**Demonstrate:** Comic sad-trombone fail blip. You'll die a LOT — must be
+playful, NOT punishing. Cartoon "wah-wah-WAHH".
 
-| # | File | What it is |
+| # | File | Vibe |
 |---|---|---|
-| 1 | `soft_heavy_002` | Padded heavy thud |
-| 2 | `soft_medium_001` | Lighter padded thud |
-| 3 | `wood_heavy_003` | Heavy hollow wood thud |
-| 4 | `hit_0` | Sad "ohh" hit jingle |
-| 5 | `hit_8` | Comedic fail hit jingle |
+| 1 | `hit_0` | Sad cartoon fail sting |
+| 2 | `hit_4` | Longer comic fail |
+| 3 | `hit_8` | Quick fail blip |
+| 4 | `hit_11` | Longer descending fail |
+| 5 | `hit_16` | Short comic fail |
 
-### `gameover` — game-over screen reveals
-**Should evoke:** Short charming sad outro — *"aww, run over"*. A descending
-3-note phrase or sad short tune. Charming, NOT depressing.
-**Should NOT be:** Long or dramatic. Quick and cute.
+### `gameover` — game-over screen
+**Demonstrate:** NES sad-but-cute outro. *"Aww, run over."* Charming, short.
 
-| # | File | What it is |
+| # | File | Vibe |
 |---|---|---|
-| 1 | `nes_15` | Classic 8-bit descending fail |
-| 2 | `nes_5` | NES sad melody |
-| 3 | `nes_10` | NES short outro |
-| 4 | `pizzi_16` | Pizzicato descending |
-| 5 | `sax_15` | Sax-like comedic fail |
+| 1 | `nes_5` | Longer NES sad melody |
+| 2 | `nes_7` | NES outro phrase |
+| 3 | `nes_14` | Quick NES sad |
+| 4 | `nes_15` | Classic descending fail |
+| 5 | `nes_16` | Short NES outro |
 
 ---
 
 ## After you pick
 
-Reply with the picks (e.g. "flap=2, coin=1, coin_combo=3, ..."), and I will:
-1. Swap the chosen files into `game/assets/sounds/<event>.ogg`
-2. Update `game/assets/sounds/CREDITS.md` with the new mapping
+Reply with picks ("flap=2, coin=1, …") and I will:
+1. Move chosen files into `game/assets/sounds/<event>.ogg`
+2. Update `game/assets/sounds/CREDITS.md`
 3. Delete this `sound_candidates/` directory
 4. Commit & push
-
-If a particular event has nothing that fits — say "none of the flap candidates
-work" — I'll pull more options from a different Kenney pack.
