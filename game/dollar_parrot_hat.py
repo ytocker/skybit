@@ -19,7 +19,7 @@ from game.parrot import (
     SPRITE_W, SPRITE_H,
     _WING_ANGLES, _build_frame, _add_outline,
 )
-from game.draw import COIN_GOLD, COIN_DARK, WHITE, NEAR_BLACK, lerp_color
+from game.draw import COIN_GOLD, COIN_DARK, WHITE, NEAR_BLACK
 from game.dollar_variants import BILL_GREEN, BILL_GREEN_DK
 
 # ── canvas ───────────────────────────────────────────────────────────────────
@@ -254,96 +254,6 @@ def draw_stovepipe(surf, hx, hy):
     f = _font(18)
     _blit_outlined(surf, "$", f, (hx, hy - crown_h // 2 - 1),
                    BILL_GREEN, BILL_GREEN_DK, outline_w=1)
-
-
-# ── Stovepipe HD — drawn at preview scale with smooth gradients ──────────────
-#
-# The native draw_stovepipe uses 9-px-half × 28-px-tall geometry that pixelates
-# heavily when smoothscale-d to preview size. This variant draws every shape at
-# `S × native` resolution so the curves and gradients stay clean.
-
-def _fill_grad_h(surf, rect, c_left, c_mid, c_right):
-    """Three-stop horizontal gradient — gives a cylinder its rounded shading."""
-    x0, y0, w, h = rect
-    for i in range(w):
-        t = i / max(1, w - 1)
-        c = lerp_color(c_left, c_mid, t * 2) if t < 0.5 \
-            else lerp_color(c_mid, c_right, (t - 0.5) * 2)
-        pygame.draw.line(surf, c, (x0 + i, y0), (x0 + i, y0 + h - 1))
-
-
-def _smooth_ellipse(surf, color, rect):
-    """Anti-aliased ellipse: render at 2× then smoothscale down."""
-    x, y, w, h = rect
-    if w < 2 or h < 2:
-        pygame.draw.ellipse(surf, color, rect)
-        return
-    big = pygame.Surface((w * 2, h * 2), pygame.SRCALPHA)
-    pygame.draw.ellipse(big, color, big.get_rect())
-    aa = pygame.transform.smoothscale(big, (w, h))
-    surf.blit(aa, (x, y))
-
-
-def draw_stovepipe_hires(surf, hx, hy, S=5):
-    """High-res stovepipe drawn at S × native scale with smooth gradients."""
-    crown_half = 9 * S
-    crown_h    = 28 * S
-    brim_w     = 17 * S
-
-    top_y  = hy - crown_h
-    left_x = hx - crown_half
-    w      = crown_half * 2
-
-    # ── crown body ──────────────────────────────────────────────────────────
-    # Outer dark outline
-    _smooth_ellipse(surf, GOLD_DK,
-                    (left_x - S, top_y - S, w + 2 * S, 6 * S))
-    pygame.draw.rect(surf, GOLD_DK,
-                     (left_x - S, top_y + 2 * S, w + 2 * S, crown_h - 4 * S))
-    # Gradient cylinder body — bright on the left, dark on the right
-    body_rect = pygame.Rect(left_x, top_y + 2 * S, w, crown_h - 4 * S)
-    _fill_grad_h(surf, body_rect, GOLD_LT, GOLD, GOLD_DK)
-    # Subtle vertical sheen near the left edge
-    sheen = pygame.Surface((max(1, S), crown_h - 8 * S), pygame.SRCALPHA)
-    sheen.fill((255, 255, 230, 90))
-    surf.blit(sheen, (left_x + 2 * S, top_y + 4 * S))
-
-    # ── crown bottom rim ────────────────────────────────────────────────────
-    _smooth_ellipse(surf, GOLD_DK, (left_x - S, hy - 4 * S, w + 2 * S, 8 * S))
-    _smooth_ellipse(surf, GOLD,    (left_x,     hy - 3 * S, w,         5 * S))
-    _smooth_ellipse(surf, GOLD_LT,
-                    (left_x + 2 * S, hy - 2 * S, w - 4 * S, 1 * S))
-
-    # ── crown top (cylinder cap) ───────────────────────────────────────────
-    _smooth_ellipse(surf, GOLD,
-                    (left_x + S, top_y, w - 2 * S, 4 * S))
-    _smooth_ellipse(surf, GOLD_LT,
-                    (left_x + 3 * S, top_y + S, w - 6 * S, 1 * S))
-
-    # ── brim ───────────────────────────────────────────────────────────────
-    # Cast shadow on the head
-    sh = pygame.Surface((brim_w * 2 + 8 * S, 9 * S), pygame.SRCALPHA)
-    _smooth_ellipse(sh, (0, 0, 0, 130), sh.get_rect())
-    surf.blit(sh, (hx - brim_w - 4 * S, hy + S))
-
-    # Dark underside (full ellipse)
-    _smooth_ellipse(surf, BAND_DK,
-                    (hx - brim_w - S, hy, (brim_w + S) * 2, 8 * S))
-    # Gold top — slightly inset so the dark underside curves out below
-    _smooth_ellipse(surf, GOLD_DK,
-                    (hx - brim_w, hy - S, brim_w * 2, 6 * S))
-    _smooth_ellipse(surf, GOLD,
-                    (hx - brim_w + S, hy, brim_w * 2 - 2 * S, 4 * S))
-    # Bright sheen across the brim top
-    pygame.draw.line(surf, GOLD_LT,
-                     (hx - brim_w + 3 * S, hy + S),
-                     (hx + brim_w - 3 * S, hy + S),
-                     max(1, S // 2))
-
-    # ── $ glyph ────────────────────────────────────────────────────────────
-    f = _font(18 * S)
-    _blit_outlined(surf, "$", f, (hx, hy - crown_h // 2 - S),
-                   BILL_GREEN, BILL_GREEN_DK, outline_w=max(1, S // 3))
 
 
 # ── Frame builder ────────────────────────────────────────────────────────────
