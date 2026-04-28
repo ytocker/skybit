@@ -255,7 +255,7 @@ class PowerUp:
 
     def draw(self, surf):
         if self.kind == "triple":
-            self._draw_mushroom(surf)
+            self._draw_grow(surf)        # parrot + green-arrow icon
         elif self.kind == "magnet":
             self._draw_magnet(surf)
         elif self.kind == "slowmo":
@@ -265,7 +265,7 @@ class PowerUp:
         elif self.kind == "ghost":
             self._draw_ghost(surf)
         elif self.kind == "grow":
-            self._draw_grow(surf)
+            self._draw_mushroom(surf)    # mushroom icon (Mario super-mushroom feel)
 
     # ── sprite variants ─────────────────────────────────────────────────────
     def _draw_mushroom(self, surf):

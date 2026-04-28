@@ -210,8 +210,8 @@ def _coin_icon(surf, cx, cy, r=10):
 def _draw_buff_icon(surf, rect, kind):
     """Tiny 20x20-ish icon for an active buff. Matches in-world sprites."""
     cx, cy = rect.center
-    if kind == "triple":
-        # Red mushroom cap + stem
+    if kind == "grow":
+        # Red mushroom cap + stem (Mario super-mushroom feel for the GROW power-up)
         pygame.draw.rect(surf, (245, 225, 195), (cx - 3, cy + 1, 6, 7), border_radius=1)
         pygame.draw.ellipse(surf, (130, 10, 20),
                             (cx - 9, cy - 6, 18, 10))
@@ -289,8 +289,8 @@ def _draw_buff_icon(surf, rect, kind):
             pygame.draw.circle(mg, (252, 254, 255, 255), (ex, gcy - 1), 3)
             pygame.draw.circle(mg, (50, 110, 220, 255),  (ex + 1, gcy), 2)
         surf.blit(mg, (cx - gcx, cy - gcy - 2))
-    elif kind == "grow":
-        # Real in-game parrot in front of a tall green up-arrow backdrop.
+    elif kind == "triple":
+        # Parrot in front of a tall green up-arrow backdrop (boost-feel for 3X coins).
         GREEN_HI  = ( 50, 220, 100)
         GREEN_OUT = ( 28, 160,  70)
 
