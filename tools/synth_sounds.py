@@ -4,10 +4,10 @@ Stdlib + ffmpeg only — no numpy, no pygame, no external assets.
 
 Each sound is rendered from waveform primitives (sine, square, triangle,
 sawtooth, low-passed noise) into a 16-bit mono 44.1 kHz WAV, then piped
-through ffmpeg for the same processing the rest of the project standardised
-on (silenceremove + loudnorm to -16 LUFS + libvorbis q4 mono 44100). The
-ffmpeg step is what the legacy CREDITS.md described for the curated Kenney
-files; reusing it here keeps loudness consistent across the catalogue.
+through ffmpeg for the project's standard processing chain — silenceremove
++ loudnorm to -16 LUFS + libvorbis q4 mono 44100 — so loudness is
+consistent across the catalogue and stays well under the clip ceiling
+even when several events overlap.
 
 Run:
     python tools/synth_sounds.py

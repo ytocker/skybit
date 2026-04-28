@@ -2,8 +2,9 @@
 
 Run from repo root:  python tools/render_sound_demo.py
 
-The actual sound files live under game/assets/sounds/ as CC0 OGGs sourced
-from Kenney.nl. This script just mirrors them to /tmp for quick auditing.
+The actual sound files live under game/assets/sounds/ as procedurally-
+synthesised OGGs (see tools/synth_sounds.py for the recipes). This
+script just mirrors them to /tmp for quick auditing.
 """
 import os
 import shutil
