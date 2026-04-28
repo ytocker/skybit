@@ -141,10 +141,11 @@ class Bird:
             w, h = img.get_size()
             img = pygame.transform.smoothscale(img, (int(w * GROW_SCALE), int(h * GROW_SCALE)))
         if self.ghost_active:
-            # Subtle breathing fade: alpha oscillates ~155..240 over a slow sine.
+            # Faded breathing: alpha oscillates ~90..170 over a slow sine,
+            # so the ghost reads as clearly translucent and ethereal.
             img = img.copy()
             pulse = 0.5 + 0.5 * math.sin(self.ghost_pulse)
-            img.set_alpha(int(155 + pulse * 85))
+            img.set_alpha(int(90 + pulse * 80))
         r = img.get_rect(center=(self.x + shake_x, self.y + shake_y))
         surf.blit(img, r.topleft)
 
