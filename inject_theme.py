@@ -464,56 +464,84 @@ body   { background: #0d0820 !important; }
         return _noiseBuf;
     }
 
-    /* Linear attack to vol over `atk`, then exponential decay with time
-       constant ~`dec` so the gain reaches ~0 by t0+dur. setTargetAtTime
-       uses tau = dec/3 to land near zero by the stop time.                 */
-    function applyEnv(g, vol, atk, dec, dur, t0) {
-        g.gain.setValueAtTime(0, t0);
-        g.gain.linearRampToValueAtTime(vol, t0 + atk);
-        g.gain.setTargetAtTime(0, t0 + atk, Math.max(0.001, dec / 3));
-        // Hard cut at end so notes don't bleed
+    /* envType="exp"   → linear attack + exp decay (sustained / pad)
+       envType="punch" → instant onset + brief overshoot + exp decay (pickup)
+       envType="hann"  → raised-cosine (set as exp here; the audible difference
+                         is small enough that "exp" with longer atk works).    */
+    function applyEnv(g, vol, atk, dec, dur, t0, envType, punch) {
+        var tau = Math.max(0.001, dec / 3);
+        if (envType === 'punch') {
+            var p = (punch === undefined ? 0.35 : punch);
+            // Instant onset with overshoot, taper to vol over 12 ms, then decay.
+            g.gain.setValueAtTime(vol * (1 + p), t0);
+            g.gain.linearRampToValueAtTime(vol, t0 + 0.012);
+            g.gain.setTargetAtTime(0, t0 + 0.012, tau);
+        } else {
+            g.gain.setValueAtTime(0, t0);
+            g.gain.linearRampToValueAtTime(vol, t0 + atk);
+            g.gain.setTargetAtTime(0, t0 + atk, tau);
+        }
         g.gain.setValueAtTime(0, t0 + dur);
     }
 
-    /* tone() now: voice with optional pitch sweep, vibrato, detune, expdecay */
+    /* tone() — band-limited oscillator voice. Supports pitch sweep, vibrato,
+       tremolo (AM), detune, and instant pitch-jump (jumpAt/jumpToF) for
+       Mario-style two-note arpeggios.                                       */
     function tone(ac, opts) {
-        // opts: {start, dur, f0, f1, type, vol, atk, dec, vib, vibDepth, detune}
         var t0 = opts.start;
         var dur = opts.dur;
         var f0 = opts.f0, f1 = (opts.f1 === undefined ? f0 : opts.f1);
-        var atk = opts.atk || 0.003;
+        var atk = (opts.atk === undefined ? 0.005 : opts.atk);
         var dec = (opts.dec === undefined ? dur * 0.5 : opts.dec);
+        var envType = opts.env || 'exp';
         var osc = ac.createOscillator(), g = ac.createGain();
         osc.type = opts.type;
         if (opts.detune) osc.detune.value = opts.detune;
         osc.frequency.setValueAtTime(f0, t0);
-        if (f0 !== f1) osc.frequency.linearRampToValueAtTime(f1, t0 + dur);
+        if (opts.jumpAt !== undefined && opts.jumpToF !== undefined) {
+            // Sweep/hold f0 until the jump, then instant jump to f2.
+            if (f0 !== f1) {
+                osc.frequency.linearRampToValueAtTime(
+                    f0 + (f1 - f0) * (opts.jumpAt / dur), t0 + opts.jumpAt);
+            }
+            osc.frequency.setValueAtTime(opts.jumpToF, t0 + opts.jumpAt);
+        } else if (f0 !== f1) {
+            osc.frequency.linearRampToValueAtTime(f1, t0 + dur);
+        }
         osc.connect(g); g.connect(ac.destination);
         if (opts.vib && opts.vibDepth) {
             var lfo = ac.createOscillator(), lfoG = ac.createGain();
             lfo.type = 'sine';
             lfo.frequency.value = opts.vib;
-            // Depth in cents: 1200 cents = 1 octave. Map fraction → cents.
-            lfoG.gain.value = opts.vibDepth * 1200;
+            lfoG.gain.value = opts.vibDepth * 1200;  // fraction → cents
             lfo.connect(lfoG); lfoG.connect(osc.detune);
             lfo.start(t0); lfo.stop(t0 + dur);
         }
-        applyEnv(g, opts.vol, atk, dec, dur, t0);
+        if (opts.tremHz && opts.tremDepth) {
+            var lfo2 = ac.createOscillator(), lfo2G = ac.createGain();
+            lfo2.type = 'sine';
+            lfo2.frequency.value = opts.tremHz;
+            lfo2G.gain.value = opts.tremDepth * opts.vol;
+            lfo2.connect(lfo2G); lfo2G.connect(g.gain);
+            lfo2.start(t0); lfo2.stop(t0 + dur);
+        }
+        applyEnv(g, opts.vol, atk, dec, dur, t0, envType, opts.punch);
         osc.start(t0); osc.stop(t0 + dur + 0.02);
     }
 
-    /* Filtered white-noise voice. lp/hp are cutoff frequencies in Hz, or 0
-       for bypass. amHz/amDepth modulate amplitude (used for thunder).      */
+    /* Filtered white-noise voice. lp/hp are cutoff frequencies in Hz.
+       env="punch" gives the same snappy onset as tone().                    */
     function noise(ac, opts) {
-        // opts: {start, dur, vol, lp, hp, atk, dec, amHz, amDepth}
         var t0 = opts.start;
         var dur = opts.dur;
-        var atk = opts.atk || 0.001;
+        var atk = (opts.atk === undefined ? 0.001 : opts.atk);
         var dec = (opts.dec === undefined ? dur * 0.5 : opts.dec);
+        var envType = opts.env || 'exp';
         var src = ac.createBufferSource();
         src.buffer = getNoiseBuf(ac);
         src.loop = true;
-        // Random start offset so successive noises don't sound identical
+        // Pseudo-random offset so consecutive plays use different noise
+        var off = Math.random() * src.buffer.duration;
         src.loopStart = 0;
         src.loopEnd = src.buffer.duration;
         var node = src;
@@ -533,7 +561,7 @@ body   { background: #0d0820 !important; }
         }
         var g = ac.createGain();
         node.connect(g); g.connect(ac.destination);
-        applyEnv(g, opts.vol, atk, dec, dur, t0);
+        applyEnv(g, opts.vol, atk, dec, dur, t0, envType, opts.punch);
         if (opts.amHz && opts.amDepth) {
             var lfo = ac.createOscillator(), lfoG = ac.createGain();
             lfo.type = 'sine';
@@ -542,169 +570,162 @@ body   { background: #0d0820 !important; }
             lfo.connect(lfoG); lfoG.connect(g.gain);
             lfo.start(t0); lfo.stop(t0 + dur);
         }
-        src.start(t0); src.stop(t0 + dur + 0.02);
+        src.start(t0, off); src.stop(t0 + dur + 0.02);
     }
 
-    /* Twin detuned-sine voice (for chorus thickness on coins, chords).     */
-    function twin(ac, base) {
-        var a = Object.assign({}, base, {detune: +5, vol: base.vol * 0.5});
-        var b = Object.assign({}, base, {detune: -5, vol: base.vol * 0.5});
-        tone(ac, a); tone(ac, b);
+    /* Random pitch jitter helper for repeat-heavy sounds (flap, coin).
+       Returns a multiplier within [1 - cents/1200, 1 + cents/1200].         */
+    function jit(maxCents) {
+        var c = (Math.random() * 2 - 1) * maxCents;
+        return Math.pow(2, c / 1200);
     }
 
     window.skyPlay = function (name, volume) {
         try {
             var ac = getCtx(), t = ac.currentTime, v = volume || 0.5;
+            // Musical anchors (matches game/audio.py _build_bank)
+            var A4=440, C5=523.25, D5=587.33, E5=659.25, G5=783.99,
+                A5=880, B5=987.77, C6=1046.50, E6=1318.51, G6=1567.98,
+                A6=1760, C7=2093.00;
 
             if (name === 'flap') {
-                noise(ac, {start: t, dur: 0.060, vol: 0.45*v, lp: 1500,
-                           atk: 0.002, dec: 0.025});
-                tone (ac, {start: t, dur: 0.080, f0: 180, f1: 90, type: 'sine',
-                           vol: 0.30*v, atk: 0.002, dec: 0.04});
+                // Per-call random pitch ±50 cents + new noise offset for organic feel
+                var pm = jit(50);
+                noise(ac, {start: t, dur: 0.055, vol: 0.40*v, lp: 1100,
+                           env: 'punch', dec: 0.025, punch: 0.55});
+                tone (ac, {start: t, dur: 0.090, f0: 170*pm, f1: 85*pm,
+                           type: 'sine', vol: 0.32*v,
+                           env: 'punch', dec: 0.045, punch: 0.55});
             }
             else if (name === 'coin') {
-                twin(ac, {start: t, dur: 0.120, f0: 1320, type: 'sine',
-                          vol: 0.55*v, atk: 0.003, dec: 0.060});
-                tone(ac, {start: t,         dur: 0.120, f0: 1980, type: 'sine',
-                          vol: 0.22*v, atk: 0.003, dec: 0.060});
-                tone(ac, {start: t + 0.080, dur: 0.040, f0: 4400, type: 'sine',
-                          vol: 0.18*v, atk: 0.001, dec: 0.012});
+                // Mario perfect-4th arpeggio B5 → E6 with per-call ±25-cent jitter
+                var pm = jit(25);
+                tone(ac, {start: t, dur: 0.130, f0: B5*pm, type: 'sine',
+                          vol: 0.62*v, env: 'punch', dec: 0.080, punch: 0.55,
+                          jumpAt: 0.030, jumpToF: E6*pm});
+                tone(ac, {start: t + 0.030, dur: 0.040, f0: E6*4*pm,
+                          type: 'sine', vol: 0.16*v,
+                          env: 'punch', dec: 0.012, punch: 0.45});
             }
             else if (name === 'coin_combo') {
-                twin(ac, {start: t, dur: 0.140, f0: 1480, type: 'sine',
-                          vol: 0.58*v, atk: 0.003, dec: 0.075});
-                tone(ac, {start: t,         dur: 0.140, f0: 2220, type: 'sine',
-                          vol: 0.24*v, atk: 0.003, dec: 0.075});
-                tone(ac, {start: t,         dur: 0.060, f0: 880, f1: 2200,
-                          type: 'sine', vol: 0.22*v, atk: 0.001, dec: 0.030});
-                tone(ac, {start: t + 0.090, dur: 0.040, f0: 4900, type: 'sine',
-                          vol: 0.20*v, atk: 0.001, dec: 0.012});
+                // Brighter arp E6 → A6
+                tone(ac, {start: t, dur: 0.150, f0: E6, type: 'sine',
+                          vol: 0.62*v, env: 'punch', dec: 0.090, punch: 0.55,
+                          jumpAt: 0.034, jumpToF: A6});
+                tone(ac, {start: t + 0.034, dur: 0.045, f0: A6*2,
+                          type: 'sine', vol: 0.16*v,
+                          env: 'punch', dec: 0.014, punch: 0.40});
             }
             else if (name === 'coin_triple') {
-                var step = function (s, d, root, vol) {
-                    twin(ac, {start: s, dur: d, f0: root, type: 'sine',
-                              vol: vol*0.55*v, atk: 0.003, dec: d*0.6});
-                    tone(ac, {start: s, dur: d, f0: root*1.5, type: 'sine',
-                              vol: vol*0.30*v, atk: 0.003, dec: d*0.55});
+                // Three Mario arps ascending C-E-G, sparkle on the last
+                var arp = function (s, d, f1, f2, vol) {
+                    tone(ac, {start: s, dur: d, f0: f1, type: 'sine',
+                              vol: vol*v, env: 'punch', dec: d*0.55, punch: 0.55,
+                              jumpAt: 0.024, jumpToF: f2});
                 };
-                step(t,         0.060, 523, 1.00);
-                step(t + 0.060, 0.060, 659, 1.00);
-                step(t + 0.120, 0.120, 784, 1.18);
-                tone(ac, {start: t + 0.130, dur: 0.050, f0: 5200, type: 'sine',
-                          vol: 0.18*v, atk: 0.001, dec: 0.020});
+                arp(t,         0.090, C5, G5,    0.55);
+                arp(t + 0.090, 0.090, E5, B5,    0.58);
+                arp(t + 0.180, 0.130, G5, D5*2,  0.62);
+                tone(ac, {start: t + 0.205, dur: 0.045, f0: C7*2, type: 'sine',
+                          vol: 0.18*v, env: 'punch', dec: 0.014, punch: 0.45});
             }
             else if (name === 'mushroom') {
-                var ms = function (s, d, f) {
-                    tone(ac, {start: s, dur: d, f0: f, type: 'triangle',
-                              vol: 0.52*v, atk: 0.004, dec: d*0.55});
+                var ms = function (s, f) {
+                    tone(ac, {start: s, dur: 0.075, f0: f, type: 'triangle',
+                              vol: 0.50*v, env: 'punch', dec: 0.045, punch: 0.40});
                 };
-                ms(t,         0.060, 523);
-                ms(t + 0.060, 0.060, 659);
-                ms(t + 0.120, 0.060, 784);
-                // Sustained C-major triad on top
-                tone(ac, {start: t + 0.180, dur: 0.220, f0: 523, type: 'triangle',
-                          vol: 0.30*v, atk: 0.005, dec: 0.18, detune: +3});
-                tone(ac, {start: t + 0.180, dur: 0.220, f0: 523, type: 'triangle',
-                          vol: 0.30*v, atk: 0.005, dec: 0.18, detune: -3});
-                tone(ac, {start: t + 0.180, dur: 0.220, f0: 659, type: 'triangle',
-                          vol: 0.26*v, atk: 0.005, dec: 0.18});
-                tone(ac, {start: t + 0.180, dur: 0.220, f0: 784, type: 'triangle',
-                          vol: 0.26*v, atk: 0.005, dec: 0.18});
-                tone(ac, {start: t + 0.190, dur: 0.060, f0: 4700, type: 'sine',
-                          vol: 0.16*v, atk: 0.001, dec: 0.025});
+                ms(t,         C5); ms(t + 0.070, E5);
+                ms(t + 0.140, G5); ms(t + 0.210, C6);
+                // Sustained C-major triad
+                [C5, E5, G5].forEach(function (f, i) {
+                    [+2, -2].forEach(function (det) {
+                        tone(ac, {start: t + 0.290, dur: 0.260, f0: f,
+                                  type: 'triangle', vol: 0.55*v/3,
+                                  atk: 0.006, dec: 0.20, detune: det});
+                    });
+                });
+                tone(ac, {start: t + 0.300, dur: 0.060, f0: C7*2, type: 'sine',
+                          vol: 0.16*v, env: 'punch', dec: 0.020, punch: 0.40});
             }
             else if (name === 'magnet') {
-                tone(ac, {start: t,         dur: 0.110, f0: 220, f1: 660,
+                tone(ac, {start: t, dur: 0.220, f0: A4, f1: A5,
                           type: 'triangle', vol: 0.45*v,
-                          atk: 0.005, dec: 0.080,
-                          vib: 5, vibDepth: 0.030});
-                tone(ac, {start: t + 0.080, dur: 0.140, f0: 660, f1: 990,
-                          type: 'sine', vol: 0.42*v,
-                          atk: 0.005, dec: 0.090,
-                          vib: 7, vibDepth: 0.020});
-                tone(ac, {start: t + 0.120, dur: 0.080, f0: 1320, type: 'sine',
-                          vol: 0.18*v, atk: 0.002, dec: 0.05});
+                          env: 'punch', dec: 0.150, punch: 0.40,
+                          tremHz: 10, tremDepth: 0.18});
+                tone(ac, {start: t + 0.110, dur: 0.060, f0: A6, type: 'sine',
+                          vol: 0.18*v, env: 'punch', dec: 0.025, punch: 0.30});
             }
             else if (name === 'slowmo') {
-                tone(ac, {start: t,         dur: 0.220, f0: 880, f1: 440,
-                          type: 'triangle', vol: 0.50*v, atk: 0.005, dec: 0.16});
-                tone(ac, {start: t + 0.090, dur: 0.220, f0: 660, f1: 330,
-                          type: 'triangle', vol: 0.30*v, atk: 0.005, dec: 0.16});
-                tone(ac, {start: t + 0.180, dur: 0.220, f0: 440, f1: 220,
-                          type: 'sine',     vol: 0.20*v, atk: 0.005, dec: 0.16});
-                tone(ac, {start: t,         dur: 0.380, f0: 220, type: 'sine',
-                          vol: 0.18*v, atk: 0.020, dec: 0.30});
+                tone(ac, {start: t, dur: 0.300, f0: A5, f1: A4,
+                          type: 'triangle', vol: 0.50*v, atk: 0.005, dec: 0.22});
+                tone(ac, {start: t, dur: 0.380, f0: A4*0.5, type: 'sine',
+                          vol: 0.22*v, atk: 0.040, dec: 0.30});
             }
             else if (name === 'thunder') {
-                noise(ac, {start: t, dur: 0.700, vol: 0.55*v, lp: 120,
-                           atk: 0.030, dec: 0.55, amHz: 4.5, amDepth: 0.35});
-                tone (ac, {start: t, dur: 0.700, f0: 50, f1: 38, type: 'sine',
-                           vol: 0.35*v, atk: 0.030, dec: 0.55});
-                noise(ac, {start: t, dur: 0.080, vol: 0.30*v, lp: 2000,
-                           atk: 0.001, dec: 0.05});
+                noise(ac, {start: t, dur: 0.700, vol: 0.55*v, lp: 110,
+                           atk: 0.040, dec: 0.55, amHz: 3.2, amDepth: 0.40});
+                tone (ac, {start: t, dur: 0.700, f0: 48, f1: 36, type: 'sine',
+                           vol: 0.32*v, atk: 0.040, dec: 0.55});
             }
             else if (name === 'death') {
-                noise(ac, {start: t,         dur: 0.080, vol: 0.45*v, lp: 2000,
-                           atk: 0.001, dec: 0.045});
-                tone (ac, {start: t,         dur: 0.220, f0: 330, f1: 90,
-                           type: 'square', vol: 0.40*v, atk: 0.004, dec: 0.16});
-                tone (ac, {start: t + 0.150, dur: 0.180, f0: 80, f1: 40,
-                           type: 'sine',   vol: 0.45*v, atk: 0.005, dec: 0.13});
+                noise(ac, {start: t, dur: 0.070, vol: 0.40*v, lp: 1200,
+                           env: 'punch', dec: 0.040, punch: 0.50});
+                tone (ac, {start: t, dur: 0.260, f0: 220, f1: 60,
+                           type: 'sine', vol: 0.50*v,
+                           env: 'punch', dec: 0.18, punch: 0.30});
+                tone (ac, {start: t + 0.080, dur: 0.220, f0: 80, f1: 40,
+                           type: 'sine', vol: 0.40*v, atk: 0.005, dec: 0.16});
             }
             else if (name === 'gameover') {
-                var go = function (s, d, f) {
-                    tone(ac, {start: s, dur: d, f0: f, type: 'triangle',
-                              vol: 0.45*v, atk: 0.004, dec: d*0.55});
+                var go = function (s, f) {
+                    tone(ac, {start: s, dur: 0.130, f0: f, type: 'triangle',
+                              vol: 0.45*v, env: 'punch', dec: 0.080, punch: 0.30});
                 };
-                go(t,         0.120, 523);
-                go(t + 0.120, 0.120, 440);
-                go(t + 0.240, 0.140, 349);
-                tone(ac, {start: t + 0.380, dur: 0.300, f0: 294, type: 'triangle',
-                          vol: 0.30*v, atk: 0.006, dec: 0.24, detune: +3});
-                tone(ac, {start: t + 0.380, dur: 0.300, f0: 294, type: 'triangle',
-                          vol: 0.30*v, atk: 0.006, dec: 0.24, detune: -3});
-                tone(ac, {start: t + 0.380, dur: 0.300, f0: 349, type: 'triangle',
-                          vol: 0.24*v, atk: 0.006, dec: 0.24});
-                tone(ac, {start: t + 0.380, dur: 0.300, f0: 440, type: 'triangle',
-                          vol: 0.20*v, atk: 0.006, dec: 0.24});
+                // F4 = A4 - 3 semitones; D4 = A4 - 7 semitones
+                var F4 = A4 * Math.pow(2, -3/12), D4 = A4 * Math.pow(2, -7/12);
+                go(t, C5); go(t + 0.140, A4); go(t + 0.280, F4);
+                [D4, F4, A4].forEach(function (f) {
+                    [+2, -2].forEach(function (det) {
+                        tone(ac, {start: t + 0.420, dur: 0.320, f0: f,
+                                  type: 'triangle', vol: 0.50*v/3,
+                                  atk: 0.006, dec: 0.24, detune: det});
+                    });
+                });
             }
             else if (name === 'poof') {
-                noise(ac, {start: t,         dur: 0.060, vol: 0.55*v, lp: 900,
-                           atk: 0.001, dec: 0.035});
-                tone (ac, {start: t + 0.010, dur: 0.140, f0: 420, f1: 180,
-                           type: 'triangle', vol: 0.48*v,
-                           atk: 0.002, dec: 0.090, vib: 8, vibDepth: 0.040});
-                tone (ac, {start: t + 0.020, dur: 0.120, f0: 130, f1: 70,
-                           type: 'sine', vol: 0.34*v, atk: 0.003, dec: 0.090});
+                noise(ac, {start: t, dur: 0.055, vol: 0.50*v, lp: 900,
+                           env: 'punch', dec: 0.030, punch: 0.55});
+                tone (ac, {start: t + 0.010, dur: 0.140, f0: 480, f1: 180,
+                           type: 'triangle', vol: 0.46*v,
+                           env: 'punch', dec: 0.090, punch: 0.35});
+                tone (ac, {start: t + 0.020, dur: 0.120, f0: 110, f1: 60,
+                           type: 'sine', vol: 0.30*v, atk: 0.003, dec: 0.080});
             }
             else if (name === 'ghost') {
-                tone (ac, {start: t,         dur: 0.520, f0: 800, type: 'sine',
-                           vol: 0.36*v, atk: 0.060, dec: 0.42,
-                           vib: 3.0, vibDepth: 0.040});
-                tone (ac, {start: t + 0.020, dur: 0.480, f0: 1200, type: 'sine',
-                           vol: 0.22*v, atk: 0.060, dec: 0.38,
-                           vib: 2.5, vibDepth: 0.025});
-                noise(ac, {start: t,         dur: 0.520, vol: 0.10*v, hp: 2500,
-                           atk: 0.080, dec: 0.40});
+                tone (ac, {start: t, dur: 0.380, f0: 700, f1: 900,
+                           type: 'sine', vol: 0.34*v, atk: 0.050, dec: 0.30,
+                           vib: 4.5, vibDepth: 0.045});
+                noise(ac, {start: t, dur: 0.380, vol: 0.10*v, hp: 2500,
+                           atk: 0.060, dec: 0.30});
             }
             else if (name === 'grow') {
-                var gs = function (s, d, f) {
-                    tone(ac, {start: s, dur: d, f0: f, type: 'triangle',
-                              vol: 0.50*v, atk: 0.003, dec: d*0.55});
+                var arp = function (s, d, f1, f2, vol) {
+                    tone(ac, {start: s, dur: d, f0: f1, type: 'sine',
+                              vol: vol*v, env: 'punch', dec: d*0.55, punch: 0.55,
+                              jumpAt: 0.024, jumpToF: f2});
                 };
-                gs(t,         0.060, 523);
-                gs(t + 0.060, 0.060, 659);
-                gs(t + 0.120, 0.060, 784);
-                tone(ac, {start: t + 0.180, dur: 0.240, f0: 1046, type: 'triangle',
-                          vol: 0.32*v, atk: 0.004, dec: 0.18, detune: +4});
-                tone(ac, {start: t + 0.180, dur: 0.240, f0: 1046, type: 'triangle',
-                          vol: 0.32*v, atk: 0.004, dec: 0.18, detune: -4});
-                tone(ac, {start: t + 0.180, dur: 0.240, f0:  784, type: 'triangle',
-                          vol: 0.28*v, atk: 0.004, dec: 0.18});
-                tone(ac, {start: t + 0.180, dur: 0.240, f0: 1318, type: 'triangle',
-                          vol: 0.24*v, atk: 0.004, dec: 0.18});
-                tone(ac, {start: t + 0.190, dur: 0.060, f0: 5200, type: 'sine',
-                          vol: 0.18*v, atk: 0.001, dec: 0.025});
+                arp(t,         0.080, C5, G5,    0.55);
+                arp(t + 0.080, 0.080, E5, B5,    0.58);
+                arp(t + 0.160, 0.090, G5, D5*2,  0.60);
+                [C6, E6, G6].forEach(function (f) {
+                    [+2, -2].forEach(function (det) {
+                        tone(ac, {start: t + 0.260, dur: 0.260, f0: f,
+                                  type: 'triangle', vol: 0.50*v/3,
+                                  atk: 0.006, dec: 0.20, detune: det});
+                    });
+                });
+                tone(ac, {start: t + 0.275, dur: 0.055, f0: C7*2, type: 'sine',
+                          vol: 0.18*v, env: 'punch', dec: 0.020, punch: 0.40});
             }
         } catch (e) { console.warn('skyPlay error:', e); }
     };
