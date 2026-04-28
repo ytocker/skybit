@@ -98,6 +98,7 @@ class Bird:
         self.ghost_active = False
         self.grow_active = False
         self.triple_active = False
+        self.ghost_pulse = 0.0    # advances while ghost_active for fade effect
 
     @property
     def tilt_deg(self):
@@ -122,6 +123,8 @@ class Bird:
             base_hz = max(3.0, base_hz - 4.0)
         self.frame_t = (self.frame_t + dt * base_hz)
         self.flap_boost = max(0.0, self.flap_boost - dt * 1.8)
+        if self.ghost_active:
+            self.ghost_pulse += dt * 2.4
 
     def draw(self, surf, shake_x=0, shake_y=0):
         frame_idx = int(self.frame_t) % len(parrot.FRAMES)
@@ -137,6 +140,11 @@ class Bird:
             from game.config import GROW_SCALE
             w, h = img.get_size()
             img = pygame.transform.smoothscale(img, (int(w * GROW_SCALE), int(h * GROW_SCALE)))
+        if self.ghost_active:
+            # Subtle breathing fade: alpha oscillates ~155..240 over a slow sine.
+            img = img.copy()
+            pulse = 0.5 + 0.5 * math.sin(self.ghost_pulse)
+            img.set_alpha(int(155 + pulse * 85))
         r = img.get_rect(center=(self.x + shake_x, self.y + shake_y))
         surf.blit(img, r.topleft)
 
