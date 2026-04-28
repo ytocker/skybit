@@ -12,6 +12,7 @@ from game.draw import (
     WHITE, NEAR_BLACK,
 )
 from game import parrot
+from game.dollar_coin_glyphs import draw_coin_font_bold as _draw_dollar_coin_hud
 
 _grow_parrot_hud: "pygame.Surface | None" = None
 
@@ -290,40 +291,13 @@ def _draw_buff_icon(surf, rect, kind):
             pygame.draw.circle(mg, (50, 110, 220, 255),  (ex + 1, gcy), 2)
         surf.blit(mg, (cx - gcx, cy - gcy - 2))
     elif kind == "triple":
-        # Parrot in front of a tall green up-arrow backdrop (boost-feel for 3X coins).
-        GREEN_HI  = ( 50, 220, 100)
-        GREEN_OUT = ( 28, 160,  70)
-
-        head_w  = 13
-        shaft_w = 5
-        total_h = 19
-        head_h  = int(total_h * 0.42)
-        top_y    = cy - total_h // 2
-        head_bot = top_y + head_h
-        bot_y    = cy + total_h // 2
-        pts_out = [
-            (cx,                  top_y),
-            (cx + head_w // 2,    head_bot),
-            (cx + shaft_w // 2,   head_bot),
-            (cx + shaft_w // 2,   bot_y),
-            (cx - shaft_w // 2,   bot_y),
-            (cx - shaft_w // 2,   head_bot),
-            (cx - head_w // 2,    head_bot),
-        ]
-        pygame.draw.polygon(surf, GREEN_OUT, pts_out)
-        pts_in = [
-            (cx,                      top_y + 1),
-            (cx + head_w // 2 - 1,    head_bot - 1),
-            (cx + shaft_w // 2 - 1,   head_bot - 1),
-            (cx + shaft_w // 2 - 1,   bot_y - 1),
-            (cx - shaft_w // 2 + 1,   bot_y - 1),
-            (cx - shaft_w // 2 + 1,   head_bot - 1),
-            (cx - head_w // 2 + 1,    head_bot - 1),
-        ]
-        pygame.draw.polygon(surf, GREEN_HI, pts_in)
-
-        bird = _get_grow_parrot_hud()
-        surf.blit(bird, (cx - bird.get_width() // 2, cy - bird.get_height() // 2))
+        # Gold coin with $ glyph — matches the in-world triple power-up icon.
+        from game.config import MUSHROOM_R
+        native = MUSHROOM_R * 2
+        icon = pygame.Surface((native, native), pygame.SRCALPHA)
+        _draw_dollar_coin_hud(icon, native // 2, native // 2, pulse=0.0)
+        scaled = pygame.transform.smoothscale(icon, (20, 20))
+        surf.blit(scaled, (cx - 10, cy - 10))
 
 
 class PauseButton:

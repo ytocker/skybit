@@ -24,6 +24,7 @@ from game.draw import (
 )
 from game import parrot
 from game.pillar_variants import draw_pillar_pair
+from game.dollar_coin_glyphs import draw_coin_font_bold as _draw_dollar_coin
 
 # ── GROW power-up parrot (scaled in-game sprite, cached) ─────────────────────
 _grow_parrot: "pygame.Surface | None" = None
@@ -255,7 +256,7 @@ class PowerUp:
 
     def draw(self, surf):
         if self.kind == "triple":
-            self._draw_grow(surf)        # parrot + green-arrow icon
+            _draw_dollar_coin(surf, int(self.x), int(self.y), pulse=self.pulse)
         elif self.kind == "magnet":
             self._draw_magnet(surf)
         elif self.kind == "slowmo":
