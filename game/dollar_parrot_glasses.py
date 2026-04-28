@@ -1,10 +1,11 @@
 """Five dollar-glasses treatments for the parrot under the triple power-up.
 
-Each `_draw_glasses_<name>(surf, cx, cy)` replaces only the sunglasses layer
-of the normal parrot sprite — body, wing, beak, tail are identical.
+All variants use oversized lenses (r=9) spread wide across the face for a
+deliberately funny silhouette. Each `_draw_glasses_*(surf, cx, cy)` replaces
+only the sunglasses layer — body, wing, beak, tail are identical.
 
-`build_dollar_frames(glasses_fn)` returns 4 outlined parrot surfaces (one per
-wing angle) ready to drop into the rotation cache.
+`build_dollar_frames(glasses_fn)` returns 4 outlined parrot surfaces ready
+to drop into the rotation cache.
 
 Preview-only — nothing in the game imports this yet.
 """
@@ -14,7 +15,6 @@ import pygame
 
 from game.parrot import (
     SPRITE_W, SPRITE_H,
-    SHADE_FRAME,
     _WING_ANGLES, _build_wing, _aaellipse, _add_outline,
 )
 from game.draw import (
@@ -48,157 +48,206 @@ def _blit_outlined(surf, text, font, center, fill, outline, outline_w=1):
     surf.blit(body, rect.topleft)
 
 
-# ── V1 — Font $ on black lens (clean baseline) ──────────────────────────────
-
-def _draw_glasses_font_dollar(surf, cx, cy):
-    """Gold aviator frame, dark lens, bold green $ via font."""
-    r = 6
-    left  = (cx - 4, cy)
-    right = (cx + 6, cy - 1)
-
-    for lc in (left, right):
-        pygame.draw.circle(surf, SHADE_FRAME, lc, r + 1)
-        pygame.draw.circle(surf, (18, 20, 35), lc, r)
-
-    f = _gfont(9)
-    for lc in (left, right):
-        _blit_outlined(surf, "$", f, (lc[0], lc[1] + 1),
-                       BILL_GREEN, BILL_GREEN_DK, outline_w=1)
-
-    pygame.draw.line(surf, SHADE_FRAME,
-                     (left[0] + r, left[1]), (right[0] - r, right[1]), 2)
-    pygame.draw.line(surf, SHADE_FRAME,
-                     (left[0] - r + 1, left[1] - r + 2),
-                     (right[0] + r - 1, right[1] - r + 2), 1)
+def _lens_reflection(surf, lc, r, tint, alpha=90):
+    """Semi-transparent sky-tint ellipse in the upper half of the lens."""
+    rw, rh = r * 2, r
+    tsurf = pygame.Surface((rw, rh), pygame.SRCALPHA)
+    pygame.draw.ellipse(tsurf, (*tint, alpha), tsurf.get_rect())
+    surf.blit(tsurf, (lc[0] - r, lc[1] - r + 2))
 
 
-# ── V2 — Coin lenses (gold disc + green $, mirrors power-up icon) ────────────
-
-def _draw_glasses_coin_lens(surf, cx, cy):
-    """Each lens is a tiny gold coin — matches the triple power-up icon."""
-    r = 6
-    left  = (cx - 4, cy)
-    right = (cx + 6, cy - 1)
-
-    for lc in (left, right):
-        pygame.draw.circle(surf, COIN_DARK, lc, r + 1)
-        pygame.draw.circle(surf, COIN_GOLD, lc, r)
-        pygame.draw.circle(surf, (255, 235, 110), lc, r - 2, 1)
-
-    f = _gfont(8)
-    for lc in (left, right):
-        _blit_outlined(surf, "$", f, (lc[0], lc[1] + 1),
-                       BILL_GREEN, BILL_GREEN_DK, outline_w=1)
-
-    # Dark coin-rim bridge
-    pygame.draw.line(surf, COIN_DARK,
-                     (left[0] + r, left[1]), (right[0] - r, right[1]), 2)
-    pygame.draw.line(surf, COIN_GOLD,
-                     (left[0] + r, left[1]), (right[0] - r, right[1]), 1)
+def _frame_highlight(surf, lc, r, color):
+    """Bright arc on the upper-rim of the frame for 3-D depth."""
+    rect = pygame.Rect(lc[0] - r - 1, lc[1] - r - 1, (r + 1) * 2, (r + 1) * 2)
+    pygame.draw.arc(surf, color, rect, math.radians(35), math.radians(155), 1)
 
 
-# ── V3 — Neon glow $ (cyberpunk / electric) ──────────────────────────────────
+# ── Shared lens geometry for all variants ───────────────────────────────────
+#   Large, wide-spaced lenses — deliberately oversized and funny.
+#   Left lens centre  L = (cx-11, cy+1)
+#   Right lens centre R = (cx+9,  cy)
+#   Radius r = 9  →  18 px diameter vs 12 px for the original sunglasses
+#   Bridge gap = R[0]-r - (L[0]+r) = (cx+9-9) - (cx-11+9) = 0 - (-2) = 2 px
 
-def _draw_glasses_neon_dollar(surf, cx, cy):
-    """Cyan frame, dark lens, neon-green glowing $ inside."""
-    r = 6
-    left  = (cx - 4, cy)
-    right = (cx + 6, cy - 1)
-    NEON_FRAME = (30, 200, 140)
-    NEON_FILL  = (80, 255, 160)
-
-    for lc in (left, right):
-        pygame.draw.circle(surf, NEON_FRAME, lc, r + 1)
-        pygame.draw.circle(surf, (8, 18, 14), lc, r)
-
-        # Soft glow halo behind the $
-        glow = pygame.Surface((r * 4, r * 4), pygame.SRCALPHA)
-        gc = (r * 2, r * 2)
-        pygame.draw.circle(glow, (*NEON_FRAME, 55), gc, r + 2)
-        pygame.draw.circle(glow, (*NEON_FRAME, 80), gc, r - 1)
-        surf.blit(glow, (lc[0] - r * 2, lc[1] - r * 2))
-
-    f = _gfont(9)
-    for lc in (left, right):
-        _blit_outlined(surf, "$", f, (lc[0], lc[1] + 1),
-                       NEON_FILL, (10, 80, 50), outline_w=1)
-
-    pygame.draw.line(surf, NEON_FRAME,
-                     (left[0] + r, left[1]), (right[0] - r, right[1]), 2)
-    pygame.draw.line(surf, NEON_FRAME,
-                     (left[0] - r + 1, left[1] - r + 2),
-                     (right[0] + r - 1, right[1] - r + 2), 1)
+def _lenses(cx, cy, r=9):
+    return (cx - 11, cy + 1), (cx + 9, cy)
 
 
-# ── V4 — Big chunky $ (cartoonish, oversized frame) ──────────────────────────
+# ── V1 — Chrome Gold ─────────────────────────────────────────────────────────
 
-def _draw_glasses_big_dollar(surf, cx, cy):
-    """Thick gold frames (r=7), large $ filling the whole lens — comically bold."""
-    r = 7
-    left  = (cx - 4, cy)
-    right = (cx + 6, cy - 1)
+def _draw_glasses_chrome(surf, cx, cy):
+    """Classic aviator soul — gold frame with real depth, dark mirror lens, $ etched in."""
+    L, R = _lenses(cx, cy)
+    r = 9
+    FRAME_SH  = (160,  95,  10)   # warm brown shadow
+    FRAME     = (255, 200,  50)   # gold
+    FRAME_HI  = (255, 240, 160)   # pale gold highlight
+    LENS      = ( 15,  18,  35)   # dark blue-black
+    TINT      = ( 60, 100, 180)   # reflected sky
 
-    for lc in (left, right):
-        # Triple-ring frame gives a thick "chunky" look
-        pygame.draw.circle(surf, BILL_GREEN_DK, lc, r + 2)
-        pygame.draw.circle(surf, SHADE_FRAME,   lc, r + 1)
-        pygame.draw.circle(surf, (22, 24, 42),  lc, r)
+    for lc in (L, R):
+        pygame.draw.circle(surf, FRAME_SH, lc, r + 2)     # shadow ring
+        pygame.draw.circle(surf, FRAME,    lc, r + 1)     # gold frame
+        pygame.draw.circle(surf, LENS,     lc, r)         # dark lens
+        _lens_reflection(surf, lc, r, TINT, alpha=100)
+        _frame_highlight(surf, lc, r, FRAME_HI)
+        pygame.draw.circle(surf, WHITE, (lc[0] - 3, lc[1] - 3), 1)   # specular
 
-    f = _gfont(11)
-    for lc in (left, right):
-        _blit_outlined(surf, "$", f, (lc[0], lc[1] + 1),
-                       (255, 235, 120), BILL_GREEN_DK, outline_w=1)
+    f = _gfont(14)
+    for lc in (L, R):
+        _blit_outlined(surf, "$", f, (lc[0], lc[1] + 1), BILL_GREEN, BILL_GREEN_DK)
 
-    pygame.draw.line(surf, SHADE_FRAME,
-                     (left[0] + r, left[1]), (right[0] - r, right[1]), 3)
-    pygame.draw.line(surf, SHADE_FRAME,
-                     (left[0] - r + 1, left[1] - r + 2),
-                     (right[0] + r - 1, right[1] - r + 2), 2)
-
-
-# ── V5 — Money-green lens (all-green, light-green $) ─────────────────────────
-
-def _draw_glasses_green_dollar(surf, cx, cy):
-    """Vivid green frame and dark-green lens — money-coloured throughout."""
-    r = 6
-    left  = (cx - 4, cy)
-    right = (cx + 6, cy - 1)
-    FRAME  = BILL_GREEN
-    LENS   = (14, 48, 30)
-    GLINT  = (180, 255, 200)
-
-    for lc in (left, right):
-        pygame.draw.circle(surf, BILL_GREEN_DK, lc, r + 2)
-        pygame.draw.circle(surf, FRAME,         lc, r + 1)
-        pygame.draw.circle(surf, LENS,          lc, r)
-
-    f = _gfont(9)
-    for lc in (left, right):
-        _blit_outlined(surf, "$", f, (lc[0], lc[1] + 1),
-                       BILL_GREEN_LT, BILL_GREEN_DK, outline_w=1)
-
-    # Tiny specular glint on each lens (upper-left)
-    for lc in (left, right):
-        pygame.draw.circle(surf, GLINT, (lc[0] - 2, lc[1] - 2), 1)
-
+    # Nose bridge
+    pygame.draw.line(surf, FRAME_SH, (L[0] + r, L[1]), (R[0] - r, R[1]), 3)
+    pygame.draw.line(surf, FRAME,    (L[0] + r, L[1]), (R[0] - r, R[1]), 1)
+    # Brow-bar
     pygame.draw.line(surf, FRAME,
-                     (left[0] + r, left[1]), (right[0] - r, right[1]), 2)
-    pygame.draw.line(surf, BILL_GREEN_LT,
-                     (left[0] - r + 1, left[1] - r + 2),
-                     (right[0] + r - 1, right[1] - r + 2), 1)
+                     (L[0] - r + 2, L[1] - r + 2), (R[0] + r - 2, R[1] - r + 2), 1)
 
 
-# ── Frame builder ────────────────────────────────────────────────────────────
+# ── V2 — Power Coin ───────────────────────────────────────────────────────────
+
+def _draw_glasses_coin(surf, cx, cy):
+    """Each lens IS the triple power-up coin — gold disc, green $ stamped on."""
+    L, R = _lenses(cx, cy)
+    r = 9
+    INNER_RING = (255, 235, 110)
+    HI_ARC     = (255, 245, 180)
+
+    for lc in (L, R):
+        pygame.draw.circle(surf, COIN_DARK, lc, r + 2)          # dark outer rim
+        pygame.draw.circle(surf, COIN_GOLD, lc, r + 1)          # gold face
+        pygame.draw.circle(surf, COIN_GOLD, lc, r)
+        pygame.draw.circle(surf, INNER_RING, lc, r - 3, 1)      # engraved inner ring
+        _lens_reflection(surf, lc, r, (255, 250, 200), alpha=70) # warm sheen
+        _frame_highlight(surf, lc, r, HI_ARC)
+        pygame.draw.circle(surf, WHITE, (lc[0] - 3, lc[1] - 3), 2)   # specular
+
+    f = _gfont(14)
+    for lc in (L, R):
+        _blit_outlined(surf, "$", f, (lc[0], lc[1] + 1), BILL_GREEN, BILL_GREEN_DK)
+
+    # Dark coin-edge bridge
+    pygame.draw.line(surf, COIN_DARK, (L[0] + r, L[1]), (R[0] - r, R[1]), 3)
+    pygame.draw.line(surf, COIN_GOLD, (L[0] + r, L[1]), (R[0] - r, R[1]), 1)
+    pygame.draw.line(surf, COIN_DARK,
+                     (L[0] - r + 2, L[1] - r + 2), (R[0] + r - 2, R[1] - r + 2), 1)
+
+
+# ── V3 — Neon Blast ───────────────────────────────────────────────────────────
+
+def _draw_glasses_neon(surf, cx, cy):
+    """Glowing neon frame + glowing neon $. Both the rim and glyph radiate light."""
+    L, R = _lenses(cx, cy)
+    r = 9
+    NEON      = ( 80, 255, 160)
+    NEON_DIM  = ( 30, 160,  85)
+    NEON_DARK = (  8,  20,  14)
+    LENS      = (  5,  10,   8)
+
+    for lc in (L, R):
+        # Outer neon glow halo on the frame itself
+        glow = pygame.Surface(((r + 5) * 2, (r + 5) * 2), pygame.SRCALPHA)
+        gc = (r + 5, r + 5)
+        pygame.draw.circle(glow, (*NEON, 25), gc, r + 5)
+        pygame.draw.circle(glow, (*NEON, 50), gc, r + 3)
+        surf.blit(glow, (lc[0] - r - 5, lc[1] - r - 5))
+
+        pygame.draw.circle(surf, NEON_DIM,  lc, r + 2)   # dim neon outer rim
+        pygame.draw.circle(surf, NEON,      lc, r + 1)   # bright neon frame
+        pygame.draw.circle(surf, NEON_DARK, lc, r)       # very dark lens
+        _frame_highlight(surf, lc, r, (200, 255, 220))
+
+    # Neon $ with inner glow ring
+    f = _gfont(14)
+    for lc in (L, R):
+        # Small radial glow behind the $
+        gs = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
+        pygame.draw.circle(gs, (*NEON, 55), (r, r), r - 2)
+        pygame.draw.circle(gs, (*NEON, 85), (r, r), r - 5)
+        surf.blit(gs, (lc[0] - r, lc[1] - r))
+        _blit_outlined(surf, "$", f, (lc[0], lc[1] + 1), NEON, NEON_DIM)
+
+    pygame.draw.line(surf, NEON,    (L[0] + r, L[1]), (R[0] - r, R[1]), 2)
+    pygame.draw.line(surf, NEON_DIM,(L[0] - r + 2, L[1] - r + 2),
+                                    (R[0] + r - 2, R[1] - r + 2), 1)
+
+
+# ── V4 — Gunmetal Embossed ────────────────────────────────────────────────────
+
+def _draw_glasses_gunmetal(surf, cx, cy):
+    """Dark steel frame with metallic depth; $ is gold embossed relief on the lens."""
+    L, R = _lenses(cx, cy)
+    r = 9
+    STEEL_SH  = ( 30,  30,  45)
+    STEEL     = ( 80,  85, 110)
+    STEEL_HI  = (155, 160, 195)
+    LENS      = ( 18,  20,  32)
+    TINT      = ( 50,  60, 120)
+
+    for lc in (L, R):
+        pygame.draw.circle(surf, STEEL_SH, lc, r + 2)
+        pygame.draw.circle(surf, STEEL,    lc, r + 1)
+        pygame.draw.circle(surf, LENS,     lc, r)
+        _lens_reflection(surf, lc, r, TINT, alpha=80)
+        _frame_highlight(surf, lc, r, STEEL_HI)
+        pygame.draw.circle(surf, (220, 225, 255), (lc[0] - 3, lc[1] - 3), 1)
+
+    # Embossed $ — shadow layer, highlight layer, gold body
+    f = _gfont(14)
+    for lc in (L, R):
+        sh   = f.render("$", True, (10, 10, 20))
+        hi   = f.render("$", True, (255, 245, 200))
+        body = f.render("$", True, COIN_GOLD)
+        cx2, cy2 = lc[0], lc[1] + 1
+        surf.blit(sh,   sh.get_rect(center=(cx2 + 1, cy2 + 1)).topleft)
+        surf.blit(hi,   hi.get_rect(center=(cx2 - 1, cy2 - 1)).topleft)
+        surf.blit(body, body.get_rect(center=(cx2, cy2)).topleft)
+
+    pygame.draw.line(surf, STEEL,   (L[0] + r, L[1]), (R[0] - r, R[1]), 3)
+    pygame.draw.line(surf, STEEL_HI,(L[0] + r, L[1]), (R[0] - r, R[1]), 1)
+    pygame.draw.line(surf, STEEL_HI,
+                     (L[0] - r + 2, L[1] - r + 2), (R[0] + r - 2, R[1] - r + 2), 1)
+
+
+# ── V5 — Emerald Rich ────────────────────────────────────────────────────────
+
+def _draw_glasses_emerald(surf, cx, cy):
+    """Lush jewel-green frame with rich layered depth; crisp white-green $ inside."""
+    L, R = _lenses(cx, cy)
+    r = 9
+    FRAME_SH  = ( 20,  72,  42)
+    FRAME     = ( 50, 160,  90)   # BILL_GREEN-family
+    FRAME_HI  = (130, 235, 165)
+    LENS      = ( 10,  38,  22)
+    TINT      = ( 40, 130,  80)
+
+    for lc in (L, R):
+        pygame.draw.circle(surf, FRAME_SH, lc, r + 2)
+        pygame.draw.circle(surf, FRAME,    lc, r + 1)
+        pygame.draw.circle(surf, LENS,     lc, r)
+        _lens_reflection(surf, lc, r, TINT, alpha=90)
+        _frame_highlight(surf, lc, r, FRAME_HI)
+        pygame.draw.circle(surf, (200, 255, 215), (lc[0] - 3, lc[1] - 3), 1)
+
+    f = _gfont(14)
+    for lc in (L, R):
+        _blit_outlined(surf, "$", f, (lc[0], lc[1] + 1),
+                       (215, 255, 225), BILL_GREEN_DK)
+
+    pygame.draw.line(surf, FRAME_SH,(L[0] + r, L[1]), (R[0] - r, R[1]), 3)
+    pygame.draw.line(surf, FRAME_HI,(L[0] + r, L[1]), (R[0] - r, R[1]), 1)
+    pygame.draw.line(surf, FRAME_HI,
+                     (L[0] - r + 2, L[1] - r + 2), (R[0] + r - 2, R[1] - r + 2), 1)
+
+
+# ── Frame builder ─────────────────────────────────────────────────────────────
 
 def _build_dollar_frame(wing_angle_deg, glasses_fn):
-    """Build a full parrot sprite frame using `glasses_fn` instead of sunglasses."""
     surf = pygame.Surface((SPRITE_W, SPRITE_H), pygame.SRCALPHA)
 
     # Tail
-    tail_colors = [
-        (200, 30, 40), (240, 95, 40), (255, 160, 55), (255, 220, 80),
-    ]
-    for i, c in enumerate(tail_colors):
+    for i, c in enumerate([(200, 30, 40), (240, 95, 40), (255, 160, 55), (255, 220, 80)]):
         pts = [(2 + i*3, 26 + i*2), (14 + i, 24 + i),
                (20 + i, 30 + i*2), (6 + i*3, 36 + i*2)]
         pygame.draw.polygon(surf, c, pts)
@@ -220,19 +269,19 @@ def _build_dollar_frame(wing_angle_deg, glasses_fn):
 
     # Head
     _aaellipse(surf, (150, 15, 20), (48, 23), 12, 11)
-    _aaellipse(surf, BIRD_RED,      (47, 21), 12, 11)
+    _aaellipse(surf, BIRD_RED,       (47, 21), 12, 11)
     _aaellipse(surf, (255, 130, 130), (44, 24), 4, 3)
     _aaellipse(surf, (255, 170, 170), (46, 16), 7, 3)
 
-    # Dollar glasses (variant-specific)
+    # Dollar glasses
     glasses_fn(surf, 50, 20)
 
-    # Beak
+    # Beak (drawn on top of glasses)
     beak_pts = [(55, 21), (61, 24), (58, 28), (52, 26)]
-    pygame.draw.polygon(surf, BIRD_BEAK, beak_pts)
+    pygame.draw.polygon(surf, BIRD_BEAK,   beak_pts)
     pygame.draw.polygon(surf, BIRD_BEAK_D, beak_pts, 1)
     pygame.draw.line(surf, (255, 230, 150), (55, 22), (59, 24), 1)
-    pygame.draw.line(surf, BIRD_BEAK_D, (52, 24), (58, 25), 1)
+    pygame.draw.line(surf, BIRD_BEAK_D,    (52, 24), (58, 25), 1)
 
     # Feet
     pygame.draw.line(surf, BIRD_BEAK_D, (28, 45), (26, 49), 2)
@@ -246,12 +295,12 @@ def build_dollar_frames(glasses_fn) -> list:
     return [_add_outline(_build_dollar_frame(a, glasses_fn)) for a in _WING_ANGLES]
 
 
-# ── Registry ─────────────────────────────────────────────────────────────────
+# ── Registry ──────────────────────────────────────────────────────────────────
 
 VARIANTS = [
-    ("FONT $",   _draw_glasses_font_dollar),
-    ("COIN $",   _draw_glasses_coin_lens),
-    ("NEON $",   _draw_glasses_neon_dollar),
-    ("BIG $",    _draw_glasses_big_dollar),
-    ("GREEN $",  _draw_glasses_green_dollar),
+    ("CHROME",   _draw_glasses_chrome),
+    ("COIN",     _draw_glasses_coin),
+    ("NEON",     _draw_glasses_neon),
+    ("GUNMETAL", _draw_glasses_gunmetal),
+    ("EMERALD",  _draw_glasses_emerald),
 ]
