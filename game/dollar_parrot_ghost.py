@@ -171,16 +171,10 @@ P_SPECTRAL = _pal(
 )
 
 def build_spectral_frame(angle_deg):
-    """Translucent cyan parrot with a soft outer halo — properly ghostly."""
-    out = pygame.Surface((SPRITE_W, SPRITE_H), pygame.SRCALPHA)
-    # Soft cyan halo behind everything
-    blit_glow(out, 32, 30, 26, (90, 200, 255), alpha=130)
-    blit_glow(out, 32, 30, 18, (180, 230, 255), alpha=140)
-    # Body in cool palette
-    body = _build_parrot_with_palette(angle_deg, P_SPECTRAL)
-    body.set_alpha(225)
-    out.blit(body, (0, 0))
-    return out
+    """Translucent cyan parrot — colour palette is the ghost cue, the
+    breathing-fade alpha applied in Bird.draw is the translucency cue.
+    No halo: it reads as a circular bubble around the bird in motion."""
+    return _build_parrot_with_palette(angle_deg, P_SPECTRAL)
 
 
 # ── V2 — WRAITH  (dark with cyan rim-light, glowing eyes) ────────────────────
