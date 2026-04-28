@@ -25,15 +25,10 @@ SKIN_BROWN = (115,  70,  25)
 # ── shared fry body ──────────────────────────────────────────────────────────
 
 def _draw_fry_body(surf, x, y, w, h, *, crinkle=False, skin_side=None,
-                   spots=None, drop_shadow=True):
+                   spots=None):
     """Single fry body at (x,y) of bounding rect, size (w,h).
-    Layers: drop shadow, dark crust, gold body, light ridge, dark shadow column,
+    Layers: dark crust, gold body, light ridge, dark shadow column,
     optional crinkle notches and potato-skin edge, plus a few crispy spots."""
-    if drop_shadow:
-        sh = pygame.Surface((w + 6, 4), pygame.SRCALPHA)
-        pygame.draw.ellipse(sh, (0, 0, 0, 140), sh.get_rect())
-        surf.blit(sh, (x - 3, y + h - 1))
-
     # Dark crust outline + gold body
     pygame.draw.rect(surf, _CRISPY_DARK, (x - 1, y, w + 2, h + 1))
     pygame.draw.rect(surf, _CRISPY_GOLD, (x, y + 1, w, h - 1))
@@ -96,11 +91,6 @@ def draw_wedge(surf, cx, cy, t=0.0):
     top_y, bot_y = cy - h // 2, cy + h // 2
     top_half_w, bot_half_w = 3, 5
 
-    # Drop shadow
-    sh = pygame.Surface((bot_half_w * 2 + 6, 4), pygame.SRCALPHA)
-    pygame.draw.ellipse(sh, (0, 0, 0, 140), sh.get_rect())
-    surf.blit(sh, (cx - bot_half_w - 3, bot_y))
-
     # Dark crust trapezoid
     pygame.draw.polygon(surf, _CRISPY_DARK, [
         (cx - bot_half_w - 1, bot_y), (cx + bot_half_w + 1, bot_y),
@@ -139,7 +129,7 @@ def _make_single_fry(w=5, h=18, pad=4):
     """Render a single straight fry onto its own padded surface for rotating."""
     sw, sh_ = w + pad * 2, h + pad * 2
     s = pygame.Surface((sw, sh_), pygame.SRCALPHA)
-    _draw_fry_body(s, pad, pad, w, h, drop_shadow=False)
+    _draw_fry_body(s, pad, pad, w, h)
     return s
 
 
@@ -148,10 +138,6 @@ def draw_pair(surf, cx, cy, t=0.0):
     f = _make_single_fry()
     left  = pygame.transform.rotate(f, 22)
     right = pygame.transform.rotate(f, -22)
-    # Soft drop shadow under the pair
-    sh = pygame.Surface((22, 5), pygame.SRCALPHA)
-    pygame.draw.ellipse(sh, (0, 0, 0, 140), sh.get_rect())
-    surf.blit(sh, (cx - 11, cy + 8))
     # Back fry slightly behind
     surf.blit(left,  left.get_rect(center=(cx - 2, cy + 1)))
     surf.blit(right, right.get_rect(center=(cx + 2, cy)))
@@ -164,10 +150,6 @@ def draw_tilted(surf, cx, cy, t=0.0):
     in PAIR but on its own. Dynamic, casual feel."""
     f = _make_single_fry()
     rot = pygame.transform.rotate(f, 22)
-    # Drop shadow under the fry
-    sh = pygame.Surface((20, 5), pygame.SRCALPHA)
-    pygame.draw.ellipse(sh, (0, 0, 0, 140), sh.get_rect())
-    surf.blit(sh, (cx - 10, cy + 8))
     surf.blit(rot, rot.get_rect(center=(cx, cy)))
 
 
@@ -179,11 +161,6 @@ def draw_carton(surf, cx, cy, t=0.0):
     ch = 11   # carton height
     top_y = cy + 1
     bot_y = top_y + ch
-
-    # Drop shadow
-    sh = pygame.Surface((cw + 6, 4), pygame.SRCALPHA)
-    pygame.draw.ellipse(sh, (0, 0, 0, 150), sh.get_rect())
-    surf.blit(sh, (cx - cw // 2 - 3, bot_y - 1))
 
     # Carton trapezoid (wider at top, narrower at bottom — classic fry box)
     half_top = cw // 2
