@@ -9,13 +9,13 @@ License: <https://creativecommons.org/publicdomain/zero/1.0/>
 
 ## Per-event mapping
 
-| Event       | Source pack             | Source file                          |
-|-------------|-------------------------|--------------------------------------|
-| flap        | Kenney Interface Sounds | `click_001.wav`                      |
-| coin        | Kenney Music Jingles    | `Pizzicato/jingles_pizzi_0.ogg`      |
-| coin_combo  | Kenney Music Jingles    | `Pizzicato/jingles_pizzi_5.ogg`      |
-| coin_triple | Kenney Music Jingles    | `Pizzicato/jingles_pizzi_8.ogg`      |
-| mushroom    | Kenney Music Jingles    | `Steel/jingles_steel_5.ogg`          |
+| Event       | Source pack             | Source file / processing                                      |
+|-------------|-------------------------|---------------------------------------------------------------|
+| flap        | Kenney RPG Audio        | `cloth_4.ogg` trimmed to 200ms, fade-out                      |
+| coin        | Kenney Digital Audio    | `pep_sound_5.ogg` trimmed to 200ms, fade-out                  |
+| coin_combo  | Kenney Digital Audio    | `pep_sound_5.ogg` (full ~570ms)                               |
+| coin_triple | Kenney Digital Audio    | `pep_sound_5.ogg` + same one octave up (sparkly chime, 200ms) |
+| mushroom    | Kenney Music Jingles    | `Steel/jingles_steel_5.ogg`                                   |
 | magnet      | Kenney Digital Audio    | `phaser_up_2.ogg`                    |
 | slowmo      | Kenney Digital Audio    | `phaser_down_2.ogg`                  |
 | thunder     | Kenney Digital Audio    | `low_three_tone.ogg`                 |
