@@ -580,152 +580,232 @@ body   { background: #0d0820 !important; }
         return Math.pow(2, c / 1200);
     }
 
+    /* Bell voice (2-op FM). The modulator's amplitude (the FM "index") is
+       what gives bells their bright clangourous attack; it decays faster
+       than the carrier's amplitude, leaving a pure sine ring afterwards.
+       mod_ratio in 1.0-2.0 → kalimba/wood; 3-5 → glockenspiel/bell;
+       6-9 → temple bell / gong (inharmonic, metallic).                     */
+    function bell(ac, opts) {
+        var t0 = opts.start;
+        var dur = opts.dur;
+        var f = opts.f;
+        var modR = opts.modRatio || 3.5;
+        var modI = (opts.modIndex === undefined) ? 2.0 : opts.modIndex;
+        var modDec = (opts.modDec === undefined) ? 0.08 : opts.modDec;
+        var dec = (opts.dec === undefined ? dur * 0.5 : opts.dec);
+        var atk = (opts.atk === undefined ? 0.0 : opts.atk);
+        var envType = opts.env || 'punch';
+        var car = ac.createOscillator(), mod = ac.createOscillator();
+        var modGain = ac.createGain();      // FM index (Hz of carrier deviation)
+        var ampGain = ac.createGain();
+        car.type = 'sine'; mod.type = 'sine';
+        car.frequency.setValueAtTime(f, t0);
+        // Optional pitch jump (Mario-style arpeggio applied to the bell)
+        if (opts.jumpAt !== undefined && opts.jumpToF !== undefined) {
+            car.frequency.setValueAtTime(opts.jumpToF, t0 + opts.jumpAt);
+            mod.frequency.setValueAtTime(opts.jumpToF * modR, t0 + opts.jumpAt);
+        }
+        mod.frequency.setValueAtTime(f * modR, t0);
+        // Initial mod depth in Hz, decays exponentially to ≈0 over ~3·modDec
+        var startDepth = modI * f * modR;
+        modGain.gain.setValueAtTime(startDepth, t0);
+        modGain.gain.setTargetAtTime(0, t0, Math.max(0.001, modDec / 3));
+        mod.connect(modGain); modGain.connect(car.frequency);
+        car.connect(ampGain); ampGain.connect(ac.destination);
+        applyEnv(ampGain, opts.vol, atk, dec, dur, t0, envType, opts.punch);
+        car.start(t0); car.stop(t0 + dur + 0.02);
+        mod.start(t0); mod.stop(t0 + dur + 0.02);
+    }
+
+    /* Karplus-Strong pluck. Web Audio doesn't expose a per-sample feedback
+       loop, but a delay node fed into itself approximates it well enough.
+       Used for the soft wood-mallet flap.                                   */
+    function pluck(ac, opts) {
+        var t0 = opts.start;
+        var dur = opts.dur;
+        var f = opts.f;
+        var src = ac.createBufferSource();
+        // Tiny noise burst as the "pluck excitation"
+        var burstLen = Math.floor(ac.sampleRate / Math.max(20, f));
+        var buf = ac.createBuffer(1, burstLen, ac.sampleRate);
+        var d = buf.getChannelData(0);
+        for (var i = 0; i < burstLen; i++) d[i] = (Math.random() * 2 - 1) * 0.6;
+        src.buffer = buf;
+        var dly = ac.createDelay(0.05);
+        var fb = ac.createGain();
+        var lpf = ac.createBiquadFilter();
+        lpf.type = 'lowpass'; lpf.frequency.value = 4000; lpf.Q.value = 0.5;
+        var ampGain = ac.createGain();
+        dly.delayTime.value = 1 / Math.max(20, f);
+        fb.gain.value = (opts.decay === undefined ? 0.96 : opts.decay);
+        // Topology: src → dly → lpf → fb → dly  (loop) and dly → ampGain → out
+        src.connect(dly);
+        dly.connect(lpf); lpf.connect(fb); fb.connect(dly);
+        dly.connect(ampGain); ampGain.connect(ac.destination);
+        applyEnv(ampGain, opts.vol, 0.0, dur * 0.55, dur, t0, 'punch', 0.30);
+        src.start(t0); src.stop(t0 + 0.005);
+    }
+
     window.skyPlay = function (name, volume) {
         try {
             var ac = getCtx(), t = ac.currentTime, v = volume || 0.5;
-            // Musical anchors (matches game/audio.py _build_bank)
+            // Musical anchors (matches game/audio.py _build_bank Crystal Realm)
             var A4=440, C5=523.25, D5=587.33, E5=659.25, G5=783.99,
                 A5=880, B5=987.77, C6=1046.50, E6=1318.51, G6=1567.98,
                 A6=1760, C7=2093.00;
+            var F4 = A4 * Math.pow(2, -3/12);
+            var D4 = A4 * Math.pow(2, -7/12);
 
             if (name === 'flap') {
-                // Per-call random pitch ±50 cents + new noise offset for organic feel
-                var pm = jit(50);
-                noise(ac, {start: t, dur: 0.055, vol: 0.40*v, lp: 1100,
-                           env: 'punch', dec: 0.025, punch: 0.55});
-                tone (ac, {start: t, dur: 0.090, f0: 170*pm, f1: 85*pm,
-                           type: 'sine', vol: 0.32*v,
-                           env: 'punch', dec: 0.045, punch: 0.55});
+                // Soft wood-mallet pluck + tiny noise click
+                var pm = jit(40);
+                pluck(ac, {start: t, dur: 0.090, f: 220 * pm, vol: 0.55*v,
+                           decay: 0.96});
+                noise(ac, {start: t, dur: 0.018, vol: 0.18*v, lp: 2500,
+                           env: 'punch', dec: 0.010, punch: 0.45});
             }
             else if (name === 'coin') {
-                // Mario perfect-4th arpeggio B5 → E6 with per-call ±25-cent jitter
-                var pm = jit(25);
-                tone(ac, {start: t, dur: 0.130, f0: B5*pm, type: 'sine',
-                          vol: 0.62*v, env: 'punch', dec: 0.080, punch: 0.55,
-                          jumpAt: 0.030, jumpToF: E6*pm});
-                tone(ac, {start: t + 0.030, dur: 0.040, f0: E6*4*pm,
-                          type: 'sine', vol: 0.16*v,
+                // Bright kalimba bell, Mario B5→E6 perfect 4th
+                var pm = jit(30);
+                bell(ac, {start: t, dur: 0.220, f: B5*pm, modRatio: 3.5,
+                          modIndex: 2.2, modDec: 0.06, vol: 0.55*v,
+                          env: 'punch', punch: 0.45, dec: 0.16,
+                          jumpAt: 0.032, jumpToF: E6*pm});
+                tone(ac, {start: t + 0.034, dur: 0.030, f0: E6*3*pm,
+                          type: 'sine', vol: 0.10*v,
                           env: 'punch', dec: 0.012, punch: 0.45});
             }
             else if (name === 'coin_combo') {
-                // Brighter arp E6 → A6
-                tone(ac, {start: t, dur: 0.150, f0: E6, type: 'sine',
-                          vol: 0.62*v, env: 'punch', dec: 0.090, punch: 0.55,
+                // Brighter bell, perfect 4th higher (E6 → A6)
+                bell(ac, {start: t, dur: 0.240, f: E6, modRatio: 3.5,
+                          modIndex: 2.4, modDec: 0.07, vol: 0.55*v,
+                          env: 'punch', punch: 0.45, dec: 0.18,
                           jumpAt: 0.034, jumpToF: A6});
-                tone(ac, {start: t + 0.034, dur: 0.045, f0: A6*2,
-                          type: 'sine', vol: 0.16*v,
-                          env: 'punch', dec: 0.014, punch: 0.40});
+                tone(ac, {start: t + 0.038, dur: 0.030, f0: A6*2,
+                          type: 'sine', vol: 0.10*v,
+                          env: 'punch', dec: 0.012, punch: 0.45});
             }
             else if (name === 'coin_triple') {
-                // Three Mario arps ascending C-E-G, sparkle on the last
-                var arp = function (s, d, f1, f2, vol) {
-                    tone(ac, {start: s, dur: d, f0: f1, type: 'sine',
-                              vol: vol*v, env: 'punch', dec: d*0.55, punch: 0.55,
-                              jumpAt: 0.024, jumpToF: f2});
+                var bellArp = function (s, d, f1, f2, vol) {
+                    bell(ac, {start: s, dur: d, f: f1, modRatio: 3.5,
+                              modIndex: 2.2, modDec: 0.06, vol: vol*v,
+                              env: 'punch', punch: 0.45, dec: d*0.65,
+                              jumpAt: 0.026, jumpToF: f2});
                 };
-                arp(t,         0.090, C5, G5,    0.55);
-                arp(t + 0.090, 0.090, E5, B5,    0.58);
-                arp(t + 0.180, 0.130, G5, D5*2,  0.62);
-                tone(ac, {start: t + 0.205, dur: 0.045, f0: C7*2, type: 'sine',
-                          vol: 0.18*v, env: 'punch', dec: 0.014, punch: 0.45});
+                bellArp(t,         0.140, C5, G5,    0.42);
+                bellArp(t + 0.090, 0.150, E5, B5,    0.45);
+                bellArp(t + 0.180, 0.220, G5, D5*2,  0.48);
+                tone(ac, {start: t + 0.210, dur: 0.040, f0: C7*2, type: 'sine',
+                          vol: 0.10*v, env: 'punch', dec: 0.014, punch: 0.45});
             }
             else if (name === 'mushroom') {
+                // Glockenspiel arpeggio + sustained warm bell triad
                 var ms = function (s, f) {
-                    tone(ac, {start: s, dur: 0.075, f0: f, type: 'triangle',
-                              vol: 0.50*v, env: 'punch', dec: 0.045, punch: 0.40});
+                    bell(ac, {start: s, dur: 0.110, f: f, modRatio: 3.5,
+                              modIndex: 2.0, modDec: 0.05, vol: 0.42*v,
+                              env: 'punch', punch: 0.40, dec: 0.080});
                 };
-                ms(t,         C5); ms(t + 0.070, E5);
-                ms(t + 0.140, G5); ms(t + 0.210, C6);
-                // Sustained C-major triad
-                [C5, E5, G5].forEach(function (f, i) {
-                    [+2, -2].forEach(function (det) {
-                        tone(ac, {start: t + 0.290, dur: 0.260, f0: f,
-                                  type: 'triangle', vol: 0.55*v/3,
-                                  atk: 0.006, dec: 0.20, detune: det});
-                    });
+                ms(t,         C5); ms(t + 0.060, E5);
+                ms(t + 0.120, G5);
+                bell(ac, {start: t + 0.180, dur: 0.140, f: C6, modRatio: 3.5,
+                          modIndex: 2.0, modDec: 0.05, vol: 0.48*v,
+                          env: 'punch', punch: 0.45, dec: 0.10});
+                [{f:C5,vl:0.20}, {f:E5,vl:0.18}, {f:G5,vl:0.16}].forEach(function (n) {
+                    bell(ac, {start: t + 0.260, dur: 0.420, f: n.f,
+                              modRatio: 4.5, modIndex: 1.8, modDec: 0.18,
+                              vol: n.vl*v, atk: 0.006, dec: 0.32});
                 });
-                tone(ac, {start: t + 0.300, dur: 0.060, f0: C7*2, type: 'sine',
-                          vol: 0.16*v, env: 'punch', dec: 0.020, punch: 0.40});
+                tone(ac, {start: t + 0.270, dur: 0.050, f0: C7*2, type: 'sine',
+                          vol: 0.10*v, env: 'punch', dec: 0.020, punch: 0.40});
             }
             else if (name === 'magnet') {
-                tone(ac, {start: t, dur: 0.220, f0: A4, f1: A5,
-                          type: 'triangle', vol: 0.45*v,
-                          env: 'punch', dec: 0.150, punch: 0.40,
-                          tremHz: 10, tremDepth: 0.18});
-                tone(ac, {start: t + 0.110, dur: 0.060, f0: A6, type: 'sine',
-                          vol: 0.18*v, env: 'punch', dec: 0.025, punch: 0.30});
+                bell(ac, {start: t, dur: 0.260, f: A4, modRatio: 3.5,
+                          modIndex: 2.4, modDec: 0.10, vol: 0.50*v,
+                          env: 'punch', punch: 0.40, dec: 0.18,
+                          jumpAt: 0.110, jumpToF: A5});
+                bell(ac, {start: t + 0.110, dur: 0.080, f: A6, modRatio: 3.5,
+                          modIndex: 1.6, modDec: 0.04, vol: 0.22*v,
+                          env: 'punch', punch: 0.30, dec: 0.05});
             }
             else if (name === 'slowmo') {
-                tone(ac, {start: t, dur: 0.300, f0: A5, f1: A4,
-                          type: 'triangle', vol: 0.50*v, atk: 0.005, dec: 0.22});
-                tone(ac, {start: t, dur: 0.380, f0: A4*0.5, type: 'sine',
-                          vol: 0.22*v, atk: 0.040, dec: 0.30});
+                bell(ac, {start: t, dur: 0.380, f: A5, modRatio: 4.5,
+                          modIndex: 2.5, modDec: 0.20, vol: 0.50*v,
+                          env: 'punch', punch: 0.30, dec: 0.30,
+                          jumpAt: 0.180, jumpToF: A4});
+                tone(ac, {start: t, dur: 0.450, f0: A4*0.5,
+                          type: 'sine', vol: 0.22*v, atk: 0.040, dec: 0.34});
             }
             else if (name === 'thunder') {
-                noise(ac, {start: t, dur: 0.700, vol: 0.55*v, lp: 110,
+                bell(ac, {start: t, dur: 0.700, f: 80, modRatio: 7.0,
+                          modIndex: 3.5, modDec: 0.40, vol: 0.45*v,
+                          atk: 0.030, dec: 0.55});
+                noise(ac, {start: t, dur: 0.700, vol: 0.30*v, lp: 140,
                            atk: 0.040, dec: 0.55, amHz: 3.2, amDepth: 0.40});
-                tone (ac, {start: t, dur: 0.700, f0: 48, f1: 36, type: 'sine',
-                           vol: 0.32*v, atk: 0.040, dec: 0.55});
+                tone (ac, {start: t, dur: 0.700, f0: 42, f1: 32, type: 'sine',
+                           vol: 0.28*v, atk: 0.040, dec: 0.55});
             }
             else if (name === 'death') {
-                noise(ac, {start: t, dur: 0.070, vol: 0.40*v, lp: 1200,
-                           env: 'punch', dec: 0.040, punch: 0.50});
-                tone (ac, {start: t, dur: 0.260, f0: 220, f1: 60,
-                           type: 'sine', vol: 0.50*v,
-                           env: 'punch', dec: 0.18, punch: 0.30});
-                tone (ac, {start: t + 0.080, dur: 0.220, f0: 80, f1: 40,
-                           type: 'sine', vol: 0.40*v, atk: 0.005, dec: 0.16});
+                bell(ac, {start: t, dur: 0.450, f: 110, modRatio: 7.0,
+                          modIndex: 4.0, modDec: 0.16, vol: 0.42*v,
+                          env: 'punch', punch: 0.50, dec: 0.32});
+                tone(ac, {start: t, dur: 0.300, f0: 80, f1: 40,
+                          type: 'sine', vol: 0.32*v,
+                          env: 'punch', dec: 0.20, punch: 0.40});
+                noise(ac, {start: t, dur: 0.060, vol: 0.20*v, lp: 900,
+                           env: 'punch', dec: 0.030, punch: 0.45});
             }
             else if (name === 'gameover') {
                 var go = function (s, f) {
-                    tone(ac, {start: s, dur: 0.130, f0: f, type: 'triangle',
-                              vol: 0.45*v, env: 'punch', dec: 0.080, punch: 0.30});
+                    bell(ac, {start: s, dur: 0.180, f: f, modRatio: 3.5,
+                              modIndex: 2.0, modDec: 0.08, vol: 0.45*v,
+                              env: 'punch', punch: 0.30, dec: 0.13});
                 };
-                // F4 = A4 - 3 semitones; D4 = A4 - 7 semitones
-                var F4 = A4 * Math.pow(2, -3/12), D4 = A4 * Math.pow(2, -7/12);
-                go(t, C5); go(t + 0.140, A4); go(t + 0.280, F4);
-                [D4, F4, A4].forEach(function (f) {
-                    [+2, -2].forEach(function (det) {
-                        tone(ac, {start: t + 0.420, dur: 0.320, f0: f,
-                                  type: 'triangle', vol: 0.50*v/3,
-                                  atk: 0.006, dec: 0.24, detune: det});
-                    });
+                go(t,         C5);
+                go(t + 0.180, A4);
+                go(t + 0.360, F4);
+                [{f:D4,vl:0.30}, {f:F4,vl:0.28}, {f:A4,vl:0.26}].forEach(function (n) {
+                    bell(ac, {start: t + 0.520, dur: 0.460, f: n.f,
+                              modRatio: 4.5, modIndex: 1.8, modDec: 0.20,
+                              vol: n.vl*v, atk: 0.006, dec: 0.36});
                 });
             }
             else if (name === 'poof') {
-                noise(ac, {start: t, dur: 0.055, vol: 0.50*v, lp: 900,
-                           env: 'punch', dec: 0.030, punch: 0.55});
-                tone (ac, {start: t + 0.010, dur: 0.140, f0: 480, f1: 180,
-                           type: 'triangle', vol: 0.46*v,
-                           env: 'punch', dec: 0.090, punch: 0.35});
-                tone (ac, {start: t + 0.020, dur: 0.120, f0: 110, f1: 60,
-                           type: 'sine', vol: 0.30*v, atk: 0.003, dec: 0.080});
+                pluck(ac, {start: t, dur: 0.060, f: 320, vol: 0.55*v,
+                           decay: 0.96});
+                bell(ac, {start: t + 0.010, dur: 0.180, f: 480, modRatio: 3.0,
+                          modIndex: 2.0, modDec: 0.08, vol: 0.40*v,
+                          env: 'punch', punch: 0.40, dec: 0.12,
+                          jumpAt: 0.060, jumpToF: 180});
+                tone(ac, {start: t + 0.020, dur: 0.120, f0: 100, f1: 55,
+                          type: 'sine', vol: 0.28*v, atk: 0.003, dec: 0.080});
             }
             else if (name === 'ghost') {
-                tone (ac, {start: t, dur: 0.380, f0: 700, f1: 900,
-                           type: 'sine', vol: 0.34*v, atk: 0.050, dec: 0.30,
-                           vib: 4.5, vibDepth: 0.045});
-                noise(ac, {start: t, dur: 0.380, vol: 0.10*v, hp: 2500,
-                           atk: 0.060, dec: 0.30});
+                bell(ac, {start: t, dur: 0.460, f: 900, modRatio: 4.5,
+                          modIndex: 1.8, modDec: 0.18, vol: 0.32*v,
+                          atk: 0.050, dec: 0.36});
+                bell(ac, {start: t + 0.020, dur: 0.420, f: 1350, modRatio: 4.5,
+                          modIndex: 1.5, modDec: 0.16, vol: 0.18*v,
+                          atk: 0.060, dec: 0.32});
+                noise(ac, {start: t, dur: 0.460, vol: 0.08*v, hp: 2500,
+                           atk: 0.060, dec: 0.36});
             }
             else if (name === 'grow') {
-                var arp = function (s, d, f1, f2, vol) {
-                    tone(ac, {start: s, dur: d, f0: f1, type: 'sine',
-                              vol: vol*v, env: 'punch', dec: d*0.55, punch: 0.55,
-                              jumpAt: 0.024, jumpToF: f2});
+                var bellArp = function (s, d, f1, f2, vol) {
+                    bell(ac, {start: s, dur: d, f: f1, modRatio: 3.5,
+                              modIndex: 2.2, modDec: 0.06, vol: vol*v,
+                              env: 'punch', punch: 0.45, dec: d*0.65,
+                              jumpAt: 0.026, jumpToF: f2});
                 };
-                arp(t,         0.080, C5, G5,    0.55);
-                arp(t + 0.080, 0.080, E5, B5,    0.58);
-                arp(t + 0.160, 0.090, G5, D5*2,  0.60);
-                [C6, E6, G6].forEach(function (f) {
-                    [+2, -2].forEach(function (det) {
-                        tone(ac, {start: t + 0.260, dur: 0.260, f0: f,
-                                  type: 'triangle', vol: 0.50*v/3,
-                                  atk: 0.006, dec: 0.20, detune: det});
-                    });
+                bellArp(t,         0.130, C5, G5,    0.42);
+                bellArp(t + 0.090, 0.140, E5, B5,    0.46);
+                bellArp(t + 0.180, 0.180, G5, D5*2,  0.50);
+                [{f:C6,vl:0.20}, {f:E6,vl:0.18}, {f:G6,vl:0.16}].forEach(function (n) {
+                    bell(ac, {start: t + 0.300, dur: 0.440, f: n.f,
+                              modRatio: 4.5, modIndex: 1.8, modDec: 0.20,
+                              vol: n.vl*v, atk: 0.006, dec: 0.34});
                 });
-                tone(ac, {start: t + 0.275, dur: 0.055, f0: C7*2, type: 'sine',
-                          vol: 0.18*v, env: 'punch', dec: 0.020, punch: 0.40});
+                tone(ac, {start: t + 0.310, dur: 0.050, f0: C7*2, type: 'sine',
+                          vol: 0.12*v, env: 'punch', dec: 0.020, punch: 0.40});
             }
         } catch (e) { console.warn('skyPlay error:', e); }
     };

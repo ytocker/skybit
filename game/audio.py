@@ -363,14 +363,95 @@ else:
                 amp *= 1.0 + am_depth * math.sin(2 * math.pi * am_hz * t)
             buf[start_i + j] += x * amp
 
-    def _render(voices, total_dur_s: float, soft_clip: bool = False) -> bytes:
+    def _voice_fm(buf, sr, total_n, start_s, dur,
+                  f_carrier, mod_ratio, mod_index_init, mod_dec_tau,
+                  vol, atk=0.0, dec=None,
+                  env="punch", punch=0.30, jump_at=None, jump_to_f=None):
+        """Two-operator FM synthesis (sine carrier ± sine modulator).
+
+        The modulator's amplitude (the FM "index") decays exponentially with
+        `mod_dec_tau`, while the carrier's amplitude has its own envelope.
+        That separation is what gives bells / glockenspiel / kalimba their
+        characteristic timbre: bright clangourous attack fading to a pure
+        sine ring. mod_ratio = 1.0 → harmonic (kalimba); mod_ratio in 3-7
+        → inharmonic (bells, gongs).
+        """
+        if dec is None:
+            dec = dur * 0.5
+        start_i = int(start_s * sr)
+        n = int(dur * sr)
+        end_i = min(start_i + n, total_n)
+        if start_i >= total_n:
+            return
+        car_phase = 0.0
+        mod_phase = 0.0
+        f_car = f_carrier
+        for j in range(end_i - start_i):
+            t = j / sr
+            if jump_at is not None and jump_to_f is not None and t >= jump_at:
+                f_car = jump_to_f
+            f_mod = f_car * mod_ratio
+            # Modulator amplitude (in Hz of carrier-frequency deviation)
+            mod_amp = mod_index_init * f_mod * math.exp(-t / max(1e-6, mod_dec_tau))
+            mod = math.sin(2 * math.pi * mod_phase) * mod_amp
+            car_phase += (f_car + mod) / sr
+            mod_phase += f_mod / sr
+            if env == "punch":
+                e = _punch_env(t, dur, dec, punch)
+            elif env == "hann":
+                e = _hann_in(t, atk) * (math.exp(-(t - atk) / max(1e-6, dec))
+                                        if t >= atk else 1.0)
+            else:
+                e = _exp_env(t, dur, atk, dec)
+            buf[start_i + j] += math.sin(2 * math.pi * car_phase) * e * vol
+
+    def _voice_pluck(buf, sr, total_n, start_s, dur, f, vol, decay_factor=0.996):
+        """Karplus-Strong plucked string. Initial buffer is white noise; each
+        sample averages two consecutive ring-buffer entries × `decay_factor`
+        and feeds back. Higher decay_factor → longer ring."""
+        start_i = int(start_s * sr)
+        n = int(dur * sr)
+        end_i = min(start_i + n, total_n)
+        if start_i >= total_n:
+            return
+        N = max(2, int(sr / max(20.0, f)))
+        # Seed with white noise (LCG)
+        state = 0xCAFEBABE ^ int(f) ^ int(start_s * 1000)
+        ring = [0.0] * N
+        for i in range(N):
+            state = (state * 1664525 + 1013904223) & 0xFFFFFFFF
+            ring[i] = (state / 0x80000000) - 1.0
+        idx = 0
+        for j in range(end_i - start_i):
+            cur = ring[idx]
+            nxt = ring[(idx + 1) % N]
+            new = decay_factor * 0.5 * (cur + nxt)
+            ring[idx] = new
+            idx = (idx + 1) % N
+            buf[start_i + j] += cur * vol
+
+    def _apply_delay_tail(buf, sr, delay_ms=120, feedback=0.30, mix=0.22):
+        """Light feedback-delay tail for shimmer / sense of space. Adds a
+        decaying echo of the dry signal back into itself in-place."""
+        d = int(delay_ms / 1000.0 * sr)
+        if d <= 0 or d >= len(buf):
+            return
+        for i in range(d, len(buf)):
+            buf[i] += mix * buf[i - d]
+            buf[i - d] *= (1.0 - feedback * 0.05)  # mild attenuation of dry tap
+
+    def _render(voices, total_dur_s: float, soft_clip: bool = False,
+                tail: bool = False) -> bytes:
         """Mix a list of voice callables into one mono 16-bit PCM buffer.
-        Each voice is `lambda buf, sr, n: ...` rendering itself into `buf`."""
+        Each voice is `lambda buf, sr, n: ...` rendering itself into `buf`.
+        `tail=True` applies a subtle feedback delay for "space"."""
         sr = SAMPLE_RATE
         n = int(total_dur_s * sr)
         buf = [0.0] * n
         for v in voices:
             v(buf, sr, n)
+        if tail:
+            _apply_delay_tail(buf, sr, delay_ms=120, feedback=0.30, mix=0.22)
         # Gentle saturation to fatten chord stacks; tanh soft-clip
         # at ~0.95 keeps headroom while pulling overdrive harmonics in.
         if soft_clip:
@@ -416,6 +497,25 @@ else:
                      atk=0.0, dec=total * 0.55, env=env, punch=punch,
                      jump_at=dur1, jump_to_f=f2)
 
+    def _bell(start, dur, f, vol, mod_ratio=4.0, mod_index=2.5,
+              mod_dec=0.10, atk=0.0, dec=None, env="punch", punch=0.30,
+              jump_at=None, jump_to_f=None):
+        """FM bell voice. mod_ratio controls timbre (1=kalimba, 4-7=bell,
+        13=metallic clang). mod_index is the initial modulation depth in
+        units of f_mod cycles. mod_dec is how fast that "bright" attack
+        fades — short → kalimba, long → temple bell."""
+        return lambda buf, sr, n: _voice_fm(
+            buf, sr, n, start, dur,
+            f_carrier=f, mod_ratio=mod_ratio,
+            mod_index_init=mod_index, mod_dec_tau=mod_dec,
+            vol=vol, atk=atk, dec=dec, env=env, punch=punch,
+            jump_at=jump_at, jump_to_f=jump_to_f)
+
+    def _pluck(start, dur, f, vol, decay_factor=0.996):
+        """Karplus-Strong plucked-string voice. Use for soft mallet/wood-tap."""
+        return lambda buf, sr, n: _voice_pluck(
+            buf, sr, n, start, dur, f, vol, decay_factor)
+
     def _chord(start, dur, freqs, shape, vol, atk=0.006, dec=None,
                detune_cents=0.0):
         """Stack of voices at given frequencies, each at vol/N."""
@@ -449,40 +549,48 @@ else:
         def _semi(f, n):
             return f * (2 ** (n / 12.0))
 
+        # ── Crystal Realm palette ──────────────────────────────────────
+        # Bell timbres are FM-synthesised: small kalimba (mod_ratio≈1.4,
+        # short index decay), bright glockenspiel/coin-bell (≈3.5),
+        # temple bell (≈4.5 with longer mod decay), low gong (≈7 with
+        # higher index, much longer mod decay). Wood mallet uses
+        # Karplus-Strong for the flap. A subtle feedback-delay tail gives
+        # hero sounds a sense of space without being "wet".
+
         def _flap_variant(seed: int, pitch_mul: float):
-            """LP-filtered noise burst + sub pop. Seed picks a different noise
-            slice; pitch shift makes consecutive flaps feel organic."""
+            """Soft wood-mallet tap: low Karplus-Strong pluck (very short
+            decay factor → wooden, dead) plus a tiny noise click. Seed
+            varies the noise burst; pitch_mul varies the pluck pitch."""
             return _render([
-                _noise(0.000, 0.055, vol=0.40, lp_hz=1100,
-                       env="punch", dec=0.025, punch=0.55, seed=seed),
-                _tone (0.000, 0.090, 170 * pitch_mul, 85 * pitch_mul,
-                       "sine", vol=0.32, env="punch", dec=0.045, punch=0.55),
-            ], total_dur_s=0.100)
+                _pluck(0.000, 0.090, 220 * pitch_mul, vol=0.55,
+                       decay_factor=0.985),
+                _noise(0.000, 0.018, vol=0.18, lp_hz=2500,
+                       env="punch", dec=0.010, punch=0.45, seed=seed),
+            ], total_dur_s=0.110)
 
         def _coin_variant(semitones: float):
-            """Mario-style perfect-4th arpeggio (B5 → E6). Single sine voice
-            with an instant pitch jump. `semitones` varies pitch per variant."""
+            """Bright kalimba bell (B5 → E6 perfect 4th). FM at mod_ratio=3.5
+            gives a glockenspiel-like timbre with the inharmonic ring that
+            pure sines can't produce. Mario arpeggio still gives the
+            instant pitch-jump that signals reward."""
             f1 = _semi(_B5, semitones)
             f2 = _semi(_E6, semitones)
             return _render([
-                _tone(0.000, 0.130, f1, f1, "sine", 0.62,
-                      env="punch", dec=0.080, punch=0.55,
-                      jump_at=0.030, jump_to_f=f2),
-                _tone(0.030, 0.040, _semi(_E6 * 4, semitones),
-                      _semi(_E6 * 4, semitones), "sine", 0.16,
+                _bell(0.000, 0.220, f1, vol=0.55,
+                      mod_ratio=3.5, mod_index=2.2, mod_dec=0.06,
+                      env="punch", punch=0.45, dec=0.16,
+                      jump_at=0.032, jump_to_f=f2),
+                # Tiny shimmer on the jump
+                _tone(0.034, 0.030, _semi(_E6 * 3, semitones),
+                      _semi(_E6 * 3, semitones), "sine", 0.10,
                       env="punch", dec=0.012, punch=0.45),
-            ], total_dur_s=0.150)
-
-        def _arp(start, f1, f2, vol, dur=0.110):
-            return [_tone(start, dur, f1, f1, "sine", vol,
-                          env="punch", dec=dur * 0.55, punch=0.55,
-                          jump_at=0.024, jump_to_f=f2)]
+            ], total_dur_s=0.250, tail=True)
 
         flap_variants = [
             _flap_variant(0xA1B2C3D4, 1.00),
-            _flap_variant(0x33445566, 1.06),
-            _flap_variant(0x77889900, 0.94),
-            _flap_variant(0x12FE34DC, 1.03),
+            _flap_variant(0x33445566, 1.05),
+            _flap_variant(0x77889900, 0.95),
+            _flap_variant(0x12FE34DC, 1.02),
         ]
         coin_variants = [
             _coin_variant( 0.0),
@@ -491,125 +599,147 @@ else:
             _coin_variant(+1.0),
         ]
 
-        # coin_combo: Mario arp one 4th up (E6 → A6)
+        # coin_combo: brighter bell, perfect 4th higher (E6 → A6)
         coin_combo = _render([
-            _tone(0.000, 0.150, _E6, _E6, "sine", 0.62,
-                  env="punch", dec=0.090, punch=0.55,
+            _bell(0.000, 0.240, _E6, vol=0.55,
+                  mod_ratio=3.5, mod_index=2.4, mod_dec=0.07,
+                  env="punch", punch=0.45, dec=0.18,
                   jump_at=0.034, jump_to_f=_A6),
-            _tone(0.034, 0.045, _A6 * 2, _A6 * 2, "sine", 0.16,
-                  env="punch", dec=0.014, punch=0.40),
-        ], total_dur_s=0.170)
+            _tone(0.038, 0.030, _A6 * 2, _A6 * 2, "sine", 0.10,
+                  env="punch", dec=0.012, punch=0.45),
+        ], total_dur_s=0.270, tail=True)
 
-        # coin_triple: three Mario arps C-E-G ascending
-        coin_triple = _render(
-            _arp(0.000, _C5, _G5,     0.55, dur=0.090) +
-            _arp(0.090, _E5, _B5,     0.58, dur=0.090) +
-            _arp(0.180, _G5, _D5 * 2, 0.62, dur=0.130) +
-            [_tone(0.205, 0.045, _C7 * 2, _C7 * 2, "sine", 0.18,
-                   env="punch", dec=0.014, punch=0.45)],
-            total_dur_s=0.330)
+        # coin_triple: three ascending bells C-E-G with sparkle on the last
+        def _bell_arp(start, f1, f2, vol, dur=0.180):
+            return _bell(start, dur, f1, vol=vol,
+                         mod_ratio=3.5, mod_index=2.2, mod_dec=0.06,
+                         env="punch", punch=0.45, dec=dur * 0.65,
+                         jump_at=0.026, jump_to_f=f2)
+        coin_triple = _render([
+            _bell_arp(0.000, _C5, _G5,     0.42, dur=0.140),
+            _bell_arp(0.090, _E5, _B5,     0.45, dur=0.150),
+            _bell_arp(0.180, _G5, _D5 * 2, 0.48, dur=0.220),
+            _tone(0.210, 0.040, _C7 * 2, _C7 * 2, "sine", 0.10,
+                  env="punch", dec=0.014, punch=0.45),
+        ], total_dur_s=0.420, tail=True)
 
-        # mushroom: fanfare arp + sustained C-major chord
-        def _mush_step(s, f):
-            return _tone(s, 0.075, f, f, "triangle", 0.50,
-                         env="punch", dec=0.045, punch=0.40)
+        # mushroom: glockenspiel chord arpeggio + sustained bell triad
         mushroom = _render([
-            _mush_step(0.000, _C5),
-            _mush_step(0.070, _E5),
-            _mush_step(0.140, _G5),
-            _mush_step(0.210, _C6),
-            *_chord(0.290, 0.260, [_C5, _E5, _G5], "triangle",
-                    vol=0.55, atk=0.006, dec=0.20, detune_cents=+2),
-            *_chord(0.290, 0.260, [_C5, _E5, _G5], "triangle",
-                    vol=0.55, atk=0.006, dec=0.20, detune_cents=-2),
-            _tone(0.300, 0.060, _C7 * 2, _C7 * 2, "sine", 0.16,
+            _bell(0.000, 0.110, _C5, 0.42, mod_ratio=3.5, mod_index=2.0,
+                  mod_dec=0.05, env="punch", punch=0.40, dec=0.080),
+            _bell(0.060, 0.110, _E5, 0.42, mod_ratio=3.5, mod_index=2.0,
+                  mod_dec=0.05, env="punch", punch=0.40, dec=0.080),
+            _bell(0.120, 0.110, _G5, 0.42, mod_ratio=3.5, mod_index=2.0,
+                  mod_dec=0.05, env="punch", punch=0.40, dec=0.080),
+            _bell(0.180, 0.140, _C6, 0.48, mod_ratio=3.5, mod_index=2.0,
+                  mod_dec=0.05, env="punch", punch=0.45, dec=0.10),
+            # Sustained warm bell triad on top (per-voice ÷3 so the chord sums to ≈ vol)
+            _bell(0.260, 0.420, _C5, 0.20, mod_ratio=4.5, mod_index=1.8,
+                  mod_dec=0.18, env="exp", atk=0.006, dec=0.32),
+            _bell(0.260, 0.420, _E5, 0.18, mod_ratio=4.5, mod_index=1.8,
+                  mod_dec=0.18, env="exp", atk=0.006, dec=0.32),
+            _bell(0.260, 0.420, _G5, 0.16, mod_ratio=4.5, mod_index=1.8,
+                  mod_dec=0.18, env="exp", atk=0.006, dec=0.32),
+            _tone(0.270, 0.050, _C7 * 2, _C7 * 2, "sine", 0.10,
                   env="punch", dec=0.020, punch=0.40),
-        ], total_dur_s=0.580)
+        ], total_dur_s=0.720, tail=True)
 
-        # magnet: ascending chime + tremolo + high tinkle
+        # magnet: rising bell glissando — single bell with pitch sweep
+        # plus a high tinkle on top.
         magnet = _render([
-            _tone(0.000, 0.220, _A4, _A5, "triangle", 0.45,
-                  env="punch", dec=0.150, punch=0.40,
-                  tremolo_hz=10, tremolo_depth=0.18),
-            _tone(0.110, 0.060, _A6, _A6, "sine", 0.18,
-                  env="punch", dec=0.025, punch=0.30),
-        ], total_dur_s=0.260)
+            _bell(0.000, 0.260, _A4, 0.50, mod_ratio=3.5, mod_index=2.4,
+                  mod_dec=0.10, env="punch", punch=0.40, dec=0.18,
+                  jump_at=0.110, jump_to_f=_A5),
+            _bell(0.110, 0.080, _A6, 0.22, mod_ratio=3.5, mod_index=1.6,
+                  mod_dec=0.04, env="punch", punch=0.30, dec=0.05),
+        ], total_dur_s=0.300, tail=True)
 
-        # slowmo: descending sweep + sub octave pad
+        # slowmo: descending bell with longer mod decay (more gong-like)
+        # and a soft sub pad underneath.
         slowmo = _render([
-            _tone(0.000, 0.300, _A5, _A4, "triangle", 0.50,
-                  env="exp", atk=0.005, dec=0.22),
-            _tone(0.000, 0.380, _A4 * 0.5, _A4 * 0.5, "sine", 0.22,
-                  env="hann", atk=0.040, dec=0.30),
-        ], total_dur_s=0.420)
+            _bell(0.000, 0.380, _A5, 0.50, mod_ratio=4.5, mod_index=2.5,
+                  mod_dec=0.20, env="punch", punch=0.30, dec=0.30,
+                  jump_at=0.180, jump_to_f=_A4),
+            _tone(0.000, 0.450, _A4 * 0.5, _A4 * 0.5, "sine", 0.22,
+                  env="hann", atk=0.040, dec=0.34),
+        ], total_dur_s=0.500, tail=True)
 
-        # thunder: LP-filtered noise rumble with AM wobble + sub
+        # thunder: low gong (FM with high mod ratio, very long mod decay)
+        # plus filtered-noise rumble + sub.
         thunder = _render([
-            _noise(0.000, 0.700, vol=0.55, lp_hz=110,
+            _bell(0.000, 0.700, 80, 0.45, mod_ratio=7.0, mod_index=3.5,
+                  mod_dec=0.40, env="exp", atk=0.030, dec=0.55),
+            _noise(0.000, 0.700, vol=0.30, lp_hz=140,
                    env="exp", atk=0.040, dec=0.55,
                    am_hz=3.2, am_depth=0.40, seed=0xBEEF1234),
-            _tone (0.000, 0.700, 48, 36, "sine", 0.32,
-                   env="exp", atk=0.040, dec=0.55),
+            _tone(0.000, 0.700, 42, 32, "sine", 0.28,
+                  env="exp", atk=0.040, dec=0.55),
         ], total_dur_s=0.760)
 
-        # death: low whomp
+        # death: low gong impact + sub-bass thud
         death = _render([
-            _noise(0.000, 0.070, vol=0.40, lp_hz=1200,
-                   env="punch", dec=0.040, punch=0.50),
-            _tone (0.000, 0.260, 220, 60, "sine", 0.50,
-                   env="punch", dec=0.18, punch=0.30),
-            _tone (0.080, 0.220, 80, 40, "sine", 0.40,
-                   env="exp", atk=0.005, dec=0.16),
-        ], total_dur_s=0.350)
+            _bell(0.000, 0.450, 110, 0.42, mod_ratio=7.0, mod_index=4.0,
+                  mod_dec=0.16, env="punch", punch=0.50, dec=0.32),
+            _tone(0.000, 0.300, 80, 40, "sine", 0.32,
+                  env="punch", dec=0.20, punch=0.40),
+            _noise(0.000, 0.060, vol=0.20, lp_hz=900,
+                   env="punch", dec=0.030, punch=0.45),
+        ], total_dur_s=0.500, tail=True)
 
-        # gameover: descending steps + sustained D-minor chord
-        def _go(s, f):
-            return _tone(s, 0.130, f, f, "triangle", 0.45,
-                         env="punch", dec=0.080, punch=0.30)
+        # gameover: sad bell descent + sustained bell triad in D minor
         gameover = _render([
-            _go(0.000, _C5),
-            _go(0.140, _A4),
-            _go(0.280, _semi(_A4, -3)),  # F4
-            *_chord(0.420, 0.320,
-                    [_semi(_A4, -7), _semi(_A4, -3), _A4],
-                    "triangle", vol=0.50, atk=0.006, dec=0.24, detune_cents=+2),
-            *_chord(0.420, 0.320,
-                    [_semi(_A4, -7), _semi(_A4, -3), _A4],
-                    "triangle", vol=0.50, atk=0.006, dec=0.24, detune_cents=-2),
-        ], total_dur_s=0.760)
+            _bell(0.000, 0.180, _C5, 0.45, mod_ratio=3.5, mod_index=2.0,
+                  mod_dec=0.08, env="punch", punch=0.30, dec=0.13),
+            _bell(0.180, 0.180, _A4, 0.45, mod_ratio=3.5, mod_index=2.0,
+                  mod_dec=0.08, env="punch", punch=0.30, dec=0.13),
+            _bell(0.360, 0.200, _semi(_A4, -3), 0.45, mod_ratio=3.5,
+                  mod_index=2.0, mod_dec=0.08, env="punch", punch=0.30, dec=0.14),
+            # Sustained D-minor triad with warm bell timbre
+            _bell(0.520, 0.460, _semi(_A4, -7), 0.30,
+                  mod_ratio=4.5, mod_index=1.8, mod_dec=0.20,
+                  env="exp", atk=0.006, dec=0.36),
+            _bell(0.520, 0.460, _semi(_A4, -3), 0.28,
+                  mod_ratio=4.5, mod_index=1.8, mod_dec=0.20,
+                  env="exp", atk=0.006, dec=0.36),
+            _bell(0.520, 0.460, _A4, 0.26,
+                  mod_ratio=4.5, mod_index=1.8, mod_dec=0.20,
+                  env="exp", atk=0.006, dec=0.36),
+        ], total_dur_s=1.020, tail=True)
 
-        # poof: cartoon puff
+        # poof: woody mallet + downward bell pitch (cartoonish but on-theme)
         poof = _render([
-            _noise(0.000, 0.055, vol=0.50, lp_hz=900,
-                   env="punch", dec=0.030, punch=0.55),
-            _tone (0.010, 0.140, 480, 180, "triangle", 0.46,
-                   env="punch", dec=0.090, punch=0.35),
-            _tone (0.020, 0.120, 110, 60, "sine", 0.30,
-                   env="exp", atk=0.003, dec=0.080),
-        ], total_dur_s=0.180)
+            _pluck(0.000, 0.060, 320, vol=0.55, decay_factor=0.985),
+            _bell(0.010, 0.180, 480, 0.40, mod_ratio=3.0, mod_index=2.0,
+                  mod_dec=0.08, env="punch", punch=0.40, dec=0.12,
+                  jump_at=0.060, jump_to_f=180),
+            _tone(0.020, 0.120, 100, 55, "sine", 0.28,
+                  env="exp", atk=0.003, dec=0.080),
+        ], total_dur_s=0.220)
 
-        # ghost: ethereal swish
+        # ghost: ethereal high bell with slow vibrato + airy noise wash
         ghost = _render([
-            _tone(0.000, 0.380, 700, 900, "sine", 0.34,
-                  env="hann", atk=0.050, dec=0.30,
-                  vibrato_hz=4.5, vibrato_depth=0.045),
-            _noise(0.000, 0.380, vol=0.10, hp_hz=2500,
-                   env="hann", atk=0.060, dec=0.30),
-        ], total_dur_s=0.420)
+            _bell(0.000, 0.460, 900, 0.32, mod_ratio=4.5, mod_index=1.8,
+                  mod_dec=0.18, env="hann", atk=0.050, dec=0.36),
+            _bell(0.020, 0.420, 1350, 0.18, mod_ratio=4.5, mod_index=1.5,
+                  mod_dec=0.16, env="hann", atk=0.060, dec=0.32),
+            _noise(0.000, 0.460, vol=0.08, hp_hz=2500,
+                   env="hann", atk=0.060, dec=0.36),
+        ], total_dur_s=0.500, tail=True)
 
-        # grow: Mario arp ladder + sustained C-major chord + sparkle
-        grow = _render(
-            _arp(0.000, _C5, _G5,     0.55, dur=0.080) +
-            _arp(0.080, _E5, _B5,     0.58, dur=0.080) +
-            _arp(0.160, _G5, _D5 * 2, 0.60, dur=0.090) +
-            [
-                *_chord(0.260, 0.260, [_C6, _E6, _G6], "triangle",
-                        vol=0.50, atk=0.006, dec=0.20, detune_cents=+2),
-                *_chord(0.260, 0.260, [_C6, _E6, _G6], "triangle",
-                        vol=0.50, atk=0.006, dec=0.20, detune_cents=-2),
-                _tone(0.275, 0.055, _C7 * 2, _C7 * 2, "sine", 0.18,
-                      env="punch", dec=0.020, punch=0.40),
-            ], total_dur_s=0.560)
+        # grow: ascending bell ladder ending in a sustained bell chord
+        grow = _render([
+            _bell_arp(0.000, _C5, _G5,     0.42, dur=0.130),
+            _bell_arp(0.090, _E5, _B5,     0.46, dur=0.140),
+            _bell_arp(0.180, _G5, _D5 * 2, 0.50, dur=0.180),
+            _bell(0.300, 0.440, _C6, 0.20, mod_ratio=4.5, mod_index=1.8,
+                  mod_dec=0.20, env="exp", atk=0.006, dec=0.34),
+            _bell(0.300, 0.440, _E6, 0.18, mod_ratio=4.5, mod_index=1.8,
+                  mod_dec=0.20, env="exp", atk=0.006, dec=0.34),
+            _bell(0.300, 0.440, _G6, 0.16, mod_ratio=4.5, mod_index=1.8,
+                  mod_dec=0.20, env="exp", atk=0.006, dec=0.34),
+            _tone(0.310, 0.050, _C7 * 2, _C7 * 2, "sine", 0.12,
+                  env="punch", dec=0.020, punch=0.40),
+        ], total_dur_s=0.760, tail=True)
 
         return {
             "flap":        flap_variants,
