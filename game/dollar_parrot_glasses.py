@@ -33,7 +33,7 @@ from game.dollar_variants import BILL_GREEN, BILL_GREEN_DK, BILL_GREEN_LT
 
 _FONT_PATH = str(pathlib.Path(__file__).parent / "assets" / "LiberationSans-Bold.ttf")
 _font_cache: dict = {}
-_R = 9   # lens radius for all variants
+_R = 8   # lens radius for all variants
 
 
 def _gfont(size):
@@ -68,8 +68,11 @@ def _frame_highlight(surf, lc, r, color):
 
 
 def _lenses(cx, cy):
-    """Return (L, R) lens centres. Positioned so all beak verts are outside."""
-    return (cx - 13, cy - 8), (cx + 6, cy - 8)
+    """Right-lens bottom rests just above the beak attachment line (y=21).
+    Right lens centre at (53,13) places its right edge at x=61 — covering
+    the eye area — while keeping all four beak vertices safely outside.
+    Glasses sit on the bridge of the beak like real spectacles."""
+    return (cx - 14, cy - 6), (cx + 3, cy - 7)
 
 
 def _bridge_and_brow(surf, L, R, r, frame_color, brow_color):
