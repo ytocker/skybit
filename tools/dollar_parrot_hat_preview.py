@@ -1,10 +1,11 @@
-"""Render 5 separate review images, one per dollar-glasses variant.
+"""Render 5 separate review images, one per dollar-hat parrot variant.
 
-Each file shows the parrot at level-wing pose at 5× scale on a navy
-backdrop. Writes docs/dollar_parrot_<name>.png. Review-only.
+Each file shows the normal parrot (with original aviator sunglasses) plus
+a large golden magician hat with a `$` on top. Writes
+docs/dollar_parrot_hat_<slug>.png at 5x scale on a navy backdrop.
 
 Run:
-    python tools/dollar_parrot_preview.py
+    python tools/dollar_parrot_hat_preview.py
 """
 import os
 import pathlib
@@ -19,12 +20,12 @@ import pygame
 pygame.init()
 pygame.display.set_mode((1, 1))
 
-from game.dollar_parrot_glasses import VARIANTS, build_dollar_frames
+from game.dollar_parrot_hat import VARIANTS, build_hat_frames
 from game.draw import UI_GOLD, UI_CREAM, NEAR_BLACK, lerp_color
 
 OUT_DIR = pathlib.Path(__file__).parent.parent / "docs"
 SCALE   = 5
-WING_IDX = 2          # level wing — clearest view of the glasses
+WING_IDX = 2          # level wing — clearest, calmest pose for review
 PAD     = 24
 
 
@@ -43,8 +44,8 @@ def _draw_centered(surf, text, center, size, color):
     surf.blit(img, r.topleft)
 
 
-def render_variant(name: str, glasses_fn) -> pygame.Surface:
-    frames = build_dollar_frames(glasses_fn)
+def render_variant(name: str, hat_fn) -> pygame.Surface:
+    frames = build_hat_frames(hat_fn)
     native = frames[WING_IDX]
     nw, nh = native.get_size()
     big    = pygame.transform.scale(native, (nw * SCALE, nh * SCALE))
@@ -69,8 +70,8 @@ def main():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     for name, fn in VARIANTS:
         surf = render_variant(name, fn)
-        slug = name.lower().replace(" ", "_").replace("$", "dollar")
-        out  = OUT_DIR / f"dollar_parrot_{slug}.png"
+        slug = name.lower().replace(" ", "_")
+        out  = OUT_DIR / f"dollar_parrot_hat_{slug}.png"
         pygame.image.save(surf, out)
         print(f"wrote {out}")
 
