@@ -23,13 +23,9 @@ from game.dollar_variants import BILL_GREEN, BILL_GREEN_DK
 # ── shared coin body ────────────────────────────────────────────────────────
 
 def _draw_coin_disc(surf, cx, cy):
-    """Identical disc for every variant: drop shadow → dark rim → gold fill
-    → warm inner ring → specular pinprick. Only the `$` overlay differs."""
+    """Identical disc for every variant: dark rim → gold fill → warm inner
+    ring → specular pinprick. Only the `$` overlay differs."""
     r = MUSHROOM_R
-    sh = pygame.Surface((r * 2 + 6, 8), pygame.SRCALPHA)
-    pygame.draw.ellipse(sh, (0, 0, 0, 130), sh.get_rect())
-    surf.blit(sh, (cx - r - 3, cy + r - 3))
-
     pygame.draw.circle(surf, COIN_DARK, (cx, cy), r + 1)
     pygame.draw.circle(surf, COIN_GOLD, (cx, cy), r)
     pygame.draw.circle(surf, (255, 235, 110), (cx, cy), r - 3, 1)

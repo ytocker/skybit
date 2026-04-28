@@ -299,16 +299,8 @@ class PowerUp:
         rounded_rect(surf, stem, 5, MUSH_STEM, 255)
         pygame.draw.line(surf, (255, 255, 230), (cx - 4, cy + 2), (cx - 4, cy + 11), 2)
         pygame.draw.line(surf, (200, 180, 145), (cx + 3, cy + 2), (cx + 3, cy + 11), 1)
-        # Stem base shadow
-        sh = pygame.Surface((16, 4), pygame.SRCALPHA)
-        pygame.draw.ellipse(sh, (0, 0, 0, 120), sh.get_rect())
-        surf.blit(sh, (cx - 8, cy + 11))
 
-        # Cap shadow (under)
         cap_rect = pygame.Rect(cx - MUSHROOM_R - 1, cy - MUSHROOM_R + 2, (MUSHROOM_R + 1) * 2, MUSHROOM_R + 5)
-        sh = pygame.Surface((cap_rect.width + 8, 8), pygame.SRCALPHA)
-        pygame.draw.ellipse(sh, (0, 0, 0, 130), sh.get_rect())
-        surf.blit(sh, (cap_rect.x - 4, cy - 2))
 
         # Cap base (deep crimson outline) then vivid red
         pygame.draw.ellipse(surf, (130, 10, 20), cap_rect.inflate(2, 2))
@@ -337,11 +329,6 @@ class PowerUp:
         inner_r = 6
         arch_cy = cy - 3
         leg_bot = cy + 12
-
-        # Drop shadow
-        sh = pygame.Surface((outer_r * 3, 8), pygame.SRCALPHA)
-        pygame.draw.ellipse(sh, (0, 0, 0, 130), sh.get_rect())
-        surf.blit(sh, (cx - outer_r - outer_r // 2, leg_bot + 4))
 
         # Build the horseshoe on an SRCALPHA scratch surface so the hollow
         # can be punched cleanly with alpha=0 overdraw.
@@ -416,12 +403,6 @@ class PowerUp:
         cy = int(self.y + math.sin(self.pulse * 0.7) * 3)
         R = MUSHROOM_R  # 14
 
-        # Drop shadow
-        sh_w = R * 2 + 6
-        sh = pygame.Surface((sh_w, 8), pygame.SRCALPHA)
-        pygame.draw.ellipse(sh, (0, 0, 0, 75), sh.get_rect())
-        surf.blit(sh, (cx - sh_w // 2, cy + R + 2))
-
         # Clock face on scratch SRCALPHA surface for clean edges
         PAD = 2
         D = (R + PAD) * 2
@@ -487,12 +468,6 @@ class PowerUp:
         cy = int(self.y + math.sin(self.pulse * 0.9) * 2.5)
         r  = MUSHROOM_R + 2
 
-        # Drop shadow
-        sh_w = int(r * 2.8)
-        sh = pygame.Surface((sh_w, 8), pygame.SRCALPHA)
-        pygame.draw.ellipse(sh, (0, 0, 0, 80), sh.get_rect())
-        surf.blit(sh, (cx - sh_w // 2, cy + r + 2))
-
         # KFC logo (real image, pre-scaled & circle-clipped)
         logo = _get_kfc_sprite()
         surf.blit(logo, (cx - logo.get_width() // 2, cy - logo.get_height() // 2))
@@ -508,11 +483,6 @@ class PowerUp:
         EYE_W    = (252, 254, 255, 255)
         EYE_IRIS = (50,  110, 220, 255)
         EYE_PUP  = (12,  18,  60,  255)
-
-        # Drop shadow
-        sh = pygame.Surface((32, 7), pygame.SRCALPHA)
-        pygame.draw.ellipse(sh, (0, 0, 0, 70), sh.get_rect())
-        surf.blit(sh, (cx - 16, cy + 19))
 
         # ── Classic ghost silhouette on scratch SRCALPHA surface ──────────────
         # 28 × 36 px sprite; head centre at local (14, 12).
