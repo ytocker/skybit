@@ -358,3 +358,30 @@ def get_ghost_parrot(frame_idx: int, tilt_deg: float) -> pygame.Surface:
         s = pygame.transform.rotozoom(GHOST_FRAMES[frame_idx], key[1], 1.0)
         _ghost_cache[key] = s
     return s
+
+
+# ── Triple-buff hat variant ───────────────────────────────────────────────────
+# Lazily built on first use to avoid a circular import (dollar_parrot_hat
+# imports from parrot for the body sprite).
+_hat_frames: "list | None" = None
+_hat_cache: dict = {}
+
+
+def _ensure_hat_frames():
+    global _hat_frames
+    if _hat_frames is None:
+        from game.dollar_parrot_hat import build_hat_frames, draw_stovepipe
+        _hat_frames = build_hat_frames(draw_stovepipe)
+    return _hat_frames
+
+
+def get_hat_parrot(frame_idx: int, tilt_deg: float) -> pygame.Surface:
+    """Return rotated stovepipe-hatted parrot, cached by (frame, rounded-angle)."""
+    frames = _ensure_hat_frames()
+    frame_idx = frame_idx % len(frames)
+    key = (frame_idx, int(round(tilt_deg / 3.0)) * 3)
+    s = _hat_cache.get(key)
+    if s is None:
+        s = pygame.transform.rotozoom(frames[frame_idx], key[1], 1.0)
+        _hat_cache[key] = s
+    return s

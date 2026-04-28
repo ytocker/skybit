@@ -23,12 +23,15 @@ from game.draw import COIN_GOLD, COIN_DARK, WHITE, NEAR_BLACK
 from game.dollar_variants import BILL_GREEN, BILL_GREEN_DK
 
 # ── canvas ───────────────────────────────────────────────────────────────────
-# Composite is taller than the in-game sprite so a tall magician hat fits.
+# Composite is tall enough for a magician hat AND keeps the parrot centred
+# vertically (parrot at composite-y 20..80, with 20 px hat space above and
+# 20 px empty space below). Centring the parrot means rotation in
+# get_hat_parrot can re-use the existing center-blit pattern in Bird.draw.
 COMPOSITE_W = SPRITE_W           # 64
-COMPOSITE_H = 80
-PARROT_DY   = COMPOSITE_H - SPRITE_H   # 20 — parrot blitted with this top-pad
-HAT_HX      = 47                       # head centre x (matches parrot._build_frame)
-HAT_HY      = 10 + PARROT_DY           # 30 — composite y of the head crown
+COMPOSITE_H = 100                # parrot center stays at composite center (50)
+PARROT_DY   = 20                 # parrot blitted at composite (0, 20)
+HAT_HX      = 47                 # head centre x (matches parrot._build_frame)
+HAT_HY      = 10 + PARROT_DY     # 30 — composite y of the head crown
 
 # ── palette ──────────────────────────────────────────────────────────────────
 GOLD_DK   = (160, 100,  20)

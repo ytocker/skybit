@@ -366,6 +366,7 @@ class World:
             # timers (real time, not scaled — the buffs shouldn't self-extend).
             if self.triple_timer > 0:
                 self.triple_timer = max(0.0, self.triple_timer - dt)
+            self.bird.triple_active = self.triple_timer > 0
             if self.magnet_timer > 0:
                 self.magnet_timer = max(0.0, self.magnet_timer - dt)
             if self.slowmo_timer > 0:

@@ -97,6 +97,7 @@ class Bird:
         self.kfc_active = False
         self.ghost_active = False
         self.grow_active = False
+        self.triple_active = False
 
     @property
     def tilt_deg(self):
@@ -128,6 +129,8 @@ class Bird:
             img = parrot.get_fried_parrot(frame_idx, self.tilt_deg)
         elif self.ghost_active:
             img = parrot.get_ghost_parrot(frame_idx, self.tilt_deg)
+        elif self.triple_active:
+            img = parrot.get_hat_parrot(frame_idx, self.tilt_deg)
         else:
             img = parrot.get_parrot(frame_idx, self.tilt_deg)
         if self.grow_active:
