@@ -206,8 +206,8 @@ class App:
         elif self.state == STATE_STATS:
             self.world.update(dt)  # let particles/weather keep going behind
             self._stats_t += dt
-            if self._stats_t >= 4.5:
-                self._advance_past_stats()
+            # No auto-advance — the screen stays until the player taps
+            # (handled in _flap_input).
         elif self.state == STATE_NAMEENTRY:
             self.world.update(dt)  # keep world alive behind JS overlay
         elif self.state == STATE_LEADERBOARD:

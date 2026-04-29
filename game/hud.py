@@ -446,25 +446,9 @@ class HUD:
         pygame.draw.rect(hi_pill, (*_PANEL_DARK, 210), (0, 0, 96, 36), border_radius=10)
         pygame.draw.rect(hi_pill, (*_ORANGE_BORDER, 80), (0, 0, 96, 36),
                          border_radius=10, width=1)
-        # Star icon
-        cx, cy = 18, 18
-        for i in range(5):
-            ang = math.pi / 2 + i * 4 * math.pi / 5
-            ang2 = ang + 2 * math.pi / 5
-            r1, r2 = 8, 4
-            x1 = cx + math.cos(ang)  * r1
-            y1 = cy - math.sin(ang)  * r1
-            x2 = cx + math.cos(ang2) * r2
-            y2 = cy - math.sin(ang2) * r2
-            if i == 0:
-                pts = [(x1, y1)]
-            else:
-                pts += [(x2, y2), (x1, y1)]
-        pts += [(cx + math.cos(math.pi / 2 + j * 4 * math.pi / 5) * [8, 4][j % 2],
-                 cy - math.sin(math.pi / 2 + j * 4 * math.pi / 5) * [8, 4][j % 2])
-                for j in range(1)]
-        pygame.draw.circle(hi_pill, _GOLD_BRIGHT, (cx, cy), 7)
-        pygame.draw.circle(hi_pill, _PANEL_DARK, (cx, cy), 4)
+        # Trophy icon — same procedural gold trophy used elsewhere in the
+        # leaderboard / theme; replaces the previous star-stub emblem.
+        _draw_trophy(hi_pill, 18, 18, 8)
         bf = _font(11, False)
         bl = bf.render("BEST", True, _GOLD_MUTED)
         hi_pill.blit(bl, bl.get_rect(center=(60, 11)))
@@ -595,11 +579,18 @@ class HUD:
 
     def draw_stats(self, surf, world, dt, elapsed):
         self.title_t += dt
-        dim = pygame.Surface((W, H), pygame.SRCALPHA)
-        dim.fill((6, 1, 21, 190))
-        surf.blit(dim, (0, 0))
 
-        _draw_overlay_stars(surf, self._stars, self.title_t)
+        # Red gradient backdrop matching the welcome-screen button palette —
+        # the stats / run-summary screen now uses the brand red as its
+        # primary background tone, with gold / yellow text on top.
+        bg = pygame.Surface((W, H))
+        for y in range(H):
+            t = y / max(1, H - 1)
+            c = lerp_color(_BTN_TOP, _BTN_BOT, t)
+            pygame.draw.line(bg, c, (0, y), (W - 1, y))
+        surf.blit(bg, (0, 0))
+        # Soft top-edge orange accent to lift the gradient
+        pygame.draw.line(surf, _ORANGE_BORDER, (0, 0), (W - 1, 0), 2)
 
         # Slide-in animation from below
         slide_t = max(0.0, min(1.0, elapsed / 0.35))
@@ -610,12 +601,14 @@ class HUD:
         _outlined_text(surf, "RUN SUMMARY", (W // 2, card_y + 4),
                         size=24, px=2, shadow_offset=(2, 3))
 
-        # Score block
+        # Score block — deep maroon panel keeps text legible on the red bg.
         score_panel = pygame.Rect(W // 2 - 80, card_y + 28, 160, 68)
-        _dark_panel(surf, score_panel, radius=16, alpha=200)
+        rounded_rect(surf, score_panel, 16, (60, 14, 4), 220)
+        pygame.draw.rect(surf, _ORANGE_BORDER, score_panel,
+                         width=2, border_radius=16)
         lf = _font(12, False)
-        lbl = lf.render("S C O R E", True, _GOLD_MUTED)
-        lbl.set_alpha(180)
+        lbl = lf.render("S C O R E", True, _GOLD_BRIGHT)
+        lbl.set_alpha(220)
         surf.blit(lbl, lbl.get_rect(center=(W // 2, card_y + 44)))
         sf = _font(42, True)
         sc = sf.render(str(world.score), True, _GOLD_BRIGHT)
@@ -638,7 +631,9 @@ class HUD:
 
         row_h = 32
         card_rect = pygame.Rect(18, card_y + 114, W - 36, len(rows) * row_h + 20)
-        _dark_panel(surf, card_rect, radius=16, alpha=210)
+        rounded_rect(surf, card_rect, 16, (60, 14, 4), 220)
+        pygame.draw.rect(surf, _ORANGE_BORDER, card_rect,
+                         width=2, border_radius=16)
 
         f_key = _font(15, False)
         f_val = _font(17, True)
@@ -646,9 +641,10 @@ class HUD:
         for i, (label, value) in enumerate(rows):
             if i > 0:
                 div = pygame.Surface((card_rect.width - 24, 1), pygame.SRCALPHA)
-                div.fill((*_ORANGE_BORDER, 35))
+                div.fill((*_ORANGE_BORDER, 80))
                 surf.blit(div, (card_rect.x + 12, ry - 4))
-            k = f_key.render(label.upper(), True, _GOLD_MUTED)
+            k = f_key.render(label.upper(), True, _GOLD_BRIGHT)
+            k.set_alpha(210)
             v = f_val.render(value, True, _GOLD_BRIGHT)
             surf.blit(k, (card_rect.x + 16, ry))
             vr = v.get_rect()
@@ -656,11 +652,20 @@ class HUD:
             surf.blit(v, vr.topleft)
             ry += row_h
 
+        # Tap-to-continue prompt — gold pulsing text (no white pill button,
+        # so every word on this screen is yellow per the theme).
         if elapsed >= 0.6:
-            alpha = max(60, min(220, int(130 + math.sin(self.title_t * 4) * 85)))
-            _pill_btn(surf, (W // 2, H - 48), "TAP TO CONTINUE", size=17, alpha=alpha)
-
-        _draw_mountain_silhouette(surf, alpha=160)
+            alpha = max(80, min(255, int(150 + math.sin(self.title_t * 4) * 90)))
+            tf = _font(18, True)
+            t_img = tf.render("TAP TO CONTINUE", True, _GOLD_BRIGHT)
+            t_img.set_alpha(alpha)
+            r = t_img.get_rect(center=(W // 2, H - 50))
+            # Subtle dark-red outline so it pops on the gradient
+            for dx, dy in ((-2, 0), (2, 0), (0, -2), (0, 2)):
+                ot = tf.render("TAP TO CONTINUE", True, _RED_OUTLINE)
+                ot.set_alpha(alpha)
+                surf.blit(ot, (r.x + dx, r.y + dy))
+            surf.blit(t_img, r.topleft)
 
     def draw_gameover(self, surf, dt, score: int, new_best: bool):
         self.title_t += dt
