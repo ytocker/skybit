@@ -12,6 +12,7 @@ from game.draw import (
     WHITE, NEAR_BLACK,
 )
 from game import parrot
+from game.dollar_coin_glyphs import draw_coin_font_bold as _draw_dollar_coin_hud
 
 _grow_parrot_hud: "pygame.Surface | None" = None
 
@@ -290,40 +291,13 @@ def _draw_buff_icon(surf, rect, kind):
             pygame.draw.circle(mg, (50, 110, 220, 255),  (ex + 1, gcy), 2)
         surf.blit(mg, (cx - gcx, cy - gcy - 2))
     elif kind == "triple":
-        # Parrot in front of a tall green up-arrow backdrop (boost-feel for 3X coins).
-        GREEN_HI  = ( 50, 220, 100)
-        GREEN_OUT = ( 28, 160,  70)
-
-        head_w  = 13
-        shaft_w = 5
-        total_h = 19
-        head_h  = int(total_h * 0.42)
-        top_y    = cy - total_h // 2
-        head_bot = top_y + head_h
-        bot_y    = cy + total_h // 2
-        pts_out = [
-            (cx,                  top_y),
-            (cx + head_w // 2,    head_bot),
-            (cx + shaft_w // 2,   head_bot),
-            (cx + shaft_w // 2,   bot_y),
-            (cx - shaft_w // 2,   bot_y),
-            (cx - shaft_w // 2,   head_bot),
-            (cx - head_w // 2,    head_bot),
-        ]
-        pygame.draw.polygon(surf, GREEN_OUT, pts_out)
-        pts_in = [
-            (cx,                      top_y + 1),
-            (cx + head_w // 2 - 1,    head_bot - 1),
-            (cx + shaft_w // 2 - 1,   head_bot - 1),
-            (cx + shaft_w // 2 - 1,   bot_y - 1),
-            (cx - shaft_w // 2 + 1,   bot_y - 1),
-            (cx - shaft_w // 2 + 1,   head_bot - 1),
-            (cx - head_w // 2 + 1,    head_bot - 1),
-        ]
-        pygame.draw.polygon(surf, GREEN_HI, pts_in)
-
-        bird = _get_grow_parrot_hud()
-        surf.blit(bird, (cx - bird.get_width() // 2, cy - bird.get_height() // 2))
+        # Gold coin with $ glyph — matches the in-world triple power-up icon.
+        from game.config import MUSHROOM_R
+        native = MUSHROOM_R * 2
+        icon = pygame.Surface((native, native), pygame.SRCALPHA)
+        _draw_dollar_coin_hud(icon, native // 2, native // 2, pulse=0.0)
+        scaled = pygame.transform.smoothscale(icon, (20, 20))
+        surf.blit(scaled, (cx - 10, cy - 10))
 
 
 class PauseButton:
@@ -521,46 +495,14 @@ class HUD:
                               lr.y - 9))
             surf.blit(label, lr.topleft)
 
-        # Mushroom (3x-coin) timer bar — depletes gold → orange → red so the
-        # urgency is obvious at a glance. Pulses in the last two seconds.
-        if world.triple_timer > 0:
-            frac = world.triple_timer / TRIPLE_DURATION
-            bw = 168
-            bx = (W - bw) // 2
-            by = 128
-            # Label above the track
-            label_col = UI_RED if frac < 0.25 else UI_ORANGE
-            _text(surf, f"3X POWER  {world.triple_timer:.1f}s",
-                  (W // 2, by - 10), size=13, color=label_col, shadow=True)
-            # Track
-            track_rect = pygame.Rect(bx - 2, by, bw + 4, 12)
-            rounded_rect(surf, track_rect, 6, (20, 25, 50), 200)
-            # Fill — color lerps with remaining time, pulses when critical
-            if frac > 0.5:
-                fill_lo = UI_ORANGE
-                fill_hi = UI_GOLD
-            elif frac > 0.25:
-                t = (frac - 0.25) / 0.25
-                fill_lo = lerp_color(UI_RED, UI_ORANGE, t)
-                fill_hi = lerp_color(UI_ORANGE, UI_GOLD, t)
-            else:
-                fill_lo = (180, 20, 20)
-                fill_hi = UI_RED
-            fill = pygame.Rect(bx, by + 2, int(bw * frac), 8)
-            if fill.width > 0:
-                rounded_rect_grad(surf, fill, 4, fill_hi, fill_lo)
-            # Low-time pulse ring
-            if frac < 0.25:
-                pulse = 0.5 + 0.5 * math.sin(self.title_t * 14)
-                ring_a = int(140 * pulse)
-                ring = pygame.Surface((bw + 10, 18), pygame.SRCALPHA)
-                pygame.draw.rect(ring, (*UI_RED, ring_a), ring.get_rect(),
-                                 border_radius=8, width=2)
-                surf.blit(ring, (bx - 5, by - 3))
-
-        # Active-buff strip (magnet + slowmo badges). Triple has its own
-        # bigger timer bar above, so we don't duplicate it here.
+        # Active-buff timer bars — every active power-up gets its own
+        # progress bar at the top of the screen with the buff's logo on the
+        # left. Stacks vertically when multiple are active. Each bar uses
+        # the same gold → orange → red gradient as time depletes, and the
+        # whole row pulses with a red ring in the final 25 % of duration.
         active = []
+        if world.triple_timer > 0:
+            active.append(("triple", world.triple_timer, TRIPLE_DURATION))
         if world.magnet_timer > 0:
             active.append(("magnet", world.magnet_timer, MAGNET_DURATION))
         if world.slowmo_timer > 0:
@@ -571,25 +513,56 @@ class HUD:
             active.append(("ghost", world.ghost_timer, GHOST_DURATION))
         if world.grow_timer > 0:
             active.append(("grow", world.grow_timer, GROW_DURATION))
+
         if active:
-            slot_w, slot_h = 28, 32
-            gap = 6
-            strip_w = len(active) * slot_w + (len(active) - 1) * gap
-            sx = (W - strip_w) // 2
-            sy = H - 108
+            icon_size = 24
+            bar_w     = 132
+            bar_h     = 12
+            row_gap   = 6
+            row_pitch = max(icon_size, bar_h) + row_gap
+            row_w     = icon_size + 6 + bar_w
+            base_x    = (W - row_w) // 2
+            top_y     = 128
+
             for i, (kind, remain, total) in enumerate(active):
-                r = pygame.Rect(sx + i * (slot_w + gap), sy, slot_w, slot_h)
-                rounded_rect(surf, r, 6, (15, 25, 60), 190)
-                _draw_buff_icon(surf, r.inflate(-6, -14).move(0, -2), kind)
-                if remain is not None and total:
-                    frac = max(0.0, min(1.0, remain / total))
-                    bar_rect = pygame.Rect(r.x + 3, r.bottom - 6, r.width - 6, 3)
-                    pygame.draw.rect(surf, (25, 25, 50), bar_rect, border_radius=1)
-                    fw = int(bar_rect.width * frac)
-                    if fw > 0:
-                        pygame.draw.rect(surf, UI_GOLD,
-                                         (bar_rect.x, bar_rect.y, fw, bar_rect.height),
-                                         border_radius=1)
+                y = top_y + i * row_pitch
+                # Icon plate on the left
+                icon_rect = pygame.Rect(base_x, y - (icon_size - bar_h) // 2,
+                                        icon_size, icon_size)
+                rounded_rect(surf, icon_rect, 6, (15, 25, 60), 200)
+                _draw_buff_icon(surf, icon_rect.inflate(-4, -4), kind)
+
+                # Bar to the right of the icon
+                bx = icon_rect.right + 6
+                by = y
+                frac = max(0.0, min(1.0, remain / total))
+                track = pygame.Rect(bx - 2, by, bar_w + 4, bar_h)
+                rounded_rect(surf, track, 6, (20, 25, 50), 200)
+                # Gold → orange → red as remaining time decreases
+                if frac > 0.5:
+                    fill_lo, fill_hi = UI_ORANGE, UI_GOLD
+                elif frac > 0.25:
+                    t = (frac - 0.25) / 0.25
+                    fill_lo = lerp_color(UI_RED, UI_ORANGE, t)
+                    fill_hi = lerp_color(UI_ORANGE, UI_GOLD, t)
+                else:
+                    fill_lo = (180, 20, 20)
+                    fill_hi = UI_RED
+                fill = pygame.Rect(bx, by + 2, int(bar_w * frac), bar_h - 4)
+                if fill.width > 0:
+                    rounded_rect_grad(surf, fill, 4, fill_hi, fill_lo)
+                # Time-remaining text inside the bar
+                _text(surf, f"{remain:.1f}s",
+                      (bx + bar_w // 2, by + bar_h // 2),
+                      size=11, color=UI_CREAM, shadow=True)
+                # Low-time pulse ring around the row when critical
+                if frac < 0.25:
+                    pulse = 0.5 + 0.5 * math.sin(self.title_t * 14)
+                    ring_a = int(140 * pulse)
+                    ring = pygame.Surface((bar_w + 10, bar_h + 6), pygame.SRCALPHA)
+                    pygame.draw.rect(ring, (*UI_RED, ring_a), ring.get_rect(),
+                                     border_radius=8, width=2)
+                    surf.blit(ring, (bx - 5, by - 3))
 
         # Combo badge bottom-center
         if world.combo >= 3 and world.combo_timer > 0:

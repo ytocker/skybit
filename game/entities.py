@@ -24,6 +24,7 @@ from game.draw import (
 )
 from game import parrot
 from game.pillar_variants import draw_pillar_pair
+from game.dollar_coin_glyphs import draw_coin_font_bold as _draw_dollar_coin
 
 # ── GROW power-up parrot (scaled in-game sprite, cached) ─────────────────────
 _grow_parrot: "pygame.Surface | None" = None
@@ -96,6 +97,8 @@ class Bird:
         self.kfc_active = False
         self.ghost_active = False
         self.grow_active = False
+        self.triple_active = False
+        self.ghost_pulse = 0.0    # advances while ghost_active for fade effect
 
     @property
     def tilt_deg(self):
@@ -120,6 +123,8 @@ class Bird:
             base_hz = max(3.0, base_hz - 4.0)
         self.frame_t = (self.frame_t + dt * base_hz)
         self.flap_boost = max(0.0, self.flap_boost - dt * 1.8)
+        if self.ghost_active:
+            self.ghost_pulse += dt * 2.4
 
     def draw(self, surf, shake_x=0, shake_y=0):
         frame_idx = int(self.frame_t) % len(parrot.FRAMES)
@@ -127,12 +132,20 @@ class Bird:
             img = parrot.get_fried_parrot(frame_idx, self.tilt_deg)
         elif self.ghost_active:
             img = parrot.get_ghost_parrot(frame_idx, self.tilt_deg)
+        elif self.triple_active:
+            img = parrot.get_hat_parrot(frame_idx, self.tilt_deg)
         else:
             img = parrot.get_parrot(frame_idx, self.tilt_deg)
         if self.grow_active:
             from game.config import GROW_SCALE
             w, h = img.get_size()
             img = pygame.transform.smoothscale(img, (int(w * GROW_SCALE), int(h * GROW_SCALE)))
+        if self.ghost_active:
+            # Faded breathing: alpha oscillates ~90..170 over a slow sine,
+            # so the ghost reads as clearly translucent and ethereal.
+            img = img.copy()
+            pulse = 0.5 + 0.5 * math.sin(self.ghost_pulse)
+            img.set_alpha(int(90 + pulse * 80))
         r = img.get_rect(center=(self.x + shake_x, self.y + shake_y))
         surf.blit(img, r.topleft)
 
@@ -201,9 +214,19 @@ class Coin:
         self.spin = (self.spin + dt * self.SPIN_RATE) % math.tau
         self.float_t += dt
 
-    def draw(self, surf):
+    def draw(self, surf, kfc_active=False):
         cx = int(self.x)
         cy = int(self.y + math.sin(self.float_t * 2.2) * 2)
+
+        # During KFC: coins look like a tilted french fry instead of a gold
+        # disc. The fry uses the same footprint as the coin so collisions
+        # stay aligned, but it doesn't spin (fries don't really spin like
+        # a disc — they just bob).
+        if kfc_active:
+            from game.kfc_fries import draw_tilted
+            draw_tilted(surf, cx, cy, t=self.float_t)
+            return
+
         cos_s = math.cos(self.spin)
         r = COIN_R
         rx = max(1, int(abs(cos_s) * r))
@@ -255,7 +278,7 @@ class PowerUp:
 
     def draw(self, surf):
         if self.kind == "triple":
-            self._draw_grow(surf)        # parrot + green-arrow icon
+            _draw_dollar_coin(surf, int(self.x), int(self.y), pulse=self.pulse)
         elif self.kind == "magnet":
             self._draw_magnet(surf)
         elif self.kind == "slowmo":
@@ -277,16 +300,8 @@ class PowerUp:
         rounded_rect(surf, stem, 5, MUSH_STEM, 255)
         pygame.draw.line(surf, (255, 255, 230), (cx - 4, cy + 2), (cx - 4, cy + 11), 2)
         pygame.draw.line(surf, (200, 180, 145), (cx + 3, cy + 2), (cx + 3, cy + 11), 1)
-        # Stem base shadow
-        sh = pygame.Surface((16, 4), pygame.SRCALPHA)
-        pygame.draw.ellipse(sh, (0, 0, 0, 120), sh.get_rect())
-        surf.blit(sh, (cx - 8, cy + 11))
 
-        # Cap shadow (under)
         cap_rect = pygame.Rect(cx - MUSHROOM_R - 1, cy - MUSHROOM_R + 2, (MUSHROOM_R + 1) * 2, MUSHROOM_R + 5)
-        sh = pygame.Surface((cap_rect.width + 8, 8), pygame.SRCALPHA)
-        pygame.draw.ellipse(sh, (0, 0, 0, 130), sh.get_rect())
-        surf.blit(sh, (cap_rect.x - 4, cy - 2))
 
         # Cap base (deep crimson outline) then vivid red
         pygame.draw.ellipse(surf, (130, 10, 20), cap_rect.inflate(2, 2))
@@ -315,11 +330,6 @@ class PowerUp:
         inner_r = 6
         arch_cy = cy - 3
         leg_bot = cy + 12
-
-        # Drop shadow
-        sh = pygame.Surface((outer_r * 3, 8), pygame.SRCALPHA)
-        pygame.draw.ellipse(sh, (0, 0, 0, 130), sh.get_rect())
-        surf.blit(sh, (cx - outer_r - outer_r // 2, leg_bot + 4))
 
         # Build the horseshoe on an SRCALPHA scratch surface so the hollow
         # can be punched cleanly with alpha=0 overdraw.
@@ -394,12 +404,6 @@ class PowerUp:
         cy = int(self.y + math.sin(self.pulse * 0.7) * 3)
         R = MUSHROOM_R  # 14
 
-        # Drop shadow
-        sh_w = R * 2 + 6
-        sh = pygame.Surface((sh_w, 8), pygame.SRCALPHA)
-        pygame.draw.ellipse(sh, (0, 0, 0, 75), sh.get_rect())
-        surf.blit(sh, (cx - sh_w // 2, cy + R + 2))
-
         # Clock face on scratch SRCALPHA surface for clean edges
         PAD = 2
         D = (R + PAD) * 2
@@ -465,12 +469,6 @@ class PowerUp:
         cy = int(self.y + math.sin(self.pulse * 0.9) * 2.5)
         r  = MUSHROOM_R + 2
 
-        # Drop shadow
-        sh_w = int(r * 2.8)
-        sh = pygame.Surface((sh_w, 8), pygame.SRCALPHA)
-        pygame.draw.ellipse(sh, (0, 0, 0, 80), sh.get_rect())
-        surf.blit(sh, (cx - sh_w // 2, cy + r + 2))
-
         # KFC logo (real image, pre-scaled & circle-clipped)
         logo = _get_kfc_sprite()
         surf.blit(logo, (cx - logo.get_width() // 2, cy - logo.get_height() // 2))
@@ -486,11 +484,6 @@ class PowerUp:
         EYE_W    = (252, 254, 255, 255)
         EYE_IRIS = (50,  110, 220, 255)
         EYE_PUP  = (12,  18,  60,  255)
-
-        # Drop shadow
-        sh = pygame.Surface((32, 7), pygame.SRCALPHA)
-        pygame.draw.ellipse(sh, (0, 0, 0, 70), sh.get_rect())
-        surf.blit(sh, (cx - 16, cy + 19))
 
         # ── Classic ghost silhouette on scratch SRCALPHA surface ──────────────
         # 28 × 36 px sprite; head centre at local (14, 12).

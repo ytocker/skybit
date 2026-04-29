@@ -334,8 +334,9 @@ class App:
         # behind the coins + bird — same layer a real foreground has.
         self.world.weather.draw(self.screen)
 
+        kfc_active = self.world.bird.kfc_active
         for c in self.world.coins:
-            c.draw(self.screen)
+            c.draw(self.screen, kfc_active=kfc_active)
         for m in self.world.powerups:
             m.draw(self.screen)
 
@@ -357,19 +358,13 @@ class App:
             tint.fill((210, 120, 10, 20))
             self.screen.blit(tint, (0, 0))
 
-        # Ghost mode: cool blue-white tint + pulsing wisp ring around the bird
+        # Ghost mode: cool blue-white screen tint. The ring around the bird
+        # was removed — the SPECTRAL parrot palette + breathing-fade alpha
+        # already carry the ghost read.
         if self.world.ghost_timer > 0:
             tint = pygame.Surface((W, H), pygame.SRCALPHA)
             tint.fill((140, 180, 255, 18))
             self.screen.blit(tint, (0, 0))
-            pulse = 0.55 + 0.45 * math.sin(self._cloud_phase * 5.0)
-            rad = int(28 + 10 * pulse)
-            ring = pygame.Surface((rad * 2 + 4, rad * 2 + 4), pygame.SRCALPHA)
-            pygame.draw.circle(ring, (160, 200, 255, int(70 * pulse)),
-                               (rad + 2, rad + 2), rad, 3)
-            self.screen.blit(ring,
-                             (self.world.bird.x + sx - rad - 2,
-                              self.world.bird.y + sy - rad - 2))
 
         # Magnet radius — faint red ring around the bird so the pull zone is legible
         if self.world.magnet_timer > 0:
