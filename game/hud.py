@@ -743,7 +743,7 @@ class HUD:
             txt = tf.render(buf, True, _GOLD_BRIGHT)
             surf.blit(txt, txt.get_rect(center=(W // 2, fy + fh // 2)))
         else:
-            placeholder = _font(18, False).render("type your name…", True, _GOLD_MUTED)
+            placeholder = _font(18, False).render("TYPE YOUR NAME…", True, _GOLD_MUTED)
             placeholder.set_alpha(100)
             surf.blit(placeholder, placeholder.get_rect(center=(W // 2, fy + fh // 2)))
 

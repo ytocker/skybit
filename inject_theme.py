@@ -71,8 +71,8 @@ NAME_OVERLAY = """
   </svg>
   <p class="ne-celebrate">YOU MADE THE TOP 10!</p>
   <p class="ne-title">WELCOME TO TOP 10!</p>
-  <p class="ne-sub">up to 10 characters</p>
-  <input id="name-input" maxlength="10" autocomplete="off" spellcheck="false"/>
+  <input id="name-input" maxlength="10" autocomplete="off" spellcheck="false"
+         placeholder="TYPE YOUR NAME…"/>
   <p id="name-counter">0 / 10</p>
   <button id="name-submit" class="ne-submit">SUBMIT</button>
   <p id="name-skip" class="ne-skip">skip</p>
