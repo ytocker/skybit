@@ -748,9 +748,15 @@ class HUD:
 
         _draw_overlay_stars(surf, self._stars, self.title_t)
 
+        # Trophy above the title — same emblem as the TOP 10 screen.
+        _draw_trophy(surf, W // 2, H // 2 - 210, 18)
+
         # Title
-        _outlined_text(surf, "WELCOME TO TOP 10!", (W // 2, H // 2 - 118),
-                       size=24, px=2, shadow_offset=(2, 3))
+        _outlined_text(surf, "Welcome to the TOP 10!", (W // 2, H // 2 - 150),
+                       size=22, px=2, shadow_offset=(2, 3))
+
+        # Trophy below the title — mirrors the one above.
+        _draw_trophy(surf, W // 2, H // 2 - 100, 18)
 
         # Input field
         fw, fh = 284, 54
