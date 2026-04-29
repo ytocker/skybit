@@ -15,7 +15,6 @@ License: <https://creativecommons.org/publicdomain/zero/1.0/>
 |-------------|----------------------------|------------------------------------------------------------------------|
 | flap        | Kenney Interface Sounds    | `pluck_002.wav`                                                        |
 | coin        | Kenney Interface Sounds    | `confirmation_001.wav`                                                 |
-| coin_combo  | Kenney Interface Sounds    | `confirmation_001.wav` (same source as `coin`; runtime pitch-shifts per combo step) |
 | coin_triple | Kenney Interface Sounds    | `confirmation_001.wav` pitched **+1 semitone** via ffmpeg `asetrate` (same as `triple_coin`) |
 | triple_coin | Kenney Interface Sounds    | `confirmation_001.wav` pitched **+1 semitone** — fires once on TRIPLE power-up pickup |
 | grow        | Kenney Digital + Impact    | `phaser_up_3.ogg` body + `impact_wood_medium_000.ogg` pop tail (amix, gain 0.5) |

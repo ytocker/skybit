@@ -1,4 +1,4 @@
-"""HUD: score, hi-score, coin count, mushroom timer bar, combo, pause button."""
+"""HUD: score, hi-score, coin count, power-up timer bar, pause button."""
 import math
 import os
 import random
@@ -601,22 +601,6 @@ class HUD:
                                      border_radius=8, width=2)
                     surf.blit(ring, (bx - 5, by - 3))
 
-        # Combo badge bottom-center
-        if world.combo >= 3 and world.combo_timer > 0:
-            t = world.combo_timer / 1.6
-            scale = 1.0 + math.sin(self.title_t * 12) * 0.08
-            size = int(22 * scale)
-            color = UI_ORANGE if world.combo < 5 else UI_RED
-            f = _font(size, True)
-            txt = f"X{world.combo} COMBO"
-            img = f.render(txt, True, color)
-            sh = f.render(txt, True, NEAR_BLACK)
-            rr = img.get_rect(center=(W // 2, H - 60))
-            sh.set_alpha(int(230 * t))
-            img.set_alpha(int(255 * t))
-            surf.blit(sh, (rr.x + 2, rr.y + 2))
-            surf.blit(img, rr.topleft)
-
         # Float texts
         for ft in world.float_texts:
             ft.draw(surf)
@@ -658,7 +642,6 @@ class HUD:
             ("Coins",          str(world.coin_count)),
             ("Pillars cleared", str(world.pillars_passed)),
             ("Power-ups",      str(sum(world.powerups_picked.values()))),
-            ("Max combo",      f"x{world.max_combo}" if world.max_combo > 1 else "—"),
             ("Near misses",    str(world.near_misses)),
         ]
 

@@ -4,8 +4,8 @@ Skybit audio: plays the curated CC0 OGG samples on both backends.
 * Native (desktop / pygbag main thread):
     pygame.mixer.Sound(file=...) loads each OGG once at init() time and
     plays it via mixer channels. A small voice-limiter caps concurrent
-    plays for the high-frequency events (coin / coin_combo / coin_triple
-    / flap) at 2 channels — keeps a 14-coin rush from muddying.
+    plays for the high-frequency events (coin / coin_triple / flap) at 2
+    channels — keeps a 14-coin rush from muddying.
 
 * Browser (pygbag / Pyodide / emscripten):
     Each play_X() call routes to JS window.skyPlay(name, volume), which
@@ -14,9 +14,9 @@ Skybit audio: plays the curated CC0 OGG samples on both backends.
     time, then plays them through Web Audio.
 
 Both backends play the picked OGG at neutral pitch. The runtime
-pitch-shift on combo / triple chain length and the ±2-semitone flap
-jitter that previously lived here were removed at the user's request —
-the climbing pitch was uncomfortable.
+pitch-shift on triple chain length and the ±2-semitone flap jitter that
+previously lived here were removed at the user's request — the climbing
+pitch was uncomfortable.
 
 Both backends degrade gracefully when the audio device can't be opened
 (headless snapshots, missing JS helper, etc.) — every play_X call is a
@@ -33,7 +33,7 @@ _IS_BROWSER = sys.platform == "emscripten"
 _SOUND_DIR = os.path.join(os.path.dirname(__file__), "assets", "sounds")
 
 _SOUND_FILES = (
-    "flap", "coin", "coin_combo", "coin_triple", "triple_coin",
+    "flap", "coin", "coin_triple", "triple_coin",
     "magnet", "slowmo", "thunder", "death", "gameover",
     "poof", "ghost", "grow",
 )
@@ -97,7 +97,6 @@ else:
     _VOICE_CAPS = {
         "flap":        2,
         "coin":        2,
-        "coin_combo":  2,
         "coin_triple": 2,
     }
 
@@ -180,15 +179,7 @@ def play_flap() -> None:
 def play_coin() -> None:
     _play("coin", 0.75)
 
-def play_coin_combo(chain_step: int = 1) -> None:
-    """Play the combo coin sound. `chain_step` is accepted for API
-    compatibility but ignored — the runtime pitch-climb was disabled at
-    the user's request."""
-    _play("coin_combo", 0.80)
-
-def play_coin_triple(chain_step: int = 1) -> None:
-    """Like play_coin_combo but for the 3X-active triple chime. Same:
-    `chain_step` is accepted but ignored."""
+def play_coin_triple() -> None:
     _play("coin_triple", 0.85)
 
 def play_triple_coin() -> None: _play("triple_coin", 0.85)

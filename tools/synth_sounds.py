@@ -280,13 +280,6 @@ def make_coin():
     return concat(n1, n2)
 
 
-def make_coin_combo():
-    # Same shape, perfect-fifth higher: F#5 → B5.
-    n1 = tone(65, 740, shape="triangle", vol=0.27, atk_ms=3, rel_ms=30)
-    n2 = tone(85, 988, shape="triangle", vol=0.29, atk_ms=3, rel_ms=60)
-    return concat(n1, n2)
-
-
 def make_coin_triple():
     # Sine arpeggio A4 → C#5 → E5, then 30 ms E5→G5 sparkle on the tail.
     n1  = tone(70, 440, shape="sine", vol=0.28, atk_ms=3, rel_ms=20)
@@ -438,7 +431,6 @@ def make_gameover():
 RECIPES = {
     "flap":        make_flap,
     "coin":        make_coin,
-    "coin_combo":  make_coin_combo,
     "coin_triple": make_coin_triple,
     "mushroom":    make_mushroom,
     "magnet":      make_magnet,

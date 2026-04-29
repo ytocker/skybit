@@ -46,8 +46,6 @@ Press **Space / Up / W** or click/tap to flap. A pulsing **TAP TO FLY** prompt h
 | Collect a coin                     | +1     |
 | Collect a coin while 3× is active  | +3     |
 
-Chain coins quickly to build a **combo multiplier** — a bouncing `X4 COMBO!` badge appears near the bottom.
-
 ---
 
 ## Power-Ups
@@ -74,7 +72,7 @@ Every 15th pipe triggers a **Coin Rush** — a wider gap filled with a dense arc
 
 ## Sound
 
-Procedurally-synthesized SFX via the stdlib `wave` module — no audio asset files. Events: flap whoosh, coin tink, combo ping, triple fanfare, magnet hum, ghost wail, slowmo chime, KFC jingle, and a thud on impact.
+Procedurally-synthesized SFX via the stdlib `wave` module — no audio asset files. Events: flap whoosh, coin tink, triple fanfare, magnet hum, ghost wail, slowmo chime, KFC jingle, and a thud on impact.
 
 ---
 
@@ -114,8 +112,8 @@ game/
 ├── world.py               Simulation: scroll, spawn, collision, pickups,
 │                          difficulty ramp, screen shake, FX
 ├── weather.py             Rain and fog weather layer
-├── hud.py                 Score, HUD pills, buff strip, combo badge,
-│                          pause button, all overlay screens
+├── hud.py                 Score, HUD pills, buff strip, pause button,
+│                          all overlay screens
 ├── scenes.py              State machine (Menu / Play / Pause / Stats /
 │                          GameOver) + App run-loop
 └── audio.py               Procedural SFX — stdlib wave, no asset files

@@ -16,7 +16,7 @@ from game.config import (
     TRIPLE_DURATION, MAGNET_DURATION, MAGNET_RADIUS,
     SLOWMO_DURATION, SLOWMO_SCALE, KFC_DURATION, GHOST_DURATION,
     GROW_DURATION, GROW_SCALE,
-    POWERUP_WEIGHTS, COMBO_WINDOW,
+    POWERUP_WEIGHTS,
     COIN_RUSH_INTERVAL, COIN_RUSH_GAP_BOOST, COIN_RUSH_COINS,
 )
 from game.entities import (
@@ -50,8 +50,6 @@ class World:
 
         self.score = 0
         self.coin_count = 0
-        self.combo = 1
-        self.combo_timer = 0.0
 
         self.triple_timer = 0.0
         self.magnet_timer = 0.0
@@ -65,7 +63,6 @@ class World:
         self.pipes_spawned = 0
 
         # Per-run stats surfaced on the post-game summary.
-        self.max_combo = 1
         self.pillars_passed = 0
         self.time_alive = 0.0
         self.near_misses = 0
@@ -384,10 +381,6 @@ class World:
             self.bird.grow_active = self.grow_timer > 0
             if self.powerup_cooldown > 0:
                 self.powerup_cooldown -= dt
-            if self.combo_timer > 0:
-                self.combo_timer -= dt
-                if self.combo_timer <= 0:
-                    self.combo = 1
             if self.hit_flash > 0:
                 self.hit_flash = max(0.0, self.hit_flash - dt)
         else:
@@ -463,7 +456,6 @@ class World:
         self.hit_flash = 0.35
         self.shake_mag = 8
         self.shake_t = 0.45
-        self.combo = 1
         audio.play_death()
         for _ in range(26):
             self.particles.append(Particle(
@@ -519,14 +511,6 @@ class World:
         value = 3 if self.triple_timer > 0 else 1
         self.score += value
         self.coin_count += 1
-        # combo
-        if self.combo_timer > 0:
-            self.combo += 1
-        else:
-            self.combo = 2
-        self.combo_timer = COMBO_WINDOW
-        if self.combo > self.max_combo:
-            self.max_combo = self.combo
 
         # *** GLITCH FIX ***
         # NO screen-wide flash. Only localized sparkle particles.
@@ -555,18 +539,10 @@ class World:
             FloatText(label, coin.x, coin.y - text_y_offset, color,
                       size=size, life=0.9))
 
-        # Pick the richest available audio cue for this pickup. Pass the
-        # current combo length so each consecutive coin in a streak plays
-        # one semitone higher than the last (capped at +12 / one octave).
         if value == 3:
-            audio.play_coin_triple(self.combo)
-        elif self.combo >= 3:
-            audio.play_coin_combo(self.combo)
+            audio.play_coin_triple()
         else:
             audio.play_coin()
-
-        # Combo is communicated by the persistent bouncing HUD badge — no
-        # per-pickup FloatText spawn, which would stack mid-air on fast streaks.
 
     def _on_powerup(self, m: PowerUp):
         self.powerups_picked[m.kind] = self.powerups_picked.get(m.kind, 0) + 1

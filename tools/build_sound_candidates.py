@@ -5,7 +5,7 @@ event in `sound_candidates_v3/<event>/`, and writes them through the same
 ffmpeg normalisation pipeline used elsewhere in the project (silenceremove
 + loudnorm I=-16 + libvorbis q4 mono 44100).
 
-Some candidates are *variant packs* (flap, coin, coin_combo): the file
+Some candidates are *variant packs* (flap, coin): the file
 becomes three nearby variants `1_label_a.ogg`, `1_label_b.ogg`, `1_label_c.ogg`
 that the audio runtime later picks between at random. Other candidates can
 be *layered* — multiple Kenney sources mixed together with per-source
@@ -165,7 +165,7 @@ SYNTH_RECIPES = {
 # ── Candidate spec ───────────────────────────────────────────────────────────
 
 # Each event maps to a list of `(slot, label, layers)` where:
-#   - For variant_pack events (flap, coin, coin_combo) `layers` is a list of
+#   - For variant_pack events (flap, coin) `layers` is a list of
 #     three single-source paths — they render as `_a/_b/_c`.
 #   - For all other events `layers` is a list of `(source, gain)` tuples.
 #     One tuple = single-file copy+normalize. Multiple tuples = ffmpeg amix.
@@ -173,7 +173,7 @@ SYNTH_RECIPES = {
 # `source` is either a Path (real file), or a "synth:<name>" sentinel that
 # triggers the small stdlib generator above.
 
-VARIANT_PACK_EVENTS = {"flap", "coin", "coin_combo"}
+VARIANT_PACK_EVENTS = {"flap", "coin"}
 
 
 def _spec():
@@ -198,14 +198,6 @@ def _spec():
             (4, "dig_two_three_tone", [D("two_tone_1"), D("two_tone_2"), D("three_tone_1")]),
             (5, "dig_zap_two_three",  [D("zap_two_tone"), D("zap_two_tone_2"), D("zap_three_tone_up")]),
         ],
-        "coin_combo": [
-            (1, "iface_glass_high",   [If("glass_004"), If("glass_005"), If("glass_006")]),
-            (2, "iface_question",     [If("question_001"), If("question_002"), If("question_003")]),
-            (3, "dig_three_tone",     [D("three_tone_1"), D("three_tone_2"), D("zap_three_tone_up")]),
-            (4, "dig_phaser_brief",   [D("phaser_up_1"), D("phaser_up_2"), D("phaser_up_3")]),
-            (5, "iface_open",         [If("open_001"), If("open_002"), If("open_003")]),
-        ],
-
         # Single-output events — Concept C spec adds reverb tails on the
         # high-stakes / "premium" candidates.
         "coin_triple": [
@@ -412,9 +404,9 @@ def main():
     readme = OUT_DIR / "README.md"
     readme.write_text(
         "# v3 sound candidates — audition pool\n\n"
-        "Each subdirectory holds 5 candidates per event. For `flap`, `coin`,\n"
-        "and `coin_combo` each candidate is a 3-variant pack (`_a/_b/_c`) — pick\n"
-        "the *family number* and you get the whole pack.\n\n"
+        "Each subdirectory holds 5 candidates per event. For `flap` and `coin`\n"
+        "each candidate is a 3-variant pack (`_a/_b/_c`) — pick the *family\n"
+        "number* and you get the whole pack.\n\n"
         "Listen with `ffplay`, VLC, or any player. Reply with picks like\n"
         "`flap=2, coin=3, mushroom=1, ...`.\n",
         encoding="utf-8",

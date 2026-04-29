@@ -39,7 +39,6 @@ KFC_DURATION       = 12.0
 GHOST_DURATION     = 6.0
 GROW_DURATION      = 6.0
 GROW_SCALE         = 1.5
-COMBO_WINDOW       = 1.6
 
 # Spawn weights for power-up kinds. Must sum to anything — they're
 # normalized at pick time.

@@ -67,7 +67,7 @@ hud3.draw_pause_overlay(screen);    save("03_pause.png")
 
 hud4 = HUD(); hud4.title_t = 1.4
 w4 = World()
-w4.score=23; w4.coin_count=11; w4.max_combo=4
+w4.score=23; w4.coin_count=11
 w4.pillars_passed=23; w4.near_misses=3; w4.time_alive=87.0
 w4.powerups_picked={"triple":2,"magnet":1}
 draw_bg(screen); w4.bird.draw(screen,0,0)
