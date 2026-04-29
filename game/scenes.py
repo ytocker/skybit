@@ -211,11 +211,17 @@ class App:
         self._name_input_buf = ""
         self._stats_t = 0.0
         if sys.platform == "emscripten":
-            # Browser: defer the qualification check + (maybe) name entry to
-            # the async task — fetching top-10 from Supabase blocks. World
-            # keeps ticking visibly until the task transitions us to the
-            # leaderboard or opens the JS overlay.
-            self.state = STATE_NAMEENTRY
+            # Browser: enter the leaderboard immediately (with a loading
+            # indicator) while an async task fetches the top-10 from
+            # Supabase. The task switches state to STATE_NAMEENTRY if and
+            # only if the player qualifies, then back to STATE_LEADERBOARD
+            # after submission/skip. Non-qualifiers never see the name
+            # entry screen — the leaderboard just resolves in place.
+            self._lb_loading = True
+            self._lb_scores = []
+            self._lb_player_rank = -1
+            self.state = STATE_LEADERBOARD
+            self._cooldown_t = 1.0
             self._start_name_entry = True
         else:
             # Native: top-10 lives in local JSON, fetch is sync.
@@ -261,6 +267,11 @@ class App:
             from game import leaderboard
             scores = await leaderboard.fetch_top10()
             if self._qualifies_for_top10(scores, self._final_score):
+                # Now we know they qualify — flip to NAMEENTRY so the
+                # Python-side render and the JS overlay both come up
+                # together. Not before; otherwise non-qualifiers see a
+                # name-entry screen flash for the duration of the fetch.
+                self.state = STATE_NAMEENTRY
                 name = await leaderboard.open_name_entry()
                 if name:
                     await leaderboard.submit(name, self._final_score)
