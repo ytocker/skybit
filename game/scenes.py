@@ -13,6 +13,7 @@ from game import biome as _biome
 from game.world import World
 from game.hud import HUD, _font
 from game import audio
+from game import play_log
 
 
 STATE_MENU = 0
@@ -52,6 +53,7 @@ class App:
         self._start_name_entry = False
         self._final_score = 0
         self._name_task = None  # strong ref prevents GC killing the task mid-flight
+        self._play_log_task = None  # strong ref for the per-run telemetry POST
         self._name_input_buf = ""  # native name-entry text buffer
 
     # ── helpers ─────────────────────────────────────────────────────────────
@@ -221,6 +223,15 @@ class App:
         self._new_best = score > self.session_best
         if self._new_best:
             self.session_best = score
+        # Fire-and-forget telemetry: send the run summary to Supabase
+        # (browser-only; native is a silent no-op). Strong ref on
+        # self prevents GC from killing the task mid-flight.
+        import asyncio as _asyncio
+        try:
+            self._play_log_task = _asyncio.create_task(play_log.log_run(self.world))
+        except RuntimeError:
+            # No running loop (e.g. headless smoke tests) — skip silently.
+            pass
         # Game-over screen no longer plays its own jingle — death.ogg
         # at the moment of impact carries the whole "run ended" cue.
         self.state = STATE_STATS

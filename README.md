@@ -95,13 +95,27 @@ Events: flap, coin, coin triple, triple-coin pickup, magnet, slowmo, ghost wail,
 
 ---
 
-## Leaderboard
+## Leaderboard & Telemetry
 
-Global top-10 via Supabase (browser build only):
+Two Supabase tables, both browser-only. Native runs are a silent no-op for
+the global path and just keep their session-best score in memory.
 
-* `inject_theme.py` injects a JS bridge (`lbSubmit` / `lbFetch` / `openNameEntry`) into the pygbag-generated HTML.
-* `game/leaderboard.py` resolves the bridge at runtime with a native fallback (local JSON file `skybit_scores.json`).
-* Native runs see only their session-best score — no global submission path.
+* **Leaderboard (`public.scores`)** — global top 10, read + write.
+  `inject_theme.py` injects a JS bridge (`lbSubmitStart` / `lbFetchStart` /
+  `openNameEntry`) into the pygbag-generated HTML. `game/leaderboard.py`
+  resolves the bridge at runtime with a native fallback (local JSON file
+  `skybit_scores.json`).
+* **Per-run telemetry (`public.plays`)** — write-only from the game; one
+  row per *completed* run with score, duration, coins, pillars, near
+  misses, and the per-power-up pickup dict. Fired fire-and-forget from
+  `scenes._on_death()` via `game/play_log.py` → `window.skyLogPlayStart`.
+  Players are identified only by an anonymous **device UUID** generated
+  client-side and persisted in `localStorage` (`skybit_device_id`). **No
+  IP, no user-agent, no PII.**
+
+The full SQL (table definitions + RLS policies) lives in
+[`supabase/schema.sql`](supabase/schema.sql) — paste it into the Supabase
+dashboard SQL editor once per environment.
 
 ---
 

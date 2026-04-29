@@ -328,6 +328,31 @@ body   { background: #0d0820 !important; }
        instead of awaiting a JS Promise directly (which freezes Python's asyncio loop). */
     window._lbSubmitDone = null;
     window._lbFetchResult = null;
+    window._skyLogPlayDone = null;
+
+    /* Anonymous device UUID — stable across reloads on the same browser via
+       localStorage, regenerated on a fresh device or after the user clears
+       site data. No PII, no IP. */
+    function _skybitDeviceId() {
+        try {
+            var id = window.localStorage.getItem('skybit_device_id');
+            if (id) return id;
+            if (window.crypto && window.crypto.randomUUID) {
+                id = window.crypto.randomUUID();
+            } else {
+                /* RFC4122 v4 fallback for older browsers */
+                id = ('xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx').replace(/[xy]/g, function (c) {
+                    var r = Math.random() * 16 | 0;
+                    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+                });
+            }
+            window.localStorage.setItem('skybit_device_id', id);
+            return id;
+        } catch (e) {
+            /* Private mode / disabled storage: still return a per-tab id */
+            return '00000000-0000-4000-8000-000000000000';
+        }
+    }
 
     window.lbSubmitStart = function (name, score) {
         window._lbSubmitDone = null;
@@ -360,6 +385,30 @@ body   { background: #0d0820 !important; }
                 );
                 window._lbFetchResult = r.ok ? await r.json() : [];
             } catch (e) { console.warn('lbFetchStart:', e); window._lbFetchResult = []; }
+        })();
+    };
+
+    /* Per-run telemetry. Python passes a JSON string; we parse it,
+       merge in the device UUID, and POST to public.plays. */
+    window.skyLogPlayStart = function (payloadJson) {
+        window._skyLogPlayDone = null;
+        (async function () {
+            if (!_SB_URL || !_SB_KEY) { window._skyLogPlayDone = false; return; }
+            try {
+                var body = JSON.parse(String(payloadJson));
+                body.device_id = _skybitDeviceId();
+                var r = await fetch(_SB_URL + '/rest/v1/plays', {
+                    method: 'POST',
+                    headers: {
+                        'apikey': _SB_KEY,
+                        'Authorization': 'Bearer ' + _SB_KEY,
+                        'Content-Type': 'application/json',
+                        'Prefer': 'return=minimal'
+                    },
+                    body: JSON.stringify(body)
+                });
+                window._skyLogPlayDone = r.ok;
+            } catch (e) { console.warn('skyLogPlayStart:', e); window._skyLogPlayDone = false; }
         })();
     };
 
