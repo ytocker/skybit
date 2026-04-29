@@ -145,10 +145,11 @@ def draw_cross(surf, cx, cy, t=0.0):
     rect = _box_rect(cx, cy)
     _drop_shadow(surf, cx, rect.bottom - 4, BOX_W + 4)
     _draw_box_body(surf, rect, RED_BASE, RED_SHADE, RED_HI)
-    _ribbon_v(surf, rect, w=8)
-    _ribbon_h(surf, rect, w=8)
+    _ribbon_v(surf, rect, w=6)
+    _ribbon_h(surf, rect, w=6)
     _draw_bow(surf, cx, rect.y - BOW_DY, UI_GOLD, GOLD_HI)
-    _draw_qmark(surf, rect.centerx, rect.centery, 32, UI_CREAM, NEAR_BLACK)
+    _draw_qmark(surf, rect.centerx, rect.centery, 42, UI_CREAM, NEAR_BLACK,
+                thick=3)
 
 
 # ── Variant 2: diagonal X ribbon + big centre "?" ───────────────────────────

@@ -35,7 +35,7 @@ def _get_surprise_sprite() -> "pygame.Surface":
     if _surprise_sprite is None:
         scratch = pygame.Surface((64, 64), pygame.SRCALPHA)
         _draw_surprise_box(scratch, 32, 32)
-        target = 2 * POWERUP_R + 4   # leave the bow + drop-shadow room
+        target = 2 * POWERUP_R + 12   # leave the bow + drop-shadow room
         _surprise_sprite = pygame.transform.smoothscale(scratch, (target, target))
     return _surprise_sprite
 
