@@ -262,9 +262,15 @@ class Coin:
 
 class PowerUp:
     """A collectible buff. `kind` selects visuals and pickup effect:
-       triple  — red mushroom, 3x coin value for TRIPLE_DURATION
-       magnet  — red horseshoe, pulls coins in for MAGNET_DURATION
-       slowmo  — purple hourglass, 0.5x world scroll for SLOWMO_DURATION
+       triple   — red mushroom, 3x coin value for TRIPLE_DURATION
+       magnet   — red horseshoe, pulls coins in for MAGNET_DURATION
+       slowmo   — purple hourglass, 0.5x world scroll for SLOWMO_DURATION
+       kfc      — KFC bucket, fried-chicken parrot mode for KFC_DURATION
+       ghost    — phantom, phase-through pipes for GHOST_DURATION
+       grow     — Mario mushroom, scaled-up parrot for GROW_DURATION
+       surprise — gold "?" block; resolves at pickup to one of the six
+                  effects above (the matching sound plays, no separate
+                  surprise sound).
     """
     def __init__(self, x, y, kind="triple"):
         self.x = x
@@ -289,6 +295,8 @@ class PowerUp:
             self._draw_ghost(surf)
         elif self.kind == "grow":
             self._draw_mushroom(surf)    # mushroom icon (Mario super-mushroom feel)
+        elif self.kind == "surprise":
+            self._draw_surprise(surf)
 
     # ── sprite variants ─────────────────────────────────────────────────────
     def _draw_mushroom(self, surf):
@@ -321,6 +329,63 @@ class PowerUp:
                            (cx - 3, cy + 2, 2)):
             pygame.draw.circle(surf, (220, 190, 200), (sx, sy), sr + 1)
             pygame.draw.circle(surf, MUSH_SPOT,       (sx, sy), sr)
+
+    def _draw_surprise(self, surf):
+        cx = int(self.x)
+        cy = int(self.y + math.sin(self.pulse * 0.7) * 2)
+        size = (POWERUP_R - 1) * 2  # 26 — square box footprint
+
+        # Drop shadow ellipse
+        sh = pygame.Surface((size + 6, 8), pygame.SRCALPHA)
+        pygame.draw.ellipse(sh, (10, 5, 30, 120), sh.get_rect())
+        surf.blit(sh, (cx - size // 2 - 3, cy + size // 2 - 1))
+
+        rect = pygame.Rect(cx - size // 2, cy - size // 2, size, size)
+
+        # Outer dark frame (slightly inflated)
+        pygame.draw.rect(surf, (40, 22, 6), rect.inflate(2, 2), border_radius=5)
+
+        # Gold/amber gradient face
+        face = pygame.Surface((size, size), pygame.SRCALPHA)
+        for yy in range(size):
+            t = yy / (size - 1)
+            face.fill(lerp_color((255, 200, 60), (220, 140, 30), t) + (255,),
+                      pygame.Rect(0, yy, size, 1))
+        # Round the corners
+        mask = pygame.Surface((size, size), pygame.SRCALPHA)
+        pygame.draw.rect(mask, (255, 255, 255, 255), mask.get_rect(),
+                         border_radius=4)
+        face.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+        surf.blit(face, rect.topleft)
+
+        # Top + left highlight; bottom + right shade
+        pygame.draw.line(surf, (255, 235, 130),
+                         (rect.x + 3, rect.y + 2), (rect.right - 4, rect.y + 2), 2)
+        pygame.draw.line(surf, (255, 215, 100),
+                         (rect.x + 2, rect.y + 3), (rect.x + 2, rect.bottom - 4), 1)
+        pygame.draw.line(surf, (160, 90, 20),
+                         (rect.x + 3, rect.bottom - 3), (rect.right - 4, rect.bottom - 3), 1)
+        pygame.draw.line(surf, (170, 100, 25),
+                         (rect.right - 3, rect.y + 3), (rect.right - 3, rect.bottom - 4), 1)
+
+        # Mario-block corner studs
+        for sx, sy in ((rect.x + 4, rect.y + 4),
+                       (rect.right - 5, rect.y + 4),
+                       (rect.x + 4, rect.bottom - 5),
+                       (rect.right - 5, rect.bottom - 5)):
+            pygame.draw.circle(surf, (90, 50, 10), (sx, sy), 2)
+            pygame.draw.circle(surf, (255, 220, 110), (sx, sy), 1)
+
+        # Pulsing "?" glyph — deep red over a soft amber back-glow
+        pulse_a = int(70 + 60 * (0.5 + 0.5 * math.sin(self.pulse * 4)))
+        blit_glow(surf, cx, cy + 1, 14, (255, 230, 120), alpha=pulse_a)
+        f = _get_float_font(20, bold=True)
+        body = f.render("?", True, (155, 30, 25))
+        edge = f.render("?", True, (35, 5, 0))
+        br = body.get_rect(center=(cx, cy + 1))
+        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            surf.blit(edge, (br.x + dx, br.y + dy))
+        surf.blit(body, br.topleft)
 
     def _draw_magnet(self, surf):
         cx = int(self.x)

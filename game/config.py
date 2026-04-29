@@ -41,14 +41,16 @@ GROW_DURATION      = 6.0
 GROW_SCALE         = 1.5
 
 # Spawn weights for power-up kinds. Must sum to anything — they're
-# normalized at pick time.
+# normalized at pick time. `surprise` resolves at pickup-time to one of
+# the six "real" kinds chosen at random (see World._activate_surprise).
 POWERUP_WEIGHTS    = (
-    ("triple", 1),
-    ("slowmo", 1),
-    ("magnet", 1),
-    ("kfc",    1),
-    ("ghost",  1),
-    ("grow",   1),
+    ("triple",   1),
+    ("slowmo",   1),
+    ("magnet",   1),
+    ("kfc",      1),
+    ("ghost",    1),
+    ("grow",     1),
+    ("surprise", 1),
 )
 
 SAVE_FILE = "skybit_save.json"

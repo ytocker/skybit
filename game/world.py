@@ -66,7 +66,7 @@ class World:
         self.pillars_passed = 0
         self.time_alive = 0.0
         self.near_misses = 0
-        self.powerups_picked = {"triple": 0, "magnet": 0, "slowmo": 0, "kfc": 0, "ghost": 0, "grow": 0}
+        self.powerups_picked = {"triple": 0, "magnet": 0, "slowmo": 0, "kfc": 0, "ghost": 0, "grow": 0, "surprise": 0}
         # Transient flag so near-miss detection fires once per pillar.
         self._near_miss_flags: dict[int, bool] = {}
 
@@ -545,19 +545,42 @@ class World:
             audio.play_coin()
 
     def _on_powerup(self, m: PowerUp):
-        self.powerups_picked[m.kind] = self.powerups_picked.get(m.kind, 0) + 1
-        if m.kind == "triple":
+        # Surprise box: roll a random "real" kind at pickup time, then route
+        # through that kind's activator. The resolved activator plays the
+        # matching sound — there's no dedicated surprise SFX.
+        kind = m.kind
+        if kind == "surprise":
+            self.powerups_picked["surprise"] = self.powerups_picked.get("surprise", 0) + 1
+            kind = random.choice(("triple", "magnet", "slowmo", "kfc", "ghost", "grow"))
+            self._spawn_surprise_reveal(m)
+        self.powerups_picked[kind] = self.powerups_picked.get(kind, 0) + 1
+        if kind == "triple":
             self._activate_triple(m)
-        elif m.kind == "magnet":
+        elif kind == "magnet":
             self._activate_magnet(m)
-        elif m.kind == "slowmo":
+        elif kind == "slowmo":
             self._activate_slowmo(m)
-        elif m.kind == "kfc":
+        elif kind == "kfc":
             self._activate_kfc(m)
-        elif m.kind == "ghost":
+        elif kind == "ghost":
             self._activate_ghost(m)
-        elif m.kind == "grow":
+        elif kind == "grow":
             self._activate_grow(m)
+
+    def _spawn_surprise_reveal(self, m):
+        """Brief gold-burst + cloud puff so the player sees the box "open"
+        before the resolved power-up's own activator fires."""
+        for _ in range(18):
+            ang = random.uniform(0, math.tau)
+            spd = random.uniform(140, 280)
+            col = random.choice((UI_GOLD, UI_ORANGE, UI_CREAM, WHITE))
+            self.particles.append(Particle(
+                m.x, m.y,
+                math.cos(ang) * spd, math.sin(ang) * spd,
+                random.uniform(0.4, 0.8),
+                random.randint(2, 4),
+                col, gravity=160,
+            ))
 
     def _pickup_burst(self, m, colors, n=30, speed_hi=320, grav=150):
         for _ in range(n):
