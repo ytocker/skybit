@@ -601,6 +601,8 @@ class World:
         self.shake_mag = max(self.shake_mag, 3.0)
         self.shake_t = max(self.shake_t, 0.25)
         audio.play_mushroom()
+        audio.play_poof()
+        self._spawn_poof(self.bird.x, self.bird.y)
         self._pickup_burst(m, (UI_ORANGE, UI_GOLD, BIRD_RED, UI_CREAM))
         self.float_texts.append(FloatText(
             "3X POWER!", m.x, m.y - 22, UI_ORANGE, size=26, life=1.4, vy=-30,
@@ -646,6 +648,8 @@ class World:
         self.shake_mag = max(self.shake_mag, 2.0)
         self.shake_t   = max(self.shake_t,   0.2)
         audio.play_ghost()
+        audio.play_poof()
+        self._spawn_poof(self.bird.x, self.bird.y)
         self._pickup_burst(m, (GHOST_BLUE, GHOST_WHITE, (180, 200, 255)),
                            n=28, speed_hi=260, grav=120)
         # Wisp orbit particles at bird position
@@ -673,6 +677,8 @@ class World:
         self.shake_mag = max(self.shake_mag, 4.0)
         self.shake_t   = max(self.shake_t,   0.3)
         audio.play_grow()
+        audio.play_poof()
+        self._spawn_poof(self.bird.x, self.bird.y)
         self._pickup_burst(m, (GROW_HI, GROW_OUT, WHITE, UI_CREAM), n=30, speed_hi=300)
         self.float_texts.append(FloatText(
             "GROW!", m.x, m.y - 22, GROW_HI, size=26, life=1.3, vy=-30,
