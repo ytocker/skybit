@@ -628,6 +628,9 @@ class HUD:
         surf.blit(dim, (0, 0))
 
         _draw_overlay_stars(surf, self._stars, self.title_t)
+        # Mountain silhouette belongs to the backdrop — drawn here so the
+        # score / stats cards layer on top instead of being clipped.
+        _draw_mountain_silhouette(surf, alpha=160)
 
         # Slide-in animation from below
         slide_t = max(0.0, min(1.0, elapsed / 0.35))
@@ -698,8 +701,6 @@ class HUD:
                            size=18, px=2, shadow_offset=(2, 3))
             tmp.set_alpha(alpha)
             surf.blit(tmp, tmp.get_rect(center=(W // 2, H - 50)))
-
-        _draw_mountain_silhouette(surf, alpha=160)
 
     def draw_gameover(self, surf, dt, score: int, new_best: bool):
         self.title_t += dt
