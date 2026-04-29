@@ -25,6 +25,20 @@ from game.draw import (
 from game import parrot
 from game.pillar_variants import draw_pillar_pair
 from game.dollar_coin_glyphs import draw_coin_font_bold as _draw_dollar_coin
+from game.surprise_box_variants import draw_cross as _draw_surprise_box
+
+# ── SURPRISE power-up gift box (rendered at 2× then smoothscaled, cached) ───
+_surprise_sprite: "pygame.Surface | None" = None
+
+def _get_surprise_sprite() -> "pygame.Surface":
+    global _surprise_sprite
+    if _surprise_sprite is None:
+        scratch = pygame.Surface((64, 64), pygame.SRCALPHA)
+        _draw_surprise_box(scratch, 32, 32)
+        target = 2 * POWERUP_R + 4   # leave the bow + drop-shadow room
+        _surprise_sprite = pygame.transform.smoothscale(scratch, (target, target))
+    return _surprise_sprite
+
 
 # ── GROW power-up parrot (scaled in-game sprite, cached) ─────────────────────
 _grow_parrot: "pygame.Surface | None" = None
@@ -333,59 +347,8 @@ class PowerUp:
     def _draw_surprise(self, surf):
         cx = int(self.x)
         cy = int(self.y + math.sin(self.pulse * 0.7) * 2)
-        size = (POWERUP_R - 1) * 2  # 26 — square box footprint
-
-        # Drop shadow ellipse
-        sh = pygame.Surface((size + 6, 8), pygame.SRCALPHA)
-        pygame.draw.ellipse(sh, (10, 5, 30, 120), sh.get_rect())
-        surf.blit(sh, (cx - size // 2 - 3, cy + size // 2 - 1))
-
-        rect = pygame.Rect(cx - size // 2, cy - size // 2, size, size)
-
-        # Outer dark frame (slightly inflated)
-        pygame.draw.rect(surf, (40, 22, 6), rect.inflate(2, 2), border_radius=5)
-
-        # Gold/amber gradient face
-        face = pygame.Surface((size, size), pygame.SRCALPHA)
-        for yy in range(size):
-            t = yy / (size - 1)
-            face.fill(lerp_color((255, 200, 60), (220, 140, 30), t) + (255,),
-                      pygame.Rect(0, yy, size, 1))
-        # Round the corners
-        mask = pygame.Surface((size, size), pygame.SRCALPHA)
-        pygame.draw.rect(mask, (255, 255, 255, 255), mask.get_rect(),
-                         border_radius=4)
-        face.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
-        surf.blit(face, rect.topleft)
-
-        # Top + left highlight; bottom + right shade
-        pygame.draw.line(surf, (255, 235, 130),
-                         (rect.x + 3, rect.y + 2), (rect.right - 4, rect.y + 2), 2)
-        pygame.draw.line(surf, (255, 215, 100),
-                         (rect.x + 2, rect.y + 3), (rect.x + 2, rect.bottom - 4), 1)
-        pygame.draw.line(surf, (160, 90, 20),
-                         (rect.x + 3, rect.bottom - 3), (rect.right - 4, rect.bottom - 3), 1)
-        pygame.draw.line(surf, (170, 100, 25),
-                         (rect.right - 3, rect.y + 3), (rect.right - 3, rect.bottom - 4), 1)
-
-        # Mario-block corner studs
-        for sx, sy in ((rect.x + 4, rect.y + 4),
-                       (rect.right - 5, rect.y + 4),
-                       (rect.x + 4, rect.bottom - 5),
-                       (rect.right - 5, rect.bottom - 5)):
-            pygame.draw.circle(surf, (90, 50, 10), (sx, sy), 2)
-            pygame.draw.circle(surf, (255, 220, 110), (sx, sy), 1)
-
-        # Pulsing "?" glyph — deep red over a soft amber back-glow
-        pulse_a = int(70 + 60 * (0.5 + 0.5 * math.sin(self.pulse * 4)))
-        blit_glow(surf, cx, cy + 1, 14, (255, 230, 120), alpha=pulse_a)
-        f = _get_float_font(20, bold=True)
-        body = f.render("?", True, (155, 30, 25))
-        edge = f.render("?", True, (35, 5, 0))
-        br = body.get_rect(center=(cx, cy + 1))
-        for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
-            surf.blit(edge, (br.x + dx, br.y + dy))
-        surf.blit(body, br.topleft)
+        sprite = _get_surprise_sprite()
+        surf.blit(sprite, sprite.get_rect(center=(cx, cy)))
 
     def _draw_magnet(self, surf):
         cx = int(self.x)
