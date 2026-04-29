@@ -717,7 +717,7 @@ class HUD:
         _draw_overlay_stars(surf, self._stars, self.title_t)
 
         # Title
-        _outlined_text(surf, "ENTER YOUR NAME", (W // 2, H // 2 - 118),
+        _outlined_text(surf, "WELCOME TO TOP 10!", (W // 2, H // 2 - 118),
                        size=24, px=2, shadow_offset=(2, 3))
 
         # Subtitle

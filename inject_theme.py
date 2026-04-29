@@ -70,7 +70,7 @@ NAME_OVERLAY = """
           fill="#0a1208" opacity="0.75"/>
   </svg>
   <p class="ne-celebrate">YOU MADE THE TOP 10!</p>
-  <p class="ne-title">ENTER YOUR NAME</p>
+  <p class="ne-title">WELCOME TO TOP 10!</p>
   <p class="ne-sub">up to 10 characters</p>
   <input id="name-input" maxlength="10" autocomplete="off" spellcheck="false"/>
   <p id="name-counter">0 / 10</p>
