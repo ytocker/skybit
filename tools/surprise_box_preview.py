@@ -23,9 +23,9 @@ from game.surprise_box_variants import VARIANTS
 from game.draw import UI_GOLD, NEAR_BLACK, lerp_color
 
 OUT_DIR = pathlib.Path(__file__).parent.parent / "docs"
-SCALE   = 6
-NATIVE  = 32
-PAD     = 24
+SCALE   = 5
+NATIVE  = 64
+PAD     = 28
 
 
 def _font(size):
