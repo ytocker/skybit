@@ -1,49 +1,54 @@
 # Skybit sound effect credits
 
-All 13 SFX events in this directory are **procedurally synthesised** from
-waveform primitives — sine, square, triangle, sawtooth, and a one-pole
-low-passed white-noise generator — using only Python's `wave`, `struct`,
-`array`, `math`, and `random` modules. There are no external assets and
-no licensed third-party audio.
+All in-game audio in this directory is sourced from **Kenney.nl** game-audio
+packs (Concept C "Pop Mobile Hyper-Casual" round) plus light post-processing
+through ffmpeg, with the exceptions noted below. All Kenney content is
+released under the **Creative Commons Zero (CC0 1.0 Universal)** license —
+public domain dedication, no attribution required. Sources listed here as a
+courtesy and to make audit / replacement easy.
 
-The synthesis recipes live in [`tools/synth_sounds.py`](../../../tools/synth_sounds.py)
-in the repository root. Run
-
-```
-python tools/synth_sounds.py
-```
-
-to regenerate every OGG in this directory. The script is idempotent —
-re-running just overwrites cleanly.
+License: <https://creativecommons.org/publicdomain/zero/1.0/>
 
 ## Per-event mapping
 
-| Event       | Waveform(s)        | Description                                                    |
-|-------------|--------------------|----------------------------------------------------------------|
-| flap        | square             | 60 ms sweep 320 → 560 Hz, low volume (plays constantly)        |
-| coin        | triangle           | Two-note ascending chime — B5 (60 ms) → E6 (80 ms)             |
-| coin_combo  | triangle           | Same shape as coin, perfect-fifth higher (F#6 → B6)            |
-| coin_triple | sine               | Major arpeggio A5/C#6/E6 + 30 ms sparkle E6 → G6 tail          |
-| mushroom    | square + triangle  | 6-note "got item!" fanfare, last note has +12 cent vibrato     |
-| magnet      | triangle + square  | 3-stage rising sweep 220 → 880 → 1320 Hz + 1760 Hz ping        |
-| slowmo      | triangle           | Descending phrase 880 → 220 Hz, tape-stretch vibrato on tail   |
-| grow        | square + tri+noise | 350 ms inflate sweep → 30 ms gap → pop (tri + noise burst)     |
-| ghost       | square (ring-mod)  | 5.5 Hz ring modulation depth 0.4 over 440 → 660 → 440 Hz curve |
-| poof        | noise + triangle   | LP-noise burst at 2.5 kHz + 1760 → 880 Hz tonal nucleus        |
-| thunder     | triangle + noise   | 60 Hz LFO triangle + 200 Hz low-passed noise tail              |
-| death       | square             | 4-note descent A4 → G4 → E4 → B3 with B3 → F#3 bend            |
-| gameover    | triangle + square  | 5-note descent C5 → C4, C-minor resolution with 100 ms fade    |
+| Event       | Source pack                | Source file(s) and processing                                          |
+|-------------|----------------------------|------------------------------------------------------------------------|
+| flap        | Kenney Interface Sounds    | `pluck_002.wav`                                                        |
+| coin        | Kenney Interface Sounds    | `confirmation_001.wav`                                                 |
+| coin_combo  | Kenney Interface Sounds    | `confirmation_001.wav` (same source as `coin`; runtime pitch-shifts per combo step) |
+| coin_triple | Kenney Interface Sounds    | `confirmation_001.wav` pitched **+1 semitone** via ffmpeg `asetrate` (same as `triple_coin`) |
+| triple_coin | Kenney Interface Sounds    | `confirmation_001.wav` pitched **+1 semitone** — fires once on TRIPLE power-up pickup |
+| grow        | Kenney Digital + Impact    | `phaser_up_3.ogg` body + `impact_wood_medium_000.ogg` pop tail (amix, gain 0.5) |
+| poof        | Kenney Impact Sounds       | `impact_generic_light_001.ogg`                                         |
+| ghost       | Kenney Digital Audio       | `phase_jump_2.ogg` pitched **−1 semitone** + 4-tap `aecho` cave tail   |
+| slowmo      | Kenney Digital Audio       | `phaser_down_2.ogg` + long-tap `aecho` reverb (200 / 400 / 600 ms)     |
+| magnet      | Kenney Sci-fi Sounds       | `laser_retro_001.ogg` + reverb tail                                    |
+| death      | Kenney Music Jingles 8-Bit | `jingles_nes_15.ogg`                                                   |
+| thunder     | _(procedural)_             | Stdlib chiptune render — see `tools/synth_sounds.py`. Pending replacement in a follow-up audition. |
+| gameover    | _(unused)_                 | File present but not played — `audio.play_gameover()` was removed from `scenes._on_death`; `death.ogg` carries the moment alone. |
+
+## Pack URLs
+
+- Kenney Interface Sounds: <https://kenney.nl/assets/interface-sounds>
+- Kenney Music Jingles:    <https://kenney.nl/assets/music-jingles>
+- Kenney Digital Audio:    <https://kenney.nl/assets/digital-audio>
+- Kenney Impact Sounds:    <https://kenney.nl/assets/impact-sounds>
+- Kenney Sci-fi Sounds:    <https://kenney.nl/assets/sci-fi-sounds>
 
 ## Processing applied to every file
 
-After synthesis, each WAV is piped through ffmpeg with:
+Each candidate is auditioned and chosen via `tools/build_sound_candidates.py`
+(see the `_spec()` dict for the per-event recipe). The build pipeline is:
 
 ```
+[optional layering via ffmpeg amix with per-input volume]
+[optional pitch/effect: asetrate, lowpass, vibrato, tremolo]
+[optional aecho reverb tail (subtle / heavy)]
 silenceremove=start_periods=1:start_silence=0.005:start_threshold=-60dB
-loudnorm=I=-16:LRA=7:tp=-2
+loudnorm=I=-16:LRA=11:TP=-1.5
 libvorbis -q:a 4 -ac 1 -ar 44100
 ```
 
-→ leading silence trimmed, loudness normalised to -16 LUFS so events
-don't clip when they overlap, then encoded to OGG Vorbis quality 4 mono
-44.1 kHz to match what `pygame.mixer` opens at runtime.
+Loudness normalised to -16 LUFS so events don't clip when they overlap, then
+encoded to OGG Vorbis quality 4 mono 44.1 kHz to match what `pygame.mixer`
+opens at runtime.
