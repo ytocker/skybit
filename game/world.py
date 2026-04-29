@@ -11,15 +11,16 @@ import pygame
 from game.config import (
     W, H, GROUND_Y, PIPE_W, PIPE_SPACING,
     GAP_START, GAP_MIN, SCROLL_BASE, SCROLL_MAX,
-    BIRD_X, BIRD_R, COIN_R, MUSHROOM_R,
-    MUSHROOM_CHANCE, MUSHROOM_COOLDOWN,
+    BIRD_X, BIRD_R, COIN_R, POWERUP_R,
+    POWERUP_CHANCE, POWERUP_COOLDOWN,
     TRIPLE_DURATION, MAGNET_DURATION, MAGNET_RADIUS,
-    SLOWMO_DURATION, SLOWMO_SCALE,
-    POWERUP_WEIGHTS, COMBO_WINDOW,
+    SLOWMO_DURATION, SLOWMO_SCALE, KFC_DURATION, GHOST_DURATION,
+    GROW_DURATION, GROW_SCALE,
+    POWERUP_WEIGHTS,
     COIN_RUSH_INTERVAL, COIN_RUSH_GAP_BOOST, COIN_RUSH_COINS,
 )
 from game.entities import (
-    Bird, Pipe, Coin, PowerUp, Particle, FloatText,
+    Bird, Pipe, Coin, PowerUp, Particle, CloudPuff, FloatText,
 )
 from game.draw import (
     COIN_GOLD, COIN_LIGHT,
@@ -49,23 +50,23 @@ class World:
 
         self.score = 0
         self.coin_count = 0
-        self.combo = 1
-        self.combo_timer = 0.0
 
         self.triple_timer = 0.0
         self.magnet_timer = 0.0
         self.slowmo_timer = 0.0
-        self.mushroom_cooldown = 0.0
+        self.kfc_timer    = 0.0
+        self.ghost_timer  = 0.0
+        self.grow_timer   = 0.0
+        self.powerup_cooldown = 0.0
 
         # Coin-rush counter: increments each spawn; every Nth pipe is a rush.
         self.pipes_spawned = 0
 
         # Per-run stats surfaced on the post-game summary.
-        self.max_combo = 1
         self.pillars_passed = 0
         self.time_alive = 0.0
         self.near_misses = 0
-        self.powerups_picked = {"triple": 0, "magnet": 0, "slowmo": 0}
+        self.powerups_picked = {"triple": 0, "magnet": 0, "slowmo": 0, "kfc": 0, "ghost": 0, "grow": 0, "surprise": 0}
         # Transient flag so near-miss detection fires once per pillar.
         self._near_miss_flags: dict[int, bool] = {}
 
@@ -170,30 +171,66 @@ class World:
                 self.coins.append(Coin(cx + dx, gy + dy))
 
     def _spawn_rush_coins(self, pipe: Pipe):
-        """Dense sinusoidal arc of ~COIN_RUSH_COINS coins across the gap."""
+        """Dense coin formation across the gap — random variant each rush."""
         cx = pipe.x + PIPE_W + PIPE_SPACING * 0.45
         gy = pipe.gap_y
         span = PIPE_SPACING * 0.85
-        amp = min(pipe.gap_h * 0.35, 70)
+        amp = min(pipe.gap_h * 0.32, 65)
         n = COIN_RUSH_COINS
-        # Random sine phase + wavelength so consecutive rushes don't all feel
-        # the same.
-        phase = random.uniform(0, math.tau)
-        waves = random.uniform(1.0, 1.6)
-        for i in range(n):
-            t = i / (n - 1)
-            x = cx - span / 2 + span * t
-            y = gy + math.sin(phase + waves * math.pi * 2 * t) * amp
-            self.coins.append(Coin(x, y))
+
+        variant = random.choice(("wave", "s_curve", "chevron", "oval", "double_arc"))
+
+        if variant == "wave":
+            phase = random.uniform(0, math.tau)
+            waves = random.uniform(1.0, 1.6)
+            for i in range(n):
+                t = i / (n - 1)
+                x = cx - span / 2 + span * t
+                y = gy + math.sin(phase + waves * math.tau * t) * amp
+                self.coins.append(Coin(x, y))
+
+        elif variant == "s_curve":
+            phase = random.choice((0.0, math.pi))
+            for i in range(n):
+                t = i / (n - 1)
+                x = cx - span / 2 + span * t
+                y = gy + math.sin(phase + 3 * math.pi * t) * amp * 0.75
+                self.coins.append(Coin(x, y))
+
+        elif variant == "chevron":
+            flip = random.choice((1, -1))
+            for i in range(n):
+                t = i / (n - 1)
+                tri = 2.0 * abs(2.0 * t - 1.0) - 1.0
+                x = cx - span / 2 + span * t
+                y = gy + flip * amp * tri
+                self.coins.append(Coin(x, y))
+
+        elif variant == "oval":
+            for i in range(n):
+                theta = i / n * math.tau
+                x = cx + math.cos(theta) * span * 0.32
+                y = gy + math.sin(theta) * amp * 0.65
+                self.coins.append(Coin(x, y))
+
+        elif variant == "double_arc":
+            half = n // 2
+            rest = n - half
+            for i in range(half):
+                t = i / max(half - 1, 1)
+                x = cx - span / 2 + span * t
+                y = gy - amp * 0.4 + math.sin(math.pi * t) * amp * 0.3
+                self.coins.append(Coin(x, y))
+            for i in range(rest):
+                t = i / max(rest - 1, 1)
+                x = cx - span / 2 + span * t
+                y = gy + amp * 0.4 - math.sin(math.pi * t) * amp * 0.3
+                self.coins.append(Coin(x, y))
 
     def _announce_rush(self, pipe: Pipe):
-        """'COIN RUSH!' float text + a burst of gold sparkles when a rush
-        pipe enters from the right edge."""
+        """Gold sparkle burst when a rush pipe enters from the right edge."""
         x = pipe.x - 20
         y = pipe.gap_y
-        self.float_texts.append(FloatText(
-            "COIN RUSH!", x, y - 40, UI_GOLD, size=26, life=1.6, vy=-28,
-        ))
         for _ in range(22):
             ang = random.uniform(0, math.tau)
             spd = random.uniform(60, 220)
@@ -207,9 +244,9 @@ class World:
             ))
 
     def _maybe_spawn_powerup(self, pipe: Pipe):
-        if self.mushroom_cooldown > 0:
+        if self.powerup_cooldown > 0:
             return
-        if random.random() >= MUSHROOM_CHANCE:
+        if random.random() >= POWERUP_CHANCE:
             return
         kinds = [k for k, _ in POWERUP_WEIGHTS]
         weights = [w for _, w in POWERUP_WEIGHTS]
@@ -217,7 +254,7 @@ class World:
         x = pipe.x + PIPE_W + PIPE_SPACING * 0.5 + random.uniform(-20, 20)
         y = pipe.gap_y + random.uniform(-10, 10)
         self.powerups.append(PowerUp(x, y, kind=kind))
-        self.mushroom_cooldown = MUSHROOM_COOLDOWN
+        self.powerup_cooldown = POWERUP_COOLDOWN
 
     # ── public control ──────────────────────────────────────────────────────
 
@@ -326,16 +363,24 @@ class World:
             # timers (real time, not scaled — the buffs shouldn't self-extend).
             if self.triple_timer > 0:
                 self.triple_timer = max(0.0, self.triple_timer - dt)
+            self.bird.triple_active = self.triple_timer > 0
             if self.magnet_timer > 0:
                 self.magnet_timer = max(0.0, self.magnet_timer - dt)
             if self.slowmo_timer > 0:
                 self.slowmo_timer = max(0.0, self.slowmo_timer - dt)
-            if self.mushroom_cooldown > 0:
-                self.mushroom_cooldown -= dt
-            if self.combo_timer > 0:
-                self.combo_timer -= dt
-                if self.combo_timer <= 0:
-                    self.combo = 1
+            if self.kfc_timer > 0:
+                self.kfc_timer = max(0.0, self.kfc_timer - dt)
+                if self.kfc_timer == 0:
+                    self._spawn_poof(self.bird.x, self.bird.y)
+            self.bird.kfc_active = self.kfc_timer > 0
+            if self.ghost_timer > 0:
+                self.ghost_timer = max(0.0, self.ghost_timer - dt)
+            self.bird.ghost_active = self.ghost_timer > 0
+            if self.grow_timer > 0:
+                self.grow_timer = max(0.0, self.grow_timer - dt)
+            self.bird.grow_active = self.grow_timer > 0
+            if self.powerup_cooldown > 0:
+                self.powerup_cooldown -= dt
             if self.hit_flash > 0:
                 self.hit_flash = max(0.0, self.hit_flash - dt)
         else:
@@ -387,13 +432,19 @@ class World:
 
     # ── collisions ───────────────────────────────────────────────────────────
 
+    def bird_radius(self) -> float:
+        return BIRD_R * GROW_SCALE if self.grow_timer > 0 else BIRD_R
+
     def _check_collisions(self):
         bx, by = self.bird.x, self.bird.y
-        if by + BIRD_R > GROUND_Y or by - BIRD_R < 0:
+        br = self.bird_radius()
+        if by + br > GROUND_Y or by - br < 0:
             self._die()
             return
+        if self.ghost_timer > 0:
+            return  # phase through pipes while ghost is active
         for p in self.pipes:
-            if p.collides_circle(bx, by, BIRD_R - 2):
+            if p.collides_circle(bx, by, br - 2):
                 self._die()
                 return
 
@@ -405,7 +456,6 @@ class World:
         self.hit_flash = 0.35
         self.shake_mag = 8
         self.shake_t = 0.45
-        self.combo = 1
         audio.play_death()
         for _ in range(26):
             self.particles.append(Particle(
@@ -434,7 +484,7 @@ class World:
                 continue
             dx = m.x - bx
             dy = m.y - by
-            if dx * dx + dy * dy < (br + MUSHROOM_R) ** 2:
+            if dx * dx + dy * dy < (br + POWERUP_R) ** 2:
                 m.collected = True
                 self._on_powerup(m)
 
@@ -461,14 +511,6 @@ class World:
         value = 3 if self.triple_timer > 0 else 1
         self.score += value
         self.coin_count += 1
-        # combo
-        if self.combo_timer > 0:
-            self.combo += 1
-        else:
-            self.combo = 2
-        self.combo_timer = COMBO_WINDOW
-        if self.combo > self.max_combo:
-            self.max_combo = self.combo
 
         # *** GLITCH FIX ***
         # NO screen-wide flash. Only localized sparkle particles.
@@ -497,25 +539,48 @@ class World:
             FloatText(label, coin.x, coin.y - text_y_offset, color,
                       size=size, life=0.9))
 
-        # Pick the richest available audio cue for this pickup.
         if value == 3:
             audio.play_coin_triple()
-        elif self.combo >= 3:
-            audio.play_coin_combo()
         else:
             audio.play_coin()
 
-        # Combo is communicated by the persistent bouncing HUD badge — no
-        # per-pickup FloatText spawn, which would stack mid-air on fast streaks.
-
     def _on_powerup(self, m: PowerUp):
-        self.powerups_picked[m.kind] = self.powerups_picked.get(m.kind, 0) + 1
-        if m.kind == "triple":
+        # Surprise box: roll a random "real" kind at pickup time, then route
+        # through that kind's activator. The resolved activator plays the
+        # matching sound — there's no dedicated surprise SFX.
+        kind = m.kind
+        if kind == "surprise":
+            self.powerups_picked["surprise"] = self.powerups_picked.get("surprise", 0) + 1
+            kind = random.choice(("triple", "magnet", "slowmo", "kfc", "ghost", "grow"))
+            self._spawn_surprise_reveal(m)
+        self.powerups_picked[kind] = self.powerups_picked.get(kind, 0) + 1
+        if kind == "triple":
             self._activate_triple(m)
-        elif m.kind == "magnet":
+        elif kind == "magnet":
             self._activate_magnet(m)
-        elif m.kind == "slowmo":
+        elif kind == "slowmo":
             self._activate_slowmo(m)
+        elif kind == "kfc":
+            self._activate_kfc(m)
+        elif kind == "ghost":
+            self._activate_ghost(m)
+        elif kind == "grow":
+            self._activate_grow(m)
+
+    def _spawn_surprise_reveal(self, m):
+        """Brief gold-burst + cloud puff so the player sees the box "open"
+        before the resolved power-up's own activator fires."""
+        for _ in range(18):
+            ang = random.uniform(0, math.tau)
+            spd = random.uniform(140, 280)
+            col = random.choice((UI_GOLD, UI_ORANGE, UI_CREAM, WHITE))
+            self.particles.append(Particle(
+                m.x, m.y,
+                math.cos(ang) * spd, math.sin(ang) * spd,
+                random.uniform(0.4, 0.8),
+                random.randint(2, 4),
+                col, gravity=160,
+            ))
 
     def _pickup_burst(self, m, colors, n=30, speed_hi=320, grav=150):
         for _ in range(n):
@@ -534,7 +599,9 @@ class World:
         self.triple_timer = TRIPLE_DURATION
         self.shake_mag = max(self.shake_mag, 3.0)
         self.shake_t = max(self.shake_t, 0.25)
-        audio.play_mushroom()
+        audio.play_triple_coin()
+        audio.play_poof()
+        self._spawn_poof(self.bird.x, self.bird.y)
         self._pickup_burst(m, (UI_ORANGE, UI_GOLD, BIRD_RED, UI_CREAM))
         self.float_texts.append(FloatText(
             "3X POWER!", m.x, m.y - 22, UI_ORANGE, size=26, life=1.4, vy=-30,
@@ -559,6 +626,79 @@ class World:
         self.float_texts.append(FloatText(
             "SLOW-MO!", m.x, m.y - 22, (200, 140, 255), size=24, life=1.3, vy=-30,
         ))
+
+    def _activate_kfc(self, m):
+        self.kfc_timer = KFC_DURATION
+        self.bird.kfc_active = True
+        self.shake_mag = max(self.shake_mag, 5.0)
+        self.shake_t   = max(self.shake_t,   0.4)
+        audio.play_poof()
+        self._spawn_poof(self.bird.x, self.bird.y)
+        self._pickup_burst(m, ((210, 138, 42), (238, 178, 72), (148, 82, 18), WHITE), n=28)
+        self.float_texts.append(FloatText(
+            "FINGER LICKIN'!", m.x, m.y - 22, (230, 160, 40), size=22, life=1.6, vy=-28,
+        ))
+
+    def _activate_ghost(self, m):
+        GHOST_BLUE  = (140, 180, 255)
+        GHOST_WHITE = (210, 225, 255)
+        self.ghost_timer = GHOST_DURATION
+        self.bird.ghost_active = True
+        self.shake_mag = max(self.shake_mag, 2.0)
+        self.shake_t   = max(self.shake_t,   0.2)
+        audio.play_ghost()
+        audio.play_poof()
+        self._spawn_poof(self.bird.x, self.bird.y)
+        self._pickup_burst(m, (GHOST_BLUE, GHOST_WHITE, (180, 200, 255)),
+                           n=28, speed_hi=260, grav=120)
+        # Wisp orbit particles at bird position
+        for i in range(10):
+            ang = i / 10 * math.tau
+            spd = random.uniform(40, 90)
+            self.particles.append(Particle(
+                self.bird.x + math.cos(ang) * 20,
+                self.bird.y + math.sin(ang) * 20,
+                math.cos(ang) * spd, math.sin(ang) * spd - 30,
+                random.uniform(0.4, 0.8),
+                random.randint(2, 4),
+                random.choice((GHOST_BLUE, GHOST_WHITE)),
+                gravity=60,
+            ))
+        self.float_texts.append(FloatText(
+            "GHOST!", m.x, m.y - 22, (180, 210, 255), size=24, life=1.3, vy=-30,
+        ))
+
+    def _activate_grow(self, m):
+        GROW_HI  = (50, 220, 100)
+        GROW_OUT = (28, 160,  70)
+        self.grow_timer = GROW_DURATION
+        self.bird.grow_active = True
+        self.shake_mag = max(self.shake_mag, 4.0)
+        self.shake_t   = max(self.shake_t,   0.3)
+        audio.play_grow()
+        audio.play_poof()
+        self._spawn_poof(self.bird.x, self.bird.y)
+        self._pickup_burst(m, (GROW_HI, GROW_OUT, WHITE, UI_CREAM), n=30, speed_hi=300)
+        self.float_texts.append(FloatText(
+            "GROW!", m.x, m.y - 22, GROW_HI, size=26, life=1.3, vy=-30,
+        ))
+
+    def _spawn_poof(self, x, y):
+        """Burst of expanding cloud puffs — used on KFC transformation start and end."""
+        puff_colors = [
+            (255, 255, 255), (240, 240, 240),
+            (225, 225, 225), (210, 215, 220),
+        ]
+        for _ in range(14):
+            angle = random.uniform(0, math.pi * 2)
+            speed = random.uniform(50, 130)
+            vx    = math.cos(angle) * speed
+            vy    = math.sin(angle) * speed - random.uniform(10, 40)
+            life  = random.uniform(0.32, 0.52)
+            r0    = random.randint(4, 9)
+            r1    = random.randint(13, 22)
+            color = random.choice(puff_colors)
+            self.particles.append(CloudPuff(x, y, vx, vy, life, r0, r1, color))
 
     # ── utility ──────────────────────────────────────────────────────────────
 

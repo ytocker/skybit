@@ -5,3 +5,4 @@ dist/
 *.spec
 skybit_save.json
 skybit_scores.json
+tools/screenshots/

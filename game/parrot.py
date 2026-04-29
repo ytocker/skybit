@@ -208,3 +208,186 @@ def get_parrot(frame_idx: int, tilt_deg: float) -> pygame.Surface:
         s = pygame.transform.rotozoom(FRAMES[frame_idx], key[1], 1.0)
         _rot_cache[key] = s
     return s
+
+
+# ── Fried-chicken variant (KFC powerup) ──────────────────────────────────────
+
+_CRISPY_GOLD  = (210, 138,  42)
+_CRISPY_DARK  = (148,  82,  18)
+_CRISPY_LIGHT = (238, 178,  72)
+_CRISPY_SPOT  = (125,  68,  12)
+
+
+def _build_fried_wing(angle_deg):
+    w = pygame.Surface((62, 62), pygame.SRCALPHA)
+    # Drop shadow
+    pygame.draw.polygon(w, (0, 0, 0, 120),
+                        [(22, 28), (52, 10), (58, 32), (40, 50), (16, 44)])
+    # Dark crust outline layer
+    pygame.draw.polygon(w, _CRISPY_DARK,
+                        [(22, 26), (50,  9), (56, 30), (38, 48), (16, 42)])
+    # Main batter
+    pygame.draw.polygon(w, _CRISPY_GOLD,
+                        [(22, 24), (48,  8), (54, 28), (36, 46), (16, 40)])
+    # Underside shadow
+    pygame.draw.polygon(w, _CRISPY_DARK, [(22, 24), (36, 46), (16, 40)])
+    # Bright ridge highlight
+    _aaellipse(w, _CRISPY_LIGHT, (38, 22), 12, 6)
+    # Dense crispy spots on wing
+    for px, py, pr in ((40, 14, 3), (50, 20, 3), (44, 28, 3),
+                       (30, 18, 2), (54, 28, 2), (34, 36, 2), (46, 34, 2)):
+        pygame.draw.circle(w, _CRISPY_SPOT, (px, py), pr)
+    # Crackle lines
+    pygame.draw.line(w, _CRISPY_DARK,  (25, 27), (47, 15), 2)
+    pygame.draw.line(w, _CRISPY_DARK,  (28, 34), (50, 24), 2)
+    pygame.draw.line(w, _CRISPY_DARK,  (30, 40), (52, 32), 1)
+    pygame.draw.line(w, _CRISPY_LIGHT, (24, 25), (46, 13), 1)
+    pygame.draw.line(w, _CRISPY_LIGHT, (27, 32), (49, 22), 1)
+    return pygame.transform.rotate(w, angle_deg)
+
+
+def _build_fried_frame(wing_angle_deg):
+    surf = pygame.Surface((SPRITE_W, SPRITE_H), pygame.SRCALPHA)
+
+    # Tail — golden-brown crispy wedges
+    for i, c in enumerate([(148, 82, 18), (178, 108, 28), (208, 138, 42), (228, 162, 58)]):
+        pts = [(2 + i*3, 26 + i*2), (14 + i, 24 + i),
+               (20 + i, 30 + i*2), (6 + i*3, 36 + i*2)]
+        pygame.draw.polygon(surf, c, pts)
+    pygame.draw.line(surf, _CRISPY_DARK, (4, 27), (18, 31), 1)
+    pygame.draw.line(surf, _CRISPY_DARK, (6, 33), (20, 35), 1)
+
+    # Body — plumper, more layered
+    _aaellipse(surf, ( 85,  44,  5),   (34, 36), 23, 17)  # deep drop shadow
+    _aaellipse(surf, _CRISPY_DARK,     (33, 35), 22, 16)  # dark base crust
+    _aaellipse(surf, _CRISPY_GOLD,     (32, 33), 21, 15)  # main batter coat
+    _aaellipse(surf, _CRISPY_LIGHT,    (29, 28), 15, 10)  # bright breast peak
+    _aaellipse(surf, (242, 190, 80),   (27, 39), 14,  8)  # belly warmth
+    _aaellipse(surf, _CRISPY_DARK,     (32, 45), 18,  5)  # bottom shadow
+
+    # Dense crispy spots — varied sizes
+    for px, py, pr in ((20, 30, 3), (37, 27, 3), (43, 35, 3),
+                       (24, 39, 2), (38, 39, 2), (28, 34, 2),
+                       (32, 26, 2), (44, 30, 2), (16, 37, 2),
+                       (34, 42, 2), (40, 24, 1), (22, 43, 1)):
+        pygame.draw.circle(surf, _CRISPY_SPOT, (px, py), pr)
+
+    # Crackle lines — dark valley + gold ridge = raised batter texture
+    for x1, y1, x2, y2 in [(14, 30, 23, 25), (37, 25, 47, 30),
+                            (15, 39, 25, 44), (40, 38, 50, 33),
+                            (22, 34, 31, 29), (34, 39, 43, 36)]:
+        pygame.draw.line(surf, _CRISPY_DARK,  (x1,   y1  ), (x2,   y2  ), 1)
+        pygame.draw.line(surf, _CRISPY_LIGHT, (x1-1, y1-1), (x2-1, y2-1), 1)
+
+    # Golden grease sheen
+    sheen = pygame.Surface((30, 7), pygame.SRCALPHA)
+    pygame.draw.ellipse(sheen, (255, 225, 145, 130), sheen.get_rect())
+    surf.blit(sheen, (17, 20))
+
+    # Wing — larger, anchored higher so it fans out prominently
+    wing = _build_fried_wing(wing_angle_deg)
+    surf.blit(wing, wing.get_rect(center=(32, 24)).topleft)
+
+    # Head — slightly bigger
+    _aaellipse(surf, ( 95,  50,  6),   (49, 23), 13, 12)
+    _aaellipse(surf, _CRISPY_GOLD,     (48, 21), 13, 12)
+    _aaellipse(surf, _CRISPY_LIGHT,    (45, 24),  5,  4)
+    _aaellipse(surf, (232, 172, 68),   (47, 15),  8,  4)
+    for px, py, pr in ((52, 18, 2), (45, 22, 2), (51, 25, 1)):
+        pygame.draw.circle(surf, _CRISPY_SPOT, (px, py), pr)
+
+    # Eyes
+    pygame.draw.circle(surf, WHITE,        (51, 20), 4)
+    pygame.draw.circle(surf, (15, 15, 25), (52, 20), 2)
+    pygame.draw.circle(surf, WHITE,        (53, 18), 1)
+
+    # Beak
+    beak_pts = [(55, 21), (61, 24), (58, 28), (52, 26)]
+    pygame.draw.polygon(surf, BIRD_BEAK,   beak_pts)
+    pygame.draw.polygon(surf, BIRD_BEAK_D, beak_pts, 1)
+    pygame.draw.line(surf, (255, 230, 150), (55, 22), (59, 24), 1)
+    pygame.draw.line(surf, BIRD_BEAK_D,    (52, 24), (58, 25), 1)
+
+    # Simple tucked legs (original style)
+    for lx, ly, ex, ey in ((28, 44, 24, 51), (34, 44, 38, 51)):
+        pygame.draw.line(surf, _CRISPY_DARK, (lx, ly), (ex, ey), 3)
+        pygame.draw.circle(surf, _CRISPY_GOLD, (ex, ey), 3)
+        pygame.draw.circle(surf, _CRISPY_DARK, (ex, ey), 3, 1)
+
+    return surf
+
+
+KFC_FRAMES: list[pygame.Surface] = [_add_outline(_build_fried_frame(a)) for a in _WING_ANGLES]
+
+_kfc_rot_cache: dict = {}
+
+
+def get_fried_parrot(frame_idx: int, tilt_deg: float) -> pygame.Surface:
+    """Return rotated fried-chicken parrot, cached by (frame, rounded-angle)."""
+    frame_idx = frame_idx % len(KFC_FRAMES)
+    key = (frame_idx, int(round(tilt_deg / 3.0)) * 3)
+    s = _kfc_rot_cache.get(key)
+    if s is None:
+        s = pygame.transform.rotozoom(KFC_FRAMES[frame_idx], key[1], 1.0)
+        _kfc_rot_cache[key] = s
+    return s
+
+
+# ── Ghost variant ─────────────────────────────────────────────────────────────
+#
+# The ghost-parrot frames are built procedurally in
+# `game.dollar_parrot_ghost.build_spectral_frame` — a full hand-drawn parrot
+# in cool cyan tones with a soft halo. Lazy-init avoids the circular import
+# (dollar_parrot_ghost imports FRAMES / _add_outline from this module).
+
+_ghost_frames: "list[pygame.Surface] | None" = None
+_ghost_cache: dict = {}
+
+
+def _ensure_ghost_frames():
+    global _ghost_frames
+    if _ghost_frames is None:
+        from game.dollar_parrot_ghost import (
+            build_ghost_variant_frames, build_spectral_frame,
+        )
+        _ghost_frames = build_ghost_variant_frames(build_spectral_frame)
+    return _ghost_frames
+
+
+def get_ghost_parrot(frame_idx: int, tilt_deg: float) -> pygame.Surface:
+    """Return rotated ghost parrot, cached by (frame, rounded-angle)."""
+    frames = _ensure_ghost_frames()
+    frame_idx = frame_idx % len(frames)
+    key = (frame_idx, int(round(tilt_deg / 3.0)) * 3)
+    s = _ghost_cache.get(key)
+    if s is None:
+        s = pygame.transform.rotozoom(frames[frame_idx], key[1], 1.0)
+        _ghost_cache[key] = s
+    return s
+
+
+# ── Triple-buff hat variant ───────────────────────────────────────────────────
+# Lazily built on first use to avoid a circular import (dollar_parrot_hat
+# imports from parrot for the body sprite).
+_hat_frames: "list | None" = None
+_hat_cache: dict = {}
+
+
+def _ensure_hat_frames():
+    global _hat_frames
+    if _hat_frames is None:
+        from game.dollar_parrot_hat import build_hat_frames, draw_stovepipe
+        _hat_frames = build_hat_frames(draw_stovepipe)
+    return _hat_frames
+
+
+def get_hat_parrot(frame_idx: int, tilt_deg: float) -> pygame.Surface:
+    """Return rotated stovepipe-hatted parrot, cached by (frame, rounded-angle)."""
+    frames = _ensure_hat_frames()
+    frame_idx = frame_idx % len(frames)
+    key = (frame_idx, int(round(tilt_deg / 3.0)) * 3)
+    s = _hat_cache.get(key)
+    if s is None:
+        s = pygame.transform.rotozoom(frames[frame_idx], key[1], 1.0)
+        _hat_cache[key] = s
+    return s
