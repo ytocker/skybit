@@ -2,7 +2,7 @@
 Five distinct procedural dollar-sign power-up icon concepts.
 
 Each `draw_*` function paints an icon centered on (cx, cy) at the existing
-power-up footprint (MUSHROOM_R = 14 from game.config), so any one of them
+power-up footprint (POWERUP_R = 14 from game.config), so any one of them
 can later drop into entities.PowerUp without geometry changes. `pulse` is
 the same 0..1+ phase advanced by `PowerUp.pulse` in-game; pass 0 for a
 static frame.
@@ -13,7 +13,7 @@ chosen variant gets wired into entities.PowerUp in a follow-up edit.
 import math
 import pygame
 
-from game.config import MUSHROOM_R
+from game.config import POWERUP_R
 from game.draw import (
     rounded_rect, lerp_color, blit_glow,
     COIN_GOLD, COIN_DARK, WHITE, NEAR_BLACK, UI_GOLD,
@@ -60,7 +60,7 @@ def _draw_dollar_glyph(surf, cx, cy, height, color, weight=2,
 # ── V1 — gold coin disc with green $ ────────────────────────────────────────
 
 def draw_coin(surf, cx, cy, pulse=0.0):
-    r = MUSHROOM_R
+    r = POWERUP_R
     # Soft drop shadow
     sh = pygame.Surface((r * 2 + 6, 8), pygame.SRCALPHA)
     pygame.draw.ellipse(sh, (0, 0, 0, 130), sh.get_rect())
@@ -85,7 +85,7 @@ def draw_coin(surf, cx, cy, pulse=0.0):
 # ── V2 — money bag (cloth sack) ─────────────────────────────────────────────
 
 def draw_bag(surf, cx, cy, pulse=0.0):
-    r = MUSHROOM_R
+    r = POWERUP_R
     # Drop shadow
     sh = pygame.Surface((r * 2 + 8, 7), pygame.SRCALPHA)
     pygame.draw.ellipse(sh, (0, 0, 0, 130), sh.get_rect())
@@ -131,7 +131,7 @@ def draw_bag(surf, cx, cy, pulse=0.0):
 # ── V3 — stack of bills ─────────────────────────────────────────────────────
 
 def draw_bills(surf, cx, cy, pulse=0.0):
-    r = MUSHROOM_R
+    r = POWERUP_R
     # Drop shadow under the stack
     sh = pygame.Surface((r * 2 + 8, 6), pygame.SRCALPHA)
     pygame.draw.ellipse(sh, (0, 0, 0, 130), sh.get_rect())
@@ -171,7 +171,7 @@ def draw_bills(surf, cx, cy, pulse=0.0):
 # ── V4 — neon glowing $ ─────────────────────────────────────────────────────
 
 def draw_neon(surf, cx, cy, pulse=0.0):
-    r = MUSHROOM_R
+    r = POWERUP_R
     # Pulsing scale
     p = 0.5 + 0.5 * math.sin(pulse)
     glow_r = r + 2 + int(p * 3)
@@ -196,7 +196,7 @@ def draw_neon(surf, cx, cy, pulse=0.0):
 # ── V5 — faceted gem $ ──────────────────────────────────────────────────────
 
 def draw_gem(surf, cx, cy, pulse=0.0):
-    r = MUSHROOM_R
+    r = POWERUP_R
 
     # Soft green ground glow so the gem reads as luminous
     blit_glow(surf, cx, cy, r + 4, (80, 220, 140), alpha=120)

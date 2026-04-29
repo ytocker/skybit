@@ -11,8 +11,8 @@ import pygame
 from game.config import (
     W, H, GROUND_Y, PIPE_W, PIPE_SPACING,
     GAP_START, GAP_MIN, SCROLL_BASE, SCROLL_MAX,
-    BIRD_X, BIRD_R, COIN_R, MUSHROOM_R,
-    MUSHROOM_CHANCE, MUSHROOM_COOLDOWN,
+    BIRD_X, BIRD_R, COIN_R, POWERUP_R,
+    POWERUP_CHANCE, POWERUP_COOLDOWN,
     TRIPLE_DURATION, MAGNET_DURATION, MAGNET_RADIUS,
     SLOWMO_DURATION, SLOWMO_SCALE, KFC_DURATION, GHOST_DURATION,
     GROW_DURATION, GROW_SCALE,
@@ -59,7 +59,7 @@ class World:
         self.kfc_timer    = 0.0
         self.ghost_timer  = 0.0
         self.grow_timer   = 0.0
-        self.mushroom_cooldown = 0.0
+        self.powerup_cooldown = 0.0
 
         # Coin-rush counter: increments each spawn; every Nth pipe is a rush.
         self.pipes_spawned = 0
@@ -247,9 +247,9 @@ class World:
             ))
 
     def _maybe_spawn_powerup(self, pipe: Pipe):
-        if self.mushroom_cooldown > 0:
+        if self.powerup_cooldown > 0:
             return
-        if random.random() >= MUSHROOM_CHANCE:
+        if random.random() >= POWERUP_CHANCE:
             return
         kinds = [k for k, _ in POWERUP_WEIGHTS]
         weights = [w for _, w in POWERUP_WEIGHTS]
@@ -257,7 +257,7 @@ class World:
         x = pipe.x + PIPE_W + PIPE_SPACING * 0.5 + random.uniform(-20, 20)
         y = pipe.gap_y + random.uniform(-10, 10)
         self.powerups.append(PowerUp(x, y, kind=kind))
-        self.mushroom_cooldown = MUSHROOM_COOLDOWN
+        self.powerup_cooldown = POWERUP_COOLDOWN
 
     # ── public control ──────────────────────────────────────────────────────
 
@@ -382,8 +382,8 @@ class World:
             if self.grow_timer > 0:
                 self.grow_timer = max(0.0, self.grow_timer - dt)
             self.bird.grow_active = self.grow_timer > 0
-            if self.mushroom_cooldown > 0:
-                self.mushroom_cooldown -= dt
+            if self.powerup_cooldown > 0:
+                self.powerup_cooldown -= dt
             if self.combo_timer > 0:
                 self.combo_timer -= dt
                 if self.combo_timer <= 0:
@@ -492,7 +492,7 @@ class World:
                 continue
             dx = m.x - bx
             dy = m.y - by
-            if dx * dx + dy * dy < (br + MUSHROOM_R) ** 2:
+            if dx * dx + dy * dy < (br + POWERUP_R) ** 2:
                 m.collected = True
                 self._on_powerup(m)
 

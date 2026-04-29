@@ -27,9 +27,9 @@ COIN_RUSH_INTERVAL = 15
 COIN_RUSH_GAP_BOOST = 1.30
 COIN_RUSH_COINS    = 14
 
-MUSHROOM_R         = 14
-MUSHROOM_CHANCE    = 0.14  # rebranded: chance to spawn *any* power-up
-MUSHROOM_COOLDOWN  = 5.5
+POWERUP_R          = 14    # collision + footprint radius for every power-up
+POWERUP_CHANCE     = 0.14  # chance to spawn a power-up after a pipe gate
+POWERUP_COOLDOWN   = 5.5   # min seconds between power-up spawns
 TRIPLE_DURATION    = 8.0
 MAGNET_DURATION    = 8.0
 MAGNET_RADIUS      = 82.0

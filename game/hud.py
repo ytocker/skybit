@@ -292,8 +292,8 @@ def _draw_buff_icon(surf, rect, kind):
         surf.blit(mg, (cx - gcx, cy - gcy - 2))
     elif kind == "triple":
         # Gold coin with $ glyph — matches the in-world triple power-up icon.
-        from game.config import MUSHROOM_R
-        native = MUSHROOM_R * 2
+        from game.config import POWERUP_R
+        native = POWERUP_R * 2
         icon = pygame.Surface((native, native), pygame.SRCALPHA)
         _draw_dollar_coin_hud(icon, native // 2, native // 2, pulse=0.0)
         scaled = pygame.transform.smoothscale(icon, (20, 20))

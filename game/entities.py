@@ -12,7 +12,7 @@ import pygame
 
 from game.config import (
     W, H, GRAVITY, FLAP_V, MAX_FALL,
-    BIRD_X, BIRD_R, PIPE_W, COIN_R, MUSHROOM_R, GROUND_Y,
+    BIRD_X, BIRD_R, PIPE_W, COIN_R, POWERUP_R, GROUND_Y,
 )
 from game.draw import (
     blit_glow, draw_pillar_mist,
@@ -47,7 +47,7 @@ def _get_kfc_sprite() -> "pygame.Surface":
     global _kfc_sprite
     if _kfc_sprite is None:
         import os
-        r         = MUSHROOM_R + 2
+        r         = POWERUP_R + 2
         logo_size = int(r * 2.4)
         path      = os.path.join(os.path.dirname(__file__), "assets", "kfc_logo.jpg")
         raw = pygame.image.load(path)
@@ -301,7 +301,7 @@ class PowerUp:
         pygame.draw.line(surf, (255, 255, 230), (cx - 4, cy + 2), (cx - 4, cy + 11), 2)
         pygame.draw.line(surf, (200, 180, 145), (cx + 3, cy + 2), (cx + 3, cy + 11), 1)
 
-        cap_rect = pygame.Rect(cx - MUSHROOM_R - 1, cy - MUSHROOM_R + 2, (MUSHROOM_R + 1) * 2, MUSHROOM_R + 5)
+        cap_rect = pygame.Rect(cx - POWERUP_R - 1, cy - POWERUP_R + 2, (POWERUP_R + 1) * 2, POWERUP_R + 5)
 
         # Cap base (deep crimson outline) then vivid red
         pygame.draw.ellipse(surf, (130, 10, 20), cap_rect.inflate(2, 2))
@@ -402,7 +402,7 @@ class PowerUp:
     def _draw_slowmo(self, surf):
         cx = int(self.x)
         cy = int(self.y + math.sin(self.pulse * 0.7) * 3)
-        R = MUSHROOM_R  # 14
+        R = POWERUP_R  # 14
 
         # Clock face on scratch SRCALPHA surface for clean edges
         PAD = 2
@@ -467,7 +467,7 @@ class PowerUp:
     def _draw_kfc(self, surf):
         cx = int(self.x)
         cy = int(self.y + math.sin(self.pulse * 0.9) * 2.5)
-        r  = MUSHROOM_R + 2
+        r  = POWERUP_R + 2
 
         # KFC logo (real image, pre-scaled & circle-clipped)
         logo = _get_kfc_sprite()

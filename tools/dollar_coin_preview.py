@@ -20,7 +20,7 @@ import pygame
 pygame.init()
 pygame.display.set_mode((1, 1))
 
-from game.config import MUSHROOM_R
+from game.config import POWERUP_R
 from game.dollar_coin_glyphs import VARIANTS
 from game.draw import UI_GOLD, UI_CREAM, NEAR_BLACK, lerp_color
 
@@ -56,7 +56,7 @@ def render_cell(name, draw_fn, index):
     pygame.draw.rect(plate, (60, 90, 160, 255), plate.get_rect(), 1, border_radius=14)
     cell.blit(plate, plate_rect.topleft)
 
-    native_size = MUSHROOM_R * 4
+    native_size = POWERUP_R * 4
     icon = pygame.Surface((native_size, native_size), pygame.SRCALPHA)
     draw_fn(icon, native_size // 2, native_size // 2, pulse=0.8)
     big = pygame.transform.smoothscale(icon, (native_size * SCALE // 2,

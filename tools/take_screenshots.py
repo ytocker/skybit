@@ -9,7 +9,7 @@ pygame.init()
 import math, sys
 sys.path.insert(0, os.path.dirname(__file__))
 
-from game.config import W, H, GROUND_Y, COIN_R, MUSHROOM_R
+from game.config import W, H, GROUND_Y, COIN_R, POWERUP_R
 from game import biome as _biome
 from game.draw import get_sky_surface_biome, draw_mountains, draw_cloud, draw_ground
 from game.world import World

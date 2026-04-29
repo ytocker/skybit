@@ -15,7 +15,7 @@ import os
 import pathlib
 import pygame
 
-from game.config import MUSHROOM_R
+from game.config import POWERUP_R
 from game.draw import COIN_GOLD, COIN_DARK, WHITE, NEAR_BLACK
 from game.dollar_variants import BILL_GREEN, BILL_GREEN_DK
 
@@ -25,7 +25,7 @@ from game.dollar_variants import BILL_GREEN, BILL_GREEN_DK
 def _draw_coin_disc(surf, cx, cy):
     """Identical disc for every variant: dark rim → gold fill → warm inner
     ring → specular pinprick. Only the `$` overlay differs."""
-    r = MUSHROOM_R
+    r = POWERUP_R
     pygame.draw.circle(surf, COIN_DARK, (cx, cy), r + 1)
     pygame.draw.circle(surf, COIN_GOLD, (cx, cy), r)
     pygame.draw.circle(surf, (255, 235, 110), (cx, cy), r - 3, 1)
@@ -136,7 +136,7 @@ def draw_coin_font_bold(surf, cx, cy, pulse=0.0):
 
 def draw_coin_heavy_stroke(surf, cx, cy, pulse=0.0):
     _draw_coin_disc(surf, cx, cy)
-    h = int(MUSHROOM_R * 1.5)
+    h = int(POWERUP_R * 1.5)
     _arc_glyph(surf, cx, cy, height=h, color=BILL_GREEN_DK, weight=5)
     _arc_glyph(surf, cx, cy, height=h, color=BILL_GREEN,    weight=3)
 
@@ -145,7 +145,7 @@ def draw_coin_heavy_stroke(surf, cx, cy, pulse=0.0):
 
 def draw_coin_block_letter(surf, cx, cy, pulse=0.0):
     _draw_coin_disc(surf, cx, cy)
-    h = int(MUSHROOM_R * 1.55)
+    h = int(POWERUP_R * 1.55)
     _block_glyph(surf, cx, cy, height=h, color=BILL_GREEN,
                  outline=BILL_GREEN_DK)
 

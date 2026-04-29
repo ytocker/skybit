@@ -20,7 +20,7 @@ import pygame
 pygame.init()
 pygame.display.set_mode((1, 1))   # required for image.save / fonts
 
-from game.config import MUSHROOM_R
+from game.config import POWERUP_R
 from game.dollar_variants import VARIANTS
 from game.draw import UI_GOLD, UI_CREAM, NEAR_BLACK, WHITE, lerp_color
 
@@ -62,7 +62,7 @@ def render_cell(name, draw_fn, index):
 
     # The variant draws into a small surface at native resolution, then we
     # smoothscale up so the in-game footprint is what's evaluated.
-    native_size = MUSHROOM_R * 4
+    native_size = POWERUP_R * 4
     icon = pygame.Surface((native_size, native_size), pygame.SRCALPHA)
     draw_fn(icon, native_size // 2, native_size // 2, pulse=0.8)
     big = pygame.transform.smoothscale(icon, (native_size * SCALE // 2,
