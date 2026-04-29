@@ -6,3 +6,8 @@ dist/
 skybit_save.json
 skybit_scores.json
 tools/screenshots/
+
+# pytest / coverage artefacts
+.coverage
+.pytest_cache/
+htmlcov/
