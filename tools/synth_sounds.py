@@ -70,6 +70,26 @@ def _envelope(i, n, atk_n, rel_n):
     return a
 
 
+def lowpass_1pole(samples, cutoff_hz, sample_rate=SR):
+    """One-pole IIR low-pass.  α = dt/(RC+dt) with RC = 1/(2π·fc).
+    Applied (1) at 3 kHz inside `tone(shape="soft_square")` to tame square-wave
+    harmonics, and (2) at 5 kHz inside `render()` as a final post-processing
+    pass on every sound for warmer overall timbre."""
+    n = len(samples)
+    if n == 0:
+        return array.array('f')
+    rc = 1.0 / (TWO_PI * cutoff_hz)
+    dt = 1.0 / sample_rate
+    alpha = dt / (rc + dt)
+    out = array.array('f', [0.0] * n)
+    y = samples[0]
+    out[0] = y
+    for i in range(1, n):
+        y = y + alpha * (samples[i] - y)
+        out[i] = y
+    return out
+
+
 # ── tone synthesizer ─────────────────────────────────────────────────────────
 
 def tone(dur_ms, f_start, f_end=None, shape="sine", vol=0.4,
@@ -88,6 +108,13 @@ def tone(dur_ms, f_start, f_end=None, shape="sine", vol=0.4,
     vol_ramp_to  — if set, volume linearly ramps from `vol` to `vol_ramp_to`
                    over the full duration (used for "inflating" sounds).
     """
+    if shape == "soft_square":
+        # Render hard square then post-filter at 3 kHz — same call shape, so
+        # call sites can drop in "soft_square" wherever they used "square".
+        raw = tone(dur_ms, f_start, f_end, shape="square", vol=vol,
+                   atk_ms=atk_ms, rel_ms=rel_ms, sweep=sweep, lfo=lfo,
+                   vol_ramp_to=vol_ramp_to)
+        return lowpass_1pole(raw, cutoff_hz=3000)
     if f_end is None:
         f_end = f_start
     n = max(1, int(SR * dur_ms / 1000))
@@ -213,6 +240,9 @@ def _ffmpeg_post(wav_path, ogg_path):
 
 def render(name, samples):
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    # Global one-pole LP at 5 kHz — single biggest perceived-warmth win.
+    # Tames square-harmonic sting while keeping chip character intact.
+    samples = lowpass_1pole(samples, cutoff_hz=5000)
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
         tmp_path = pathlib.Path(tmp.name)
     try:
@@ -228,119 +258,129 @@ def render(name, samples):
             pass
 
 
-# ── 13 sound recipes ─────────────────────────────────────────────────────────
+# ── 13 sound recipes (Warm Chiptune revision) ───────────────────────────────
+#
+# Three rules driving every recipe:
+#   * fundamentals dropped one octave from the prior version
+#   * triangle by default; square only where bite is the character;
+#     "soft_square" (square + 3 kHz LP) where we still need chip tone
+#   * peak volumes 0.22..0.32 to give loudnorm headroom — warmer body, less sting
+# render() applies a global 5 kHz one-pole LP to every output. noise() keeps
+# its own internal LP for poof / thunder / grow's pop burst.
 
 def make_flap():
-    # Single square sweep 320 → 560 over 60 ms, vol 0.22.
-    return tone(60, 320, 560, shape="square", vol=0.22, atk_ms=4, rel_ms=50)
+    # Soft-square sweep 160 → 280 Hz — full octave below the prior square.
+    return tone(60, 160, 280, shape="soft_square", vol=0.18, atk_ms=4, rel_ms=50)
 
 
 def make_coin():
-    # Two-note ascending triangle chime (Mario coin DNA).
-    n1 = tone(60, 988, shape="triangle", vol=0.40, atk_ms=3, rel_ms=30)
-    n2 = tone(80, 1318, shape="triangle", vol=0.45, atk_ms=3, rel_ms=60)
+    # Two-note triangle chime, B4 → E5 (was B5/E6).
+    n1 = tone(65, 494, shape="triangle", vol=0.26, atk_ms=3, rel_ms=30)
+    n2 = tone(85, 659, shape="triangle", vol=0.28, atk_ms=3, rel_ms=60)
     return concat(n1, n2)
 
 
 def make_coin_combo():
-    # Same shape as coin, perfect-fifth higher.
-    n1 = tone(60, 1480, shape="triangle", vol=0.40, atk_ms=3, rel_ms=30)
-    n2 = tone(80, 1976, shape="triangle", vol=0.45, atk_ms=3, rel_ms=60)
+    # Same shape, perfect-fifth higher: F#5 → B5.
+    n1 = tone(65, 740, shape="triangle", vol=0.27, atk_ms=3, rel_ms=30)
+    n2 = tone(85, 988, shape="triangle", vol=0.29, atk_ms=3, rel_ms=60)
     return concat(n1, n2)
 
 
 def make_coin_triple():
-    # Major arpeggio A5 → C#6 → E6 (sine for premium feel) + sparkle tail.
-    n1 = tone(70, 880,  shape="sine", vol=0.42, atk_ms=3, rel_ms=20)
-    n2 = tone(70, 1108, shape="sine", vol=0.42, atk_ms=3, rel_ms=20)
-    # Final note: 70 ms steady E6 then 30 ms sweep E6 → G6 for sparkle.
-    n3a = tone(40, 1318, shape="sine", vol=0.42, atk_ms=2, rel_ms=2)
-    n3b = tone(30, 1318, 1568, shape="sine", vol=0.42, atk_ms=1, rel_ms=20)
+    # Sine arpeggio A4 → C#5 → E5, then 30 ms E5→G5 sparkle on the tail.
+    n1  = tone(70, 440, shape="sine", vol=0.28, atk_ms=3, rel_ms=20)
+    n2  = tone(70, 554, shape="sine", vol=0.28, atk_ms=3, rel_ms=20)
+    n3a = tone(40, 659, shape="sine", vol=0.28, atk_ms=2, rel_ms=2)
+    n3b = tone(30, 659, 784, shape="sine", vol=0.28, atk_ms=1, rel_ms=20)
     return concat(n1, n2, n3a, n3b)
 
 
 def make_mushroom():
-    # 6-note "got item!" fanfare — square + triangle stacked (gain 0.7 on tri).
+    # 6-note "got item!" fanfare, all an octave warmer (C4..C5 instead of C5..C6).
+    # Triangle (gain 1.0) stacked with soft_square (gain 0.3) for chip bite
+    # without the previous square sting.
     notes = [
-        ( 80, 523),
-        ( 80, 659),
-        ( 80, 784),
-        (100, 1047),
-        ( 80, 988),
+        ( 80, 262),   # C4
+        ( 80, 330),   # E4
+        ( 80, 392),   # G4
+        (100, 523),   # C5
+        ( 80, 494),   # B4
     ]
     parts = []
     for ms, f in notes:
-        sq = tone(ms, f, shape="square",   vol=0.40, atk_ms=4, rel_ms=25)
-        tr = tone(ms, f, shape="triangle", vol=0.40, atk_ms=4, rel_ms=25)
-        parts.append(mix(sq, tr, gains=[1.0, 0.7]))
-    # Final note 1047 Hz, 180 ms, with +12 cent vibrato over the last 100 ms.
+        tr = tone(ms, f, shape="triangle",    vol=0.24, atk_ms=4, rel_ms=25)
+        sq = tone(ms, f, shape="soft_square", vol=0.24, atk_ms=4, rel_ms=25)
+        parts.append(mix(tr, sq, gains=[0.7, 0.3]))
+    # Final 180 ms C5 with 8 Hz vibrato over the last 100 ms (±0.5%).
     def lfo(t):
-        # Vibrato only after t >= 0.080 s (last 100 ms of the 180 ms note).
         if t < 0.080:
             return 1.0
         return 1.0 + 0.005 * math.sin(TWO_PI * 8.0 * t)
-    sq = tone(180, 1047, shape="square",   vol=0.40, atk_ms=4, rel_ms=40, lfo=lfo)
-    tr = tone(180, 1047, shape="triangle", vol=0.40, atk_ms=4, rel_ms=40, lfo=lfo)
-    parts.append(mix(sq, tr, gains=[1.0, 0.7]))
+    tr = tone(180, 523, shape="triangle",    vol=0.24, atk_ms=4, rel_ms=40, lfo=lfo)
+    sq = tone(180, 523, shape="soft_square", vol=0.24, atk_ms=4, rel_ms=40, lfo=lfo)
+    parts.append(mix(tr, sq, gains=[0.7, 0.3]))
     return concat(*parts)
 
 
 def make_magnet():
-    # 3-stage rising sweep: triangle 220→880, square 880→1320, triangle ping 1760.
-    s1 = tone(200, 220,  880,  shape="triangle", vol=0.40, atk_ms=4,  rel_ms=10, sweep="exp")
-    s2 = tone(100, 880,  1320, shape="square",   vol=0.42, atk_ms=2,  rel_ms=10)
-    s3 = tone( 50, 1760,        shape="triangle", vol=0.45, atk_ms=2,  rel_ms=40)
+    # 3-stage rising sweep, all an octave lower than before.
+    s1 = tone(200, 110, 440, shape="triangle",    vol=0.26, atk_ms=4, rel_ms=10,
+              sweep="exp")
+    s2 = tone(100, 440, 660, shape="soft_square", vol=0.28, atk_ms=2, rel_ms=10)
+    s3 = tone( 50, 880,      shape="triangle",    vol=0.30, atk_ms=2, rel_ms=40)
     return concat(s1, s2, s3)
 
 
 def make_slowmo():
-    # 3-stage descending phrase, all triangle (warm). Last 80 ms gets vibrato.
-    s1 = tone(130, 880, 660, shape="triangle", vol=0.38, atk_ms=4, rel_ms=10)
-    s2 = tone(130, 660, 440, shape="triangle", vol=0.40, atk_ms=2, rel_ms=10)
-    # Stage 3: 190 ms; the last 80 ms get a 6 Hz vibrato.
+    # Descending triangle 440 → 110 (was 880 → 220). Last 80 ms get 6 Hz vibrato.
+    s1 = tone(130, 440, 330, shape="triangle", vol=0.24, atk_ms=4, rel_ms=10)
+    s2 = tone(130, 330, 220, shape="triangle", vol=0.26, atk_ms=2, rel_ms=10)
     def lfo(t):
         if t < 0.110:
             return 1.0
         return 1.0 + 0.015 * math.sin(TWO_PI * 6.0 * t)
-    s3 = tone(190, 440, 220, shape="triangle", vol=0.42, atk_ms=2, rel_ms=80, lfo=lfo)
+    s3 = tone(190, 220, 110, shape="triangle", vol=0.28, atk_ms=2, rel_ms=80, lfo=lfo)
     return concat(s1, s2, s3)
 
 
 def make_grow():
-    # Stage 1: square exp-sweep 110→660 over 350 ms with vol ramping 0.32→0.45.
-    s1 = tone(350, 110, 660, shape="square", vol=0.32, atk_ms=10, rel_ms=10,
-              sweep="exp", vol_ramp_to=0.45)
+    # Stage 1: soft_square exp-sweep 55 → 330 over 350 ms (octave down), vol
+    # ramps 0.20 → 0.30. Stage 3 pop ends at 440 instead of 880 — warmer pop.
+    s1 = tone(350, 55, 330, shape="soft_square", vol=0.20, atk_ms=10, rel_ms=10,
+              sweep="exp", vol_ramp_to=0.30)
     s2 = silence(30)
-    # Stage 3: triangle 1320→880 over 80 ms + noise burst on top of first 40 ms.
-    pop = tone(80, 1320, 880, shape="triangle", vol=0.50, atk_ms=1, rel_ms=60)
-    burst = noise(40, cutoff_hz=4000, vol=0.25, atk_ms=1, rel_ms=20, seed=1)
-    pop_with_burst = mix(pop, burst)
-    return concat(s1, s2, pop_with_burst)
+    pop = tone(80, 660, 440, shape="triangle", vol=0.32, atk_ms=1, rel_ms=60)
+    # Noise burst stays at 2 kHz LP — internal cutoff, untouched by the global LP.
+    burst = noise(40, cutoff_hz=2000, vol=0.18, atk_ms=1, rel_ms=20, seed=1)
+    return concat(s1, s2, mix(pop, burst))
 
 
 def make_ghost():
-    # Square parabolic 440→660→440 with 5.5 Hz / 0.4-depth ring-mod.
-    half = tone(200, 440, 660, shape="square", vol=0.36, atk_ms=4, rel_ms=10)
-    back = tone(200, 660, 440, shape="square", vol=0.36, atk_ms=2, rel_ms=40)
-    return ring_mod(concat(half, back), lfo_hz=5.5, depth=0.4)
+    # Triangle (changed from square) sweeping 220 → 330 → 220 with deep
+    # frequency vibrato — produces wobble without the metallic ring-mod tones.
+    def lfo(t):
+        return 1.0 + 0.4 * math.sin(TWO_PI * 5.5 * t)
+    half = tone(200, 220, 330, shape="triangle", vol=0.22, atk_ms=4, rel_ms=10, lfo=lfo)
+    back = tone(200, 330, 220, shape="triangle", vol=0.22, atk_ms=2, rel_ms=40, lfo=lfo)
+    return concat(half, back)
 
 
 def make_poof():
-    # Noise burst (LP at 2.5 kHz) + tonal nucleus for shape.
-    n = noise(120, cutoff_hz=2500, vol=0.45, atk_ms=2, rel_ms=110, seed=2)
-    t = tone(80, 1760, 880, shape="triangle", vol=0.20, atk_ms=2, rel_ms=60)
+    # Tighter noise LP (1.8 kHz, was 2.5 kHz) — under 2 kHz reads as "puff",
+    # above as "hiss". Tonal nucleus also dropped an octave (1760 → 880).
+    n = noise(120, cutoff_hz=1800, vol=0.32, atk_ms=2, rel_ms=110, seed=2)
+    t = tone(80, 880, 440, shape="triangle", vol=0.16, atk_ms=2, rel_ms=60)
     return mix(n, t)
 
 
 def make_thunder():
-    # Low triangle 60 Hz with a slow random walk + noise tail starting at 200 ms.
+    # Triangle dropped 60 → 45 Hz with a tighter wander; noise tail LP 200 → 150 Hz.
     rng = random.Random(7)
-    chunks = []
     chunk_ms = 50
     total_ms = 800
     n_chunks = total_ms // chunk_ms
-    # Pre-roll the chunk frequencies so we can interpolate cleanly.
-    freqs = [60 + rng.uniform(-5, 5) for _ in range(n_chunks + 1)]
+    freqs = [45 + rng.uniform(-4, 4) for _ in range(n_chunks + 1)]
     body = array.array('f')
     phase = 0.0
     for ci in range(n_chunks):
@@ -349,42 +389,45 @@ def make_thunder():
             t = i / n_in_chunk
             f = freqs[ci] + (freqs[ci + 1] - freqs[ci]) * t
             phase += TWO_PI * f / SR
-            v = _triangle(phase) * 0.42
-            body.append(v)
-    # AR envelope over the body — slow attack, no release here (noise tail
-    # carries the trailing energy).
+            body.append(_triangle(phase) * 0.36)
     atk_n = int(SR * 50 / 1000)
     for i in range(atk_n):
         body[i] *= i / atk_n
-    # Noise tail starts at 200 ms, lasts 600 ms, 400 ms decay.
-    tail = noise(600, cutoff_hz=200, vol=0.20, atk_ms=10, rel_ms=400, seed=3)
+    tail = noise(600, cutoff_hz=150, vol=0.22, atk_ms=10, rel_ms=400, seed=3)
     pad = silence(200)
     tail = concat(pad, tail)
     return mix(body, tail)
 
 
 def make_death():
-    # 4-note descending square with a B3→F#3 bend on the last note.
-    n1 = tone( 80, 440, shape="square", vol=0.38, atk_ms=4, rel_ms=20)
-    n2 = tone( 80, 392, shape="square", vol=0.40, atk_ms=4, rel_ms=20)
-    n3 = tone(100, 330, shape="square", vol=0.42, atk_ms=4, rel_ms=20)
-    n4a = tone( 60, 247, shape="square", vol=0.45, atk_ms=4, rel_ms=10)
-    n4b = tone( 80, 247, 185, shape="square", vol=0.45, atk_ms=2, rel_ms=60)
+    # 4-note descending soft_square; whole phrase moves down a fourth from before.
+    # Bottom note bends G3 → D3 over the last 80 ms.
+    n1  = tone( 80, 330, shape="soft_square", vol=0.26, atk_ms=4, rel_ms=20)
+    n2  = tone( 80, 294, shape="soft_square", vol=0.28, atk_ms=4, rel_ms=20)
+    n3  = tone(100, 247, shape="soft_square", vol=0.30, atk_ms=4, rel_ms=20)
+    n4a = tone( 60, 196, shape="soft_square", vol=0.32, atk_ms=4, rel_ms=10)
+    n4b = tone( 80, 196, 147, shape="soft_square", vol=0.32, atk_ms=2, rel_ms=60)
     return concat(n1, n2, n3, n4a, n4b)
 
 
 def make_gameover():
-    # 5-note descending triangle + square stack. Final note fades out.
-    notes = [(110, 523), (110, 440), (130, 392), (150, 330)]
+    # 5-note descending phrase G4..G3 (was C5..C4). Triangle + soft_square stack.
+    notes = [
+        (110, 392),  # G4
+        (110, 330),  # E4
+        (130, 294),  # D4
+        (150, 247),  # B3
+    ]
     parts = []
-    for ms, f in notes:
-        tr = tone(ms, f, shape="triangle", vol=0.40, atk_ms=4, rel_ms=25)
-        sq = tone(ms, f, shape="square",   vol=0.40, atk_ms=4, rel_ms=25)
-        parts.append(mix(tr, sq, gains=[1.0, 0.6]))
-    # Final 200 ms note at C4, fade-out the last 100 ms.
-    tr = tone(200, 262, shape="triangle", vol=0.44, atk_ms=4, rel_ms=10)
-    sq = tone(200, 262, shape="square",   vol=0.44, atk_ms=4, rel_ms=10)
-    final = mix(tr, sq, gains=[1.0, 0.6])
+    vols = [0.24, 0.26, 0.28, 0.30]
+    for (ms, f), vol in zip(notes, vols):
+        tr = tone(ms, f, shape="triangle",    vol=vol, atk_ms=4, rel_ms=25)
+        sq = tone(ms, f, shape="soft_square", vol=vol, atk_ms=4, rel_ms=25)
+        parts.append(mix(tr, sq, gains=[0.7, 0.3]))
+    # Final 200 ms G3, last 100 ms fades to silence.
+    tr = tone(200, 196, shape="triangle",    vol=0.32, atk_ms=4, rel_ms=10)
+    sq = tone(200, 196, shape="soft_square", vol=0.32, atk_ms=4, rel_ms=10)
+    final = mix(tr, sq, gains=[0.7, 0.3])
     fade_out(final, 100)
     parts.append(final)
     return concat(*parts)
