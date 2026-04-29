@@ -53,6 +53,7 @@ JING_ROOT  = pathlib.Path("/tmp/kenney-music-jingles-for-godot")
 IMP_ROOT   = pathlib.Path("/tmp/kenney-impact-sounds-for-godot")
 IFACE_ROOT = pathlib.Path("/tmp/kenney-interface-sounds")
 UI_ROOT    = pathlib.Path("/tmp/kenney-ui-audio")
+SCIFI_ROOT = pathlib.Path("/tmp/kenney-sci-fi-sounds-for-godot")
 
 
 def find_file(root: pathlib.Path, name: str) -> pathlib.Path:
@@ -68,6 +69,7 @@ def J(name):  return find_file(JING_ROOT,  name)   # Music Jingles (NES + Hit et
 def Im(name): return find_file(IMP_ROOT,   name)   # Impact Sounds
 def If(name): return find_file(IFACE_ROOT, name)   # Interface Sounds
 def U(name):  return find_file(UI_ROOT,    name)   # UI Audio
+def S(name):  return find_file(SCIFI_ROOT, name)   # Sci-fi Sounds (force_field, low_freq_explosion, etc.)
 
 
 # ── Synth sweeteners (stdlib only; only ever mixed UNDER a real sample) ─────
@@ -175,109 +177,115 @@ VARIANT_PACK_EVENTS = {"flap", "coin", "coin_combo"}
 
 
 def _spec():
+    """Concept C 'Pop Mobile Hyper-Casual' candidate set — closest-fit
+    substitution given the libraries actually reachable from the build host
+    (Casino + Sonniss are unreachable). Each candidate is either a 3-tuple
+    (slot, label, layers) or a 4-tuple (..., reverb) where reverb is
+    'subtle' / 'heavy' / None — see REVERB_AF for the ffmpeg specs."""
     return {
+        # Variant packs — 3 single-source files per slot, rendered as _a/_b/_c
         "flap": [
-            (1, "pep_low_123",        [D("pep_sound_1"), D("pep_sound_2"), D("pep_sound_3")]),
-            (2, "pep_mid_345",        [D("pep_sound_3"), D("pep_sound_4"), D("pep_sound_5")]),
-            (3, "iface_pluck_drop",   [If("pluck_001"),  If("pluck_002"),  If("drop_004")]),
-            (4, "iface_drop",         [If("drop_001"),   If("drop_002"),   If("drop_003")]),
-            (5, "iface_click",        [If("click_001"),  If("click_002"),  If("click_003")]),
+            (1, "iface_select_123", [If("select_001"), If("select_002"), If("select_003")]),
+            (2, "iface_tick_124",   [If("tick_001"),   If("tick_002"),   If("tick_004")]),
+            (3, "iface_drop_123",   [If("drop_001"),   If("drop_002"),   If("drop_003")]),
+            (4, "ui_click_123",     [U("click1"),      U("click2"),      U("click3")]),
+            (5, "iface_pluck_drop", [If("pluck_001"),  If("pluck_002"),  If("drop_004")]),
         ],
         "coin": [
-            (1, "two_three_tone",     [D("two_tone_1"),  D("two_tone_2"),  D("three_tone_1")]),
-            (2, "zap_two_three",      [D("zap_two_tone"), D("zap_two_tone_2"), D("zap_three_tone_up")]),
-            (3, "nes_short_012",      [J("jingles_nes_0"), J("jingles_nes_1"), J("jingles_nes_2")]),
-            (4, "iface_confirm",      [If("confirmation_001"), If("confirmation_002"), If("confirmation_003")]),
-            (5, "iface_glass",        [If("glass_001"), If("glass_002"), If("glass_003")]),
+            (1, "iface_confirm_123",  [If("confirmation_001"), If("confirmation_002"), If("confirmation_003")]),
+            (2, "iface_glass_low",    [If("glass_001"), If("glass_002"), If("glass_003")]),
+            (3, "iface_select_456",   [If("select_004"), If("select_005"), If("select_006")]),
+            (4, "dig_two_three_tone", [D("two_tone_1"), D("two_tone_2"), D("three_tone_1")]),
+            (5, "dig_zap_two_three",  [D("zap_two_tone"), D("zap_two_tone_2"), D("zap_three_tone_up")]),
         ],
         "coin_combo": [
-            (1, "three_tone_pack",    [D("three_tone_1"), D("three_tone_2"), D("zap_three_tone_up")]),
-            (2, "nes_phrases_123",    [J("jingles_nes_1"), J("jingles_nes_2"), J("jingles_nes_3")]),
-            (3, "zap_ascending",      [D("zap_three_tone_up"), D("zap_two_tone"), D("zap_two_tone_2")]),
-            (4, "switch_clean",       [U("switch1"), U("switch2"), U("switch3")]),
-            (5, "phaser_brief",       [D("phaser_up_1"), D("phaser_up_2"), D("phaser_up_3")]),
+            (1, "iface_glass_high",   [If("glass_004"), If("glass_005"), If("glass_006")]),
+            (2, "iface_question",     [If("question_001"), If("question_002"), If("question_003")]),
+            (3, "dig_three_tone",     [D("three_tone_1"), D("three_tone_2"), D("zap_three_tone_up")]),
+            (4, "dig_phaser_brief",   [D("phaser_up_1"), D("phaser_up_2"), D("phaser_up_3")]),
+            (5, "iface_open",         [If("open_001"), If("open_002"), If("open_003")]),
         ],
 
+        # Single-output events — Concept C spec adds reverb tails on the
+        # high-stakes / "premium" candidates.
         "coin_triple": [
-            (1, "layered_nes3+pwr5",  [(J("jingles_nes_3"), 1.0), (D("power_up_5"), 0.4)]),
-            (2, "nes_4_solo",         [(J("jingles_nes_4"), 1.0)]),
-            (3, "nes_8_arpeggio",     [(J("jingles_nes_8"), 1.0)]),
-            (4, "layered_nes5+up3",   [(J("jingles_nes_5"), 1.0), (D("phaser_up_3"), 0.3)]),
-            (5, "nes_6_solo",         [(J("jingles_nes_6"), 1.0)]),
+            (1, "iface_confirm4+ff0",   [(If("confirmation_004"), 1.0), (S("force_field_000"), 0.3)],   "subtle"),
+            (2, "nes_3_accent",         [(J("jingles_nes_3"), 1.0)]),
+            (3, "iface_glass4+up3",     [(If("glass_004"), 1.0), (D("phaser_up_3"), 0.4)],              "subtle"),
+            (4, "scifi_force_field_1",  [(S("force_field_001"), 1.0)],                                  "subtle"),
+            (5, "iface_confirm2+cn0",   [(If("confirmation_002"), 1.0), (S("computer_noise_000"), 0.3)],"subtle"),
         ],
 
         "mushroom": [
-            (1, "layered_nes10+up3+sub", [(J("jingles_nes_10"), 1.0),
-                                           (D("phaser_up_3"),    0.3),
-                                           ("synth:sub_bump_60_80", 0.5)]),
-            (2, "nes_11_solo",         [(J("jingles_nes_11"), 1.0)]),
-            (3, "layered_nes12+up5",   [(J("jingles_nes_12"), 1.0), (D("phaser_up_5"), 0.4)]),
-            (4, "nes_13_solo",         [(J("jingles_nes_13"), 1.0)]),
-            (5, "layered_nes14+pwr8",  [(J("jingles_nes_14"), 1.0), (D("power_up_8"), 0.3)]),
+            (1, "up3+confirm4+sub",     [(D("phaser_up_3"), 1.0), (If("confirmation_004"), 1.0), ("synth:sub_bump_60_80", 0.5)], "subtle"),
+            (2, "pwr8+ff2",             [(D("power_up_8"), 1.0), (S("force_field_002"), 0.3)],          "subtle"),
+            (3, "nes_11_accent",        [(J("jingles_nes_11"), 1.0)]),
+            (4, "up5+confirm2+sub",     [(D("phaser_up_5"), 1.0), (If("confirmation_002"), 1.0), ("synth:sub_bump_60_80", 0.4)], "subtle"),
+            (5, "power_up_3_solo",      [(D("power_up_3"), 1.0)],                                       "subtle"),
         ],
 
         "magnet": [
-            (1, "phaser_up_2_solo",    [(D("phaser_up_2"), 1.0)]),
-            (2, "power_up_5_solo",     [(D("power_up_5"), 1.0)]),
-            (3, "layered_up4+pwr11",   [(D("phaser_up_4"), 1.0), (D("power_up_11"), 0.4)]),
-            (4, "phaser_up_7_solo",    [(D("phaser_up_7"), 1.0)]),
-            (5, "layered_up3+zap",     [(D("phaser_up_3"), 1.0), (D("zap_three_tone_up"), 0.5)]),
+            (1, "phaser_up_2_solo",     [(D("phaser_up_2"), 1.0)]),
+            (2, "phaser_up_4_solo",     [(D("phaser_up_4"), 1.0)]),
+            (3, "up3+confirm4_lock",    [(D("phaser_up_3"), 1.0), (If("confirmation_004"), 0.4)]),
+            (4, "power_up_5_solo",      [(D("power_up_5"), 1.0)]),
+            (5, "up7+computer_noise1",  [(D("phaser_up_7"), 1.0), (S("computer_noise_001"), 0.3)]),
         ],
 
         "slowmo": [
-            (1, "phaser_down_2_solo",  [(D("phaser_down_2"), 1.0)]),
-            (2, "layered_down3+low",   [(D("phaser_down_3"), 1.0), (D("low_down"), 0.4)]),
-            (3, "low_down_solo",       [(D("low_down"), 1.0)]),
-            (4, "layered_down1+zap",   [(D("phaser_down_1"), 1.0), (D("zap_three_tone_down"), 0.4)]),
-            (5, "zap_down_solo",       [(D("zap_three_tone_down"), 1.0)]),
+            (1, "phaser_down_2_solo",   [(D("phaser_down_2"), 1.0)]),
+            (2, "phaser_down_3_solo",   [(D("phaser_down_3"), 1.0)]),
+            (3, "down3+computer_noise2",[(D("phaser_down_3"), 1.0), (S("computer_noise_002"), 0.3)]),
+            (4, "low_down_solo",        [(D("low_down"), 1.0)]),
+            (5, "down1+zap_down",       [(D("phaser_down_1"), 1.0), (D("zap_three_tone_down"), 0.4)]),
         ],
 
         "grow": [
-            (1, "layered_up3+wood_med",[(D("phaser_up_3"), 1.0), (Im("impact_wood_medium_000"), 0.5)]),
-            (2, "power_up_8_solo",     [(D("power_up_8"), 1.0)]),
-            (3, "power_up_3_solo",     [(D("power_up_3"), 1.0)]),
-            (4, "layered_up5+wood_lt", [(D("phaser_up_5"), 1.0), (Im("impact_wood_light_002"), 0.4)]),
-            (5, "layered_pwr11+wood",  [(D("power_up_11"), 1.0), (Im("impact_wood_medium_002"), 0.5)]),
+            (1, "up3+wood_med0",        [(D("phaser_up_3"), 1.0), (Im("impact_wood_medium_000"), 0.5)]),
+            (2, "power_up_8_solo",      [(D("power_up_8"), 1.0)]),
+            (3, "ff3+wood_lt2",         [(S("force_field_003"), 1.0), (Im("impact_wood_light_002"), 0.4)]),
+            (4, "pwr11+wood_med2",      [(D("power_up_11"), 1.0), (Im("impact_wood_medium_002"), 0.5)]),
+            (5, "power_up_3_solo",      [(D("power_up_3"), 1.0)]),
         ],
 
         "ghost": [
-            (1, "phase_jump_1_solo",   [(D("phase_jump_1"), 1.0)]),
-            (2, "phase_jump_3_solo",   [(D("phase_jump_3"), 1.0)]),
-            (3, "phase_jump_5_solo",   [(D("phase_jump_5"), 1.0)]),
-            (4, "layered_pj5+space",   [(D("phase_jump_5"), 1.0), (D("space_trash_1"), 0.3)]),
-            (5, "layered_pj2+lowtone", [(D("phase_jump_2"), 1.0), (D("low_three_tone"), 0.3)]),
+            (1, "pj3+ff1_airy",         [(D("phase_jump_3"), 1.0), (S("force_field_001"), 0.3)],        "subtle"),
+            (2, "phase_jump_5_solo",    [(D("phase_jump_5"), 1.0)],                                     "subtle"),
+            (3, "phase_jump_1_solo",    [(D("phase_jump_1"), 1.0)],                                     "subtle"),
+            (4, "scifi_force_field_4",  [(S("force_field_004"), 1.0)],                                  "subtle"),
+            (5, "pj2+computer_noise0",  [(D("phase_jump_2"), 1.0), (S("computer_noise_000"), 0.3)],     "subtle"),
         ],
 
         "poof": [
-            (1, "wood_light_002_solo", [(Im("impact_wood_light_002"), 1.0)]),
-            (2, "generic_lt_001_solo", [(Im("impact_generic_light_001"), 1.0)]),
-            (3, "layered_pep2+noise",  [(D("pep_sound_2"), 1.0), ("synth:noise_burst_1500hz", 0.3)]),
-            (4, "low_random_solo",     [(D("low_random"), 1.0)]),
-            (5, "layered_pj2+wood",    [(D("phase_jump_2"), 1.0), (Im("impact_generic_light_002"), 0.4)]),
+            (1, "iface_select_001_solo",[(If("select_001"), 1.0)]),
+            (2, "ui_click1_solo",       [(U("click1"), 1.0)]),
+            (3, "impact_generic_lt_1",  [(Im("impact_generic_light_001"), 1.0)]),
+            (4, "iface_drop_001_solo",  [(If("drop_001"), 1.0)]),
+            (5, "select2+noise_burst",  [(If("select_002"), 1.0), ("synth:noise_burst_1500hz", 0.3)]),
         ],
 
         "thunder": [
-            (1, "low_three_tone_solo", [(D("low_three_tone"), 1.0)]),
-            (2, "layered_low_random",  [(D("low_random"), 1.0), (D("low_down"), 0.5)]),
-            (3, "low_down_solo",       [(D("low_down"), 1.0)]),
-            (4, "layered_low3+space",  [(D("low_three_tone"), 1.0), (D("space_trash_2"), 0.4)]),
-            (5, "space_trash_3_solo",  [(D("space_trash_3"), 1.0)]),
+            (1, "scifi_low_freq_exp_0", [(S("low_frequency_explosion_000"), 1.0)]),
+            (2, "scifi_low_freq_exp_1", [(S("low_frequency_explosion_001"), 1.0)]),
+            (3, "low_three_tone_solo",  [(D("low_three_tone"), 1.0)]),
+            (4, "lfe0+low_random",      [(S("low_frequency_explosion_000"), 1.0), (D("low_random"), 0.4)]),
+            (5, "scifi_space_engine_lo",[(S("space_engine_low_000"), 1.0)]),
         ],
 
         "death": [
-            (1, "layered_hit0+whistle",[(J("jingles_hit_0"), 1.0), ("synth:whistle_down_80", 0.3)]),
-            (2, "hit_4_solo",          [(J("jingles_hit_4"), 1.0)]),
-            (3, "hit_8_solo",          [(J("jingles_hit_8"), 1.0)]),
-            (4, "layered_hit11+low",   [(J("jingles_hit_11"), 1.0), (D("low_down"), 0.3)]),
-            (5, "hit_13_solo",         [(J("jingles_hit_13"), 1.0)]),
+            (1, "wood_med2+whistle",    [(Im("impact_wood_medium_002"), 1.0), ("synth:whistle_down_80", 0.4)]),
+            (2, "hit_4_accent",         [(J("jingles_hit_4"), 1.0)]),
+            (3, "impact_generic_lt_3",  [(Im("impact_generic_light_003"), 1.0)]),
+            (4, "error1+low_down",      [(If("error_001"), 1.0), (D("low_down"), 0.3)]),
+            (5, "drop2+whistle_down",   [(If("drop_002"), 1.0), ("synth:whistle_down_80", 0.4)]),
         ],
 
         "gameover": [
-            (1, "layered_nes15+pad",   [(J("jingles_nes_15"), 1.0), ("synth:soft_pad_200", 0.2)]),
-            (2, "nes_5_solo",          [(J("jingles_nes_5"), 1.0)]),
-            (3, "nes_7_solo",          [(J("jingles_nes_7"), 1.0)]),
-            (4, "layered_nes14+pwr7",  [(J("jingles_nes_14"), 1.0), (D("power_up_7"), 0.3)]),
-            (5, "nes_9_solo",          [(J("jingles_nes_9"), 1.0)]),
+            (1, "low3tone+pad_heavy",   [(D("low_three_tone"), 1.0), ("synth:soft_pad_200", 0.3)],      "heavy"),
+            (2, "nes_15_accent",        [(J("jingles_nes_15"), 1.0)]),
+            (3, "down3+pad",            [(D("phaser_down_3"), 1.0), ("synth:soft_pad_200", 0.3)],       "subtle"),
+            (4, "ff2+pad",              [(S("force_field_002"), 1.0), ("synth:soft_pad_200", 0.3)],     "subtle"),
+            (5, "nes5+pad",             [(J("jingles_nes_5"), 1.0), ("synth:soft_pad_200", 0.2)],       "subtle"),
         ],
     }
 
@@ -286,6 +294,22 @@ def _spec():
 
 NORM_AF = ("silenceremove=start_periods=1:start_silence=0.005:start_threshold=-60dB,"
            "loudnorm=I=-16:LRA=11:tp=-1.5")
+
+# Concept C reverb tails — applied (when the candidate spec asks) BEFORE the
+# normalise chain so the reverb energy gets factored into loudnorm.
+#   subtle  — single short tap, ~60 ms delay, light feedback
+#   heavy   — two taps (60 + 150 ms), used only on the gameover pad layer
+REVERB_AF = {
+    "subtle": "aecho=0.7:0.7:60:0.3",
+    "heavy":  "aecho=0.8:0.88:60|150:0.4|0.3",
+}
+
+
+def _af_chain(reverb):
+    """Build the audio-filter chain string. `reverb` is None / 'subtle' / 'heavy'."""
+    if reverb and reverb in REVERB_AF:
+        return f"{REVERB_AF[reverb]},{NORM_AF}"
+    return NORM_AF
 
 
 def _materialise_synth(spec, tmpdir):
@@ -304,18 +328,19 @@ def _materialise_synth(spec, tmpdir):
     return spec
 
 
-def render_single(src: pathlib.Path, gain: float, out: pathlib.Path):
+def render_single(src: pathlib.Path, gain: float, out: pathlib.Path, reverb=None):
     cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
            "-i", str(src),
-           "-af", f"volume={gain},{NORM_AF}",
+           "-af", f"volume={gain},{_af_chain(reverb)}",
            "-ac", "1", "-ar", str(SR),
            "-c:a", "libvorbis", "-q:a", "4",
            str(out)]
     subprocess.run(cmd, check=True)
 
 
-def render_layered(layers, out: pathlib.Path):
-    """ffmpeg amix of N inputs with per-input volume + the standard normalise tail."""
+def render_layered(layers, out: pathlib.Path, reverb=None):
+    """ffmpeg amix of N inputs with per-input volume + the standard normalise tail.
+    Optional `reverb` adds an aecho stage before the normalise chain."""
     cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error"]
     for src, _gain in layers:
         cmd += ["-i", str(src)]
@@ -325,7 +350,7 @@ def render_layered(layers, out: pathlib.Path):
         parts.append(f"[{i}:a]volume={gain}[v{i}]")
         labels.append(f"[v{i}]")
     parts.append("".join(labels) + f"amix=inputs={len(layers)}:duration=longest:dropout_transition=0[mix]")
-    parts.append(f"[mix]{NORM_AF}[out]")
+    parts.append(f"[mix]{_af_chain(reverb)}[out]")
     cmd += ["-filter_complex", ";".join(parts),
             "-map", "[out]",
             "-ac", "1", "-ar", str(SR),
@@ -335,25 +360,31 @@ def render_layered(layers, out: pathlib.Path):
 
 
 def render_event(name: str, candidates, tmpdir: pathlib.Path) -> int:
+    """Each candidate is (slot, label, layers) or (slot, label, layers, reverb)."""
     out_dir = OUT_DIR / name
     out_dir.mkdir(parents=True, exist_ok=True)
     is_pack = name in VARIANT_PACK_EVENTS
     written = 0
-    for slot, label, layers in candidates:
+    for cand in candidates:
+        if len(cand) == 4:
+            slot, label, layers, reverb = cand
+        else:
+            slot, label, layers = cand
+            reverb = None
         if is_pack:
             for sub, src in zip("abc", layers):
                 src = _materialise_synth(src, tmpdir)
                 out = out_dir / f"{slot}_{label}_{sub}.ogg"
-                render_single(src, 1.0, out)
+                render_single(src, 1.0, out, reverb=reverb)
                 written += 1
         else:
             resolved = [_materialise_synth(L, tmpdir) for L in layers]
             out = out_dir / f"{slot}_{label}.ogg"
             if len(resolved) == 1:
                 src, gain = resolved[0]
-                render_single(src, gain, out)
+                render_single(src, gain, out, reverb=reverb)
             else:
-                render_layered(resolved, out)
+                render_layered(resolved, out, reverb=reverb)
             written += 1
     return written
 
