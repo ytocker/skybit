@@ -5,4 +5,12 @@ dist/
 *.spec
 skybit_save.json
 skybit_scores.json
+skybit_ratelimit.json
+skybit_privacy.json
 tools/screenshots/
+
+# Build-time HMAC secret written by inject_theme.py — never commit.
+game/security/_build_secret.py
+.env
+.env.*
+

@@ -16,6 +16,10 @@ html = src.read_text(encoding="utf-8")
 
 _SB_URL = os.environ.get("SUPABASE_URL", "")
 _SB_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
+# Build-time HMAC secret used by game/security/crypto.py + the JS bridge to
+# sign score-submit envelopes. Rotates on every Netlify deploy. Generated
+# fresh if not provided so local builds still work.
+_SB_HMAC = os.environ.get("SKYBIT_HMAC_KEY") or os.urandom(24).hex()
 
 # ── 1. Dark body + canvas background (CSS) ───────────────────────────────────
 html = html.replace("background-color:powderblue", "background-color:#0d0820")
@@ -303,14 +307,37 @@ body   { background: #0d0820 !important; }
 <script>
 /* ── Supabase leaderboard bridge ───────────────────────────────────────── */
 (function () {
-    var _SB_URL = "__SB_URL__";
-    var _SB_KEY = "__SB_KEY__";
+    var _SB_URL  = "__SB_URL__";
+    var _SB_KEY  = "__SB_KEY__";
+    var _SB_HMAC = "__SB_HMAC__";  /* HMAC-SHA256 secret, replaced at build time */
 
     /* Fire-and-poll pattern: Python polls window._lbSubmitDone / window._lbFetchResult
        instead of awaiting a JS Promise directly (which freezes Python's asyncio loop). */
-    window._lbSubmitDone = null;
-    window._lbFetchResult = null;
+    window._lbSubmitDone   = null;
+    window._lbFetchResult  = null;
     window._skyLogPlayDone = null;
+    window._skySecEventDone = null;
+
+    /* HMAC-SHA256(text) → hex string. Uses SubtleCrypto. */
+    async function _hmacHex(keyStr, text) {
+        try {
+            var enc = new TextEncoder();
+            var key = await window.crypto.subtle.importKey(
+                'raw', enc.encode(keyStr),
+                {name: 'HMAC', hash: 'SHA-256'},
+                false, ['sign']
+            );
+            var sig = await window.crypto.subtle.sign('HMAC', key, enc.encode(text));
+            var bytes = new Uint8Array(sig);
+            var hex = '';
+            for (var i = 0; i < bytes.length; i++) {
+                hex += bytes[i].toString(16).padStart(2, '0');
+            }
+            return hex;
+        } catch (e) {
+            return '';
+        }
+    }
 
     /* Anonymous device UUID — stable across reloads on the same browser via
        localStorage, regenerated on a fresh device or after the user clears
@@ -336,23 +363,72 @@ body   { background: #0d0820 !important; }
         }
     }
 
+    /* Legacy: kept for back-compat with any cached client. NEW: signed RPC. */
     window.lbSubmitStart = function (name, score) {
+        var env = JSON.stringify({name: String(name), score: Number(score),
+                                  duration: 0, pillars: 0, run_sig: '',
+                                  chain_last: '', chain_count: 0,
+                                  y_stddev_centi: 0, y_range_centi: 0});
+        window.lbSubmitSignedStart(env);
+    };
+
+    /* Signed-RPC submit. Python builds the envelope; we add device_id +
+       client_sig and POST to /rest/v1/rpc/submit_score which enforces
+       plausibility, rate-limit, and the anti-cheat trajectory check. */
+    window.lbSubmitSignedStart = function (envelopeJson) {
         window._lbSubmitDone = null;
         (async function () {
             if (!_SB_URL || !_SB_KEY) { window._lbSubmitDone = false; return; }
             try {
-                var r = await fetch(_SB_URL + '/rest/v1/scores', {
+                var env = JSON.parse(String(envelopeJson));
+                var device = _skybitDeviceId();
+                /* HMAC over the canonical envelope so a tampered field
+                   produces a sig the server's presence-check still
+                   accepts but real verification (off-line analytics)
+                   would reject. The presence check alone forces the
+                   client to go through this signed bridge. */
+                var canon = JSON.stringify({
+                    n: String(env.name || ''),
+                    s: Number(env.score || 0),
+                    d: Number(env.duration || 0),
+                    p: Number(env.pillars || 0),
+                    rs: String(env.run_sig || ''),
+                    cl: String(env.chain_last || ''),
+                    cc: Number(env.chain_count || 0),
+                    ys: Number(env.y_stddev_centi || 0),
+                    yr: Number(env.y_range_centi || 0),
+                    dev: device
+                });
+                var sig = await _hmacHex(_SB_HMAC, canon);
+                var body = {
+                    p_name:           String(env.name || ''),
+                    p_score:          Number(env.score || 0),
+                    p_device:         device,
+                    p_duration:       Number(env.duration || 0),
+                    p_run_sig:        String(env.run_sig || ''),
+                    p_pillars:        Number(env.pillars || 0),
+                    p_y_stddev_centi: Number(env.y_stddev_centi || 0),
+                    p_y_range_centi:  Number(env.y_range_centi || 0),
+                    p_chain_last:     String(env.chain_last || ''),
+                    p_chain_count:    Number(env.chain_count || 0),
+                    p_client_sig:     sig
+                };
+                var r = await fetch(_SB_URL + '/rest/v1/rpc/submit_score', {
                     method: 'POST',
                     headers: {
                         'apikey': _SB_KEY,
                         'Authorization': 'Bearer ' + _SB_KEY,
-                        'Content-Type': 'application/json',
-                        'Prefer': 'return=minimal'
+                        'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({name: String(name), score: Number(score)})
+                    body: JSON.stringify(body)
                 });
+                if (!r.ok) {
+                    /* Try to surface the server-side rejection reason on
+                       the JS console — invaluable for debugging. */
+                    try { console.warn('submit_score rejected:', await r.text()); } catch (e) {}
+                }
                 window._lbSubmitDone = r.ok;
-            } catch (e) { console.warn('lbSubmitStart:', e); window._lbSubmitDone = false; }
+            } catch (e) { console.warn('lbSubmitSignedStart:', e); window._lbSubmitDone = false; }
         })();
     };
 
@@ -370,16 +446,54 @@ body   { background: #0d0820 !important; }
         })();
     };
 
-    /* Per-run telemetry. Python passes a JSON string; we parse it,
-       merge in the device UUID, and POST to public.plays. */
+    /* Per-run telemetry. Python passes a JSON string; we parse it, merge
+       in the device UUID, and POST to the public.log_play RPC which
+       enforces plausibility caps. */
     window.skyLogPlayStart = function (payloadJson) {
         window._skyLogPlayDone = null;
         (async function () {
             if (!_SB_URL || !_SB_KEY) { window._skyLogPlayDone = false; return; }
             try {
-                var body = JSON.parse(String(payloadJson));
-                body.device_id = _skybitDeviceId();
-                var r = await fetch(_SB_URL + '/rest/v1/plays', {
+                var p = JSON.parse(String(payloadJson));
+                var body = {
+                    p_device:      _skybitDeviceId(),
+                    p_score:       Number(p.score || 0),
+                    p_duration:    Number(p.duration_s || 0),
+                    p_coins:       Number(p.coins || 0),
+                    p_pillars:     Number(p.pillars || 0),
+                    p_near_misses: Number(p.near_misses || 0),
+                    p_powerups:    p.powerups || {},
+                    p_run_sig:     String(p.run_sig || '')
+                };
+                var r = await fetch(_SB_URL + '/rest/v1/rpc/log_play', {
+                    method: 'POST',
+                    headers: {
+                        'apikey': _SB_KEY,
+                        'Authorization': 'Bearer ' + _SB_KEY,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(body)
+                });
+                window._skyLogPlayDone = r.ok;
+            } catch (e) { console.warn('skyLogPlayStart:', e); window._skyLogPlayDone = false; }
+        })();
+    };
+
+    /* Security-event flush. Python collects anomalies into a ring buffer
+       (game/security/events.py) and POSTs them in a batch via this bridge.
+       Best-effort; failures don't break the game. */
+    window.skySecEventStart = function (payloadJson) {
+        window._skySecEventDone = null;
+        (async function () {
+            if (!_SB_URL || !_SB_KEY) { window._skySecEventDone = false; return; }
+            try {
+                var arr = JSON.parse(String(payloadJson));
+                var device = _skybitDeviceId();
+                var rows = arr.map(function (e) {
+                    return {device_id: device, name: String(e.name || ''),
+                            detail: e.detail || {}, ts: new Date((e.ts || 0) * 1000).toISOString()};
+                });
+                var r = await fetch(_SB_URL + '/rest/v1/security_events', {
                     method: 'POST',
                     headers: {
                         'apikey': _SB_KEY,
@@ -387,10 +501,10 @@ body   { background: #0d0820 !important; }
                         'Content-Type': 'application/json',
                         'Prefer': 'return=minimal'
                     },
-                    body: JSON.stringify(body)
+                    body: JSON.stringify(rows)
                 });
-                window._skyLogPlayDone = r.ok;
-            } catch (e) { console.warn('skyLogPlayStart:', e); window._skyLogPlayDone = false; }
+                window._skySecEventDone = r.ok;
+            } catch (e) { console.warn('skySecEventStart:', e); window._skySecEventDone = false; }
         })();
     };
 
@@ -568,6 +682,7 @@ html = html.replace("</body>", INJECTION + "</body>", 1)
 
 html = html.replace("__SB_URL__", _SB_URL)
 html = html.replace("__SB_KEY__", _SB_KEY)
+html = html.replace("__SB_HMAC__", _SB_HMAC)
 
 src.write_text(html, encoding="utf-8")
 print("✓ Skybit theme injected into build/web/index.html")
@@ -575,6 +690,25 @@ if _SB_URL:
     print(f"✓ Supabase URL set: {_SB_URL[:40]}...")
 else:
     print("⚠ SUPABASE_URL not set — leaderboard will be disabled")
+if os.environ.get("SKYBIT_HMAC_KEY"):
+    print(f"✓ Skybit HMAC key set from env (rotates per deploy)")
+else:
+    print("⚠ SKYBIT_HMAC_KEY not set — generated ephemeral build secret (set the env var on Netlify for stable rotation)")
+
+# Mirror the HMAC into a Python module so game/security/crypto.py can
+# read the same secret on the Python side. Written into the build's
+# bundled game/ tree (pygbag packs game/security/_build_secret.py).
+try:
+    sec_dir = Path("game/security")
+    if sec_dir.exists():
+        (sec_dir / "_build_secret.py").write_text(
+            f'# Auto-generated by inject_theme.py — do not edit by hand.\n'
+            f'HMAC_KEY = {_SB_HMAC!r}\n',
+            encoding="utf-8",
+        )
+        print("✓ game/security/_build_secret.py written")
+except Exception as e:
+    print(f"⚠ failed to write _build_secret.py: {e}")
 
 # ── 4. Copy CC0 sound files to build/web/sounds/ for browser fetch ──────────
 # Native pygame.mixer reads them straight from game/assets/sounds/. The

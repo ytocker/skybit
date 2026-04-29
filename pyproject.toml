@@ -3,7 +3,12 @@ name = "skybit"
 version = "1.1.0"
 description = "Skybit — Pocket Sky Flyer"
 requires-python = ">=3.11"
-dependencies = ["pygame>=2.0"]
+# Pinned to a bounded range so `pip-audit` runs deterministically in CI.
+dependencies = ["pygame>=2.5,<3"]
+
+[project.optional-dependencies]
+security = ["pip-audit"]
+test = ["pytest"]
 
 [tool.pygbag]
 title = "Skybit"

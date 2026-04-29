@@ -1,0 +1,66 @@
+name: security
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  pip-audit:
+    name: Dependency audit (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pip-audit
+      - name: Audit pyproject dependencies
+        run: |
+          python - <<'PY' > /tmp/reqs.txt
+          import tomllib
+          with open('pyproject.toml', 'rb') as f:
+              d = tomllib.load(f)
+          print('\n'.join(d['project']['dependencies']))
+          PY
+          pip-audit --strict --requirement /tmp/reqs.txt
+
+  build-leak-check:
+    name: Build-bundle leak check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Static scan (no real build, no real key)
+        run: |
+          mkdir -p build/web
+          cp -r game build/web/ 2>/dev/null || true
+          python tools/check_anon_key.py build/web
+
+  python-tests:
+    name: Security unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pytest
+      - run: pytest tests/security -q

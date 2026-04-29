@@ -50,10 +50,22 @@ async def main():
     try:
         await _run_game()
     except Exception:
+        import os as _os
         tb = traceback.format_exc()
+        # Always log the full trace to stderr (devtools / pygbag console).
         print(tb, file=sys.stderr)
+        # In production builds (no SKYBIT_DEV env var) DON'T paint the full
+        # traceback onto the canvas — that's an info leak: file paths, code
+        # snippets, library versions can all aid an attacker. Show a generic
+        # message instead.
+        is_dev = _os.environ.get("SKYBIT_DEV") == "1"
+        on_canvas = tb if is_dev else (
+            "Skybit hit an unexpected error.\n"
+            "Please refresh / relaunch.\n"
+            "If the problem persists, contact the developer."
+        )
         try:
-            await _show_error(tb)
+            await _show_error(on_canvas)
         except Exception:
             # If even the error screen fails, at least stdout has the trace.
             print("(also failed to render the error screen)", file=sys.stderr)

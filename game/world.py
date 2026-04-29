@@ -22,6 +22,7 @@ from game.config import (
 from game.entities import (
     Bird, Pipe, Coin, PowerUp, Particle, CloudPuff, FloatText,
 )
+from game.security.integrity import RunRecorder, SignedRun
 from game.draw import (
     COIN_GOLD, COIN_LIGHT,
     PARTICLE_GOLD, PARTICLE_ORNG, PARTICLE_WHT, PARTICLE_CRIM,
@@ -85,6 +86,12 @@ class World:
         self.ready_t = 1.0
 
         self.game_over = False
+
+        # Anti-cheat: every score-relevant event + bird-y samples are
+        # appended to an HMAC chain; sealed in _die() and consumed by
+        # scenes._on_death to build the signed-submit envelope.
+        self.run_recorder = RunRecorder()
+        self.signed_run: SignedRun | None = None
 
         self._seed_first_pipes()
 
@@ -331,6 +338,7 @@ class World:
                     p.scored = True
                     self.score += 1
                     self.pillars_passed += 1
+                    self.run_recorder.record_pillar(self.time_alive, p.x, p.gap_y)
 
             # Near-miss detection: once per pipe, flag if the bird was within
             # a narrow band of either edge without hitting. Fires as the pipe
@@ -353,6 +361,10 @@ class World:
 
             # Time alive
             self.time_alive += dt
+
+            # Anti-cheat trajectory sampling — RunRecorder downsamples to
+            # ~10 Hz internally so this is cheap.
+            self.run_recorder.sample_bird_y(self.time_alive, self.bird.y)
 
             # collisions
             self._check_collisions()
@@ -456,6 +468,13 @@ class World:
         self.hit_flash = 0.35
         self.shake_mag = 8
         self.shake_t = 0.45
+        # Seal the run with a 'death' event. scenes._on_death will read
+        # self.signed_run and forward it to the leaderboard / telemetry
+        # paths so they have the integrity envelope.
+        try:
+            self.signed_run = self.run_recorder.seal(self)
+        except Exception:
+            self.signed_run = None
         audio.play_death()
         for _ in range(26):
             self.particles.append(Particle(
@@ -511,6 +530,7 @@ class World:
         value = 3 if self.triple_timer > 0 else 1
         self.score += value
         self.coin_count += 1
+        self.run_recorder.record_coin(self.time_alive, coin.x, coin.y, value)
 
         # *** GLITCH FIX ***
         # NO screen-wide flash. Only localized sparkle particles.
@@ -554,6 +574,7 @@ class World:
             kind = random.choice(("triple", "magnet", "slowmo", "kfc", "ghost", "grow"))
             self._spawn_surprise_reveal(m)
         self.powerups_picked[kind] = self.powerups_picked.get(kind, 0) + 1
+        self.run_recorder.record_powerup(self.time_alive, kind)
         if kind == "triple":
             self._activate_triple(m)
         elif kind == "magnet":

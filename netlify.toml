@@ -13,6 +13,16 @@
   [headers.values]
     Cross-Origin-Embedder-Policy = "credentialless"
     Cross-Origin-Opener-Policy   = "same-origin"
+    # Lock script + connect origins. 'wasm-unsafe-eval' is required by pygbag
+    # to instantiate the WASM module. Add the Supabase project URL to
+    # connect-src in the deployed build (inject_theme.py rewrites it from
+    # __SB_URL__) so leaderboard/telemetry XHRs aren't CSP-blocked.
+    Content-Security-Policy   = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' https://*.supabase.co; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'; object-src 'none'; worker-src 'self' blob:; manifest-src 'self'"
+    X-Frame-Options           = "DENY"
+    X-Content-Type-Options    = "nosniff"
+    Referrer-Policy           = "no-referrer"
+    Permissions-Policy        = "camera=(), microphone=(), geolocation=(), usb=(), serial=(), bluetooth=(), payment=(), midi=(), magnetometer=(), gyroscope=(), accelerometer=(), interest-cohort=()"
+    Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"
 
 [[headers]]
   for = "/*.wasm"

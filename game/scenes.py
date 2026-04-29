@@ -306,7 +306,7 @@ class App:
                 self.state = STATE_NAMEENTRY
                 name = await leaderboard.open_name_entry()
                 if name:
-                    await leaderboard.submit(name, self._final_score)
+                    await leaderboard.submit(name, self._final_score, world=self.world)
                     scores = await leaderboard.fetch_top10()
                     self._lb_player_rank = next(
                         (i for i, e in enumerate(scores) if e["score"] == self._final_score),
