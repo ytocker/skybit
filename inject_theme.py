@@ -275,7 +275,9 @@ body   { background: #0d0820 !important; }
     position: relative;
     z-index: 1;
 }
-.ne-submit {
+.ne-submit, .ne-skip {
+    /* Identical buttons: same width, same opacity, no animation, sit on
+       top of whatever's behind via z-index. */
     font-family: Arial Black, Arial, sans-serif;
     font-size: clamp(13px, 3.6vw, 18px);
     font-weight: 900;
@@ -284,37 +286,17 @@ body   { background: #0d0820 !important; }
     background: linear-gradient(180deg, #c84018 0%, #7e1c02 100%);
     border: 2px solid #e86828;
     border-radius: 60px;
-    padding: 16px 52px;
-    box-shadow:
-        0 5px 30px rgba(200, 64, 20, 0.65),
-        inset 0 1px 0 rgba(255, 255, 255, 0.18);
-    animation: pulse-btn 1.8s ease-in-out infinite;
+    padding: 16px 24px;
+    min-width: 220px;
+    text-align: center;
     cursor: pointer;
     white-space: nowrap;
     position: relative;
-    z-index: 1;
+    z-index: 2;
+    opacity: 1;
 }
 .ne-skip {
-    /* Same visual language as .ne-submit so the actions feel paired,
-       just without the pulse animation so SUBMIT stays the primary CTA. */
-    font-family: Arial Black, Arial, sans-serif;
-    font-size: clamp(13px, 3.6vw, 18px);
-    font-weight: 900;
-    letter-spacing: 4px;
-    color: #ffffff;
-    background: linear-gradient(180deg, #c84018 0%, #7e1c02 100%);
-    border: 2px solid #e86828;
-    border-radius: 60px;
-    padding: 16px 52px;
-    box-shadow:
-        0 5px 30px rgba(200, 64, 20, 0.45),
-        inset 0 1px 0 rgba(255, 255, 255, 0.18);
     margin-top: 14px;
-    cursor: pointer;
-    white-space: nowrap;
-    position: relative;
-    z-index: 1;
-    opacity: 0.85;
 }
 </style>
 

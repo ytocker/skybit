@@ -60,14 +60,17 @@ def _outlined_text(surf, txt, center, size, fill=_GOLD_BRIGHT,
     return r
 
 
-def _pill_btn(surf, center, text, size=20, alpha=255, wide=False):
+def _pill_btn(surf, center, text, size=20, alpha=255, wide=False, min_width=None):
     """Styled pill button with red gradient fill + orange border (welcome theme).
     Returns the pygame.Rect of the rendered button so callers can hit-test
-    clicks against it."""
+    clicks against it. `min_width` lets paired buttons (SUBMIT + SKIP) share
+    one width regardless of label length."""
     f = _font(size, True)
     img = f.render(text, True, WHITE)
     pad_x = 64 if wide else 44
     pw = img.get_width() + pad_x
+    if min_width is not None:
+        pw = max(pw, min_width)
     ph = img.get_height() + 22
     pill = pygame.Surface((pw, ph), pygame.SRCALPHA)
     # Gradient fill
@@ -773,17 +776,18 @@ class HUD:
             placeholder.set_alpha(100)
             surf.blit(placeholder, placeholder.get_rect(center=(W // 2, fy + fh // 2)))
 
-        # Submit button — clickable on tap; ENTER also still works on keyboard.
-        # Only active once something is typed.
-        submit_alpha = int(190 + math.sin(self.title_t * 3.5) * 60) if buf.strip() else 80
-        self.name_submit_rect = _pill_btn(
-            surf, (W // 2, H // 2 + 34), "SUBMIT", size=18, alpha=submit_alpha)
-
-        # Skip button — clickable, styled like SUBMIT so the actions feel paired.
-        self.name_skip_rect = _pill_btn(
-            surf, (W // 2, H // 2 + 92), "SKIP", size=18, alpha=200)
-
+        # Mountain silhouette belongs to the backdrop — drawn before the
+        # buttons so SUBMIT / SKIP sit on top of any scenery, never behind it.
         _draw_mountain_silhouette(surf, alpha=160)
+
+        # Paired action buttons. Identical size + fully opaque + no
+        # animation so neither button visually overpowers the other.
+        self.name_submit_rect = _pill_btn(
+            surf, (W // 2, H // 2 + 34), "SUBMIT",
+            size=18, alpha=255, min_width=200)
+        self.name_skip_rect = _pill_btn(
+            surf, (W // 2, H // 2 + 92), "SKIP",
+            size=18, alpha=255, min_width=200)
 
     def draw_leaderboard(self, surf, dt, scores: list, player_rank: int,
                          loading: bool, cooldown: float):
