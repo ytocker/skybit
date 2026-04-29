@@ -269,7 +269,7 @@ def _spec():
             (2, "scifi_low_freq_exp_1", [(S("low_frequency_explosion_001"), 1.0)]),
             (3, "low_three_tone_solo",  [(D("low_three_tone"), 1.0)]),
             (4, "lfe0+low_random",      [(S("low_frequency_explosion_000"), 1.0), (D("low_random"), 0.4)]),
-            (5, "scifi_space_engine_lo",[(S("space_engine_low_000"), 1.0)]),
+            (5, "low_random_solo",      [(D("low_random"), 1.0)]),
         ],
 
         "death": [
@@ -349,7 +349,7 @@ def render_layered(layers, out: pathlib.Path, reverb=None):
     for i, (_src, gain) in enumerate(layers):
         parts.append(f"[{i}:a]volume={gain}[v{i}]")
         labels.append(f"[v{i}]")
-    parts.append("".join(labels) + f"amix=inputs={len(layers)}:duration=longest:dropout_transition=0[mix]")
+    parts.append("".join(labels) + f"amix=inputs={len(layers)}:duration=first:dropout_transition=0[mix]")
     parts.append(f"[mix]{_af_chain(reverb)}[out]")
     cmd += ["-filter_complex", ";".join(parts),
             "-map", "[out]",
