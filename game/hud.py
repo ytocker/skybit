@@ -61,7 +61,9 @@ def _outlined_text(surf, txt, center, size, fill=_GOLD_BRIGHT,
 
 
 def _pill_btn(surf, center, text, size=20, alpha=255, wide=False):
-    """Styled pill button with red gradient fill + orange border (welcome theme)."""
+    """Styled pill button with red gradient fill + orange border (welcome theme).
+    Returns the pygame.Rect of the rendered button so callers can hit-test
+    clicks against it."""
     f = _font(size, True)
     img = f.render(text, True, WHITE)
     pad_x = 64 if wide else 44
@@ -89,7 +91,9 @@ def _pill_btn(surf, center, text, size=20, alpha=255, wide=False):
     pill.blit(img, ir.topleft)
     pill.set_alpha(alpha)
     cx, cy = center
-    surf.blit(pill, (cx - pw // 2, cy - ph // 2))
+    top_left = (cx - pw // 2, cy - ph // 2)
+    surf.blit(pill, top_left)
+    return pygame.Rect(top_left[0], top_left[1], pw, ph)
 
 
 def _dark_panel(surf, rect, radius=16, alpha=210):
@@ -331,6 +335,11 @@ class HUD:
     def __init__(self):
         self.pause_btn = PauseButton()
         self.title_t = 0.0
+        # Name-entry button rects — populated each frame by draw_name_entry,
+        # read by scenes.py click-handling. Pre-init to empty rects so the
+        # first click before any draw is harmless.
+        self.name_submit_rect = pygame.Rect(0, 0, 0, 0)
+        self.name_skip_rect   = pygame.Rect(0, 0, 0, 0)
         # Precompute star positions for overlay screens (seeded for consistency)
         rng = random.Random(42)
         self._stars = [
@@ -720,12 +729,6 @@ class HUD:
         _outlined_text(surf, "WELCOME TO TOP 10!", (W // 2, H // 2 - 118),
                        size=24, px=2, shadow_offset=(2, 3))
 
-        # Subtitle
-        sf = _font(12, False)
-        sub = sf.render("U P  T O  1 6  C H A R A C T E R S", True, _GOLD_MUTED)
-        sub.set_alpha(170)
-        surf.blit(sub, sub.get_rect(center=(W // 2, H // 2 - 86)))
-
         # Input field
         fw, fh = 284, 54
         fx, fy = W // 2 - fw // 2, H // 2 - 48
@@ -747,18 +750,15 @@ class HUD:
             placeholder.set_alpha(100)
             surf.blit(placeholder, placeholder.get_rect(center=(W // 2, fy + fh // 2)))
 
-        # Submit button (only active once something is typed)
-        if buf.strip():
-            alpha = int(190 + math.sin(self.title_t * 3.5) * 60)
-            _pill_btn(surf, (W // 2, H // 2 + 34), "SUBMIT  ·  ENTER", size=17, alpha=alpha)
-        else:
-            _pill_btn(surf, (W // 2, H // 2 + 34), "SUBMIT  ·  ENTER", size=17, alpha=80)
+        # Submit button — clickable on tap; ENTER also still works on keyboard.
+        # Only active once something is typed.
+        submit_alpha = int(190 + math.sin(self.title_t * 3.5) * 60) if buf.strip() else 80
+        self.name_submit_rect = _pill_btn(
+            surf, (W // 2, H // 2 + 34), "SUBMIT", size=18, alpha=submit_alpha)
 
-        # Skip hint
-        hf = _font(12, False)
-        hint = hf.render("ESC to skip", True, _GOLD_MUTED)
-        hint.set_alpha(110)
-        surf.blit(hint, hint.get_rect(center=(W // 2, H // 2 + 78)))
+        # Skip button — clickable, styled like SUBMIT so the actions feel paired.
+        self.name_skip_rect = _pill_btn(
+            surf, (W // 2, H // 2 + 92), "SKIP", size=18, alpha=200)
 
         _draw_mountain_silhouette(surf, alpha=160)
 

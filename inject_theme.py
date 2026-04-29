@@ -75,7 +75,7 @@ NAME_OVERLAY = """
          placeholder="TYPE YOUR NAME…"/>
   <p id="name-counter">0 / 10</p>
   <button id="name-submit" class="ne-submit">SUBMIT</button>
-  <p id="name-skip" class="ne-skip">skip</p>
+  <button id="name-skip" class="ne-skip">SKIP</button>
 </div>
 """
 html = html.replace("<body>", "<body>\n" + OVERLAY + NAME_OVERLAY, 1)
@@ -295,14 +295,26 @@ body   { background: #0d0820 !important; }
     z-index: 1;
 }
 .ne-skip {
-    margin-top: 18px;
-    color: rgba(200, 200, 220, 0.38);
-    font-size: 12px;
-    letter-spacing: 2px;
+    /* Same visual language as .ne-submit so the actions feel paired,
+       just without the pulse animation so SUBMIT stays the primary CTA. */
+    font-family: Arial Black, Arial, sans-serif;
+    font-size: clamp(13px, 3.6vw, 18px);
+    font-weight: 900;
+    letter-spacing: 4px;
+    color: #ffffff;
+    background: linear-gradient(180deg, #c84018 0%, #7e1c02 100%);
+    border: 2px solid #e86828;
+    border-radius: 60px;
+    padding: 16px 52px;
+    box-shadow:
+        0 5px 30px rgba(200, 64, 20, 0.45),
+        inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    margin-top: 14px;
     cursor: pointer;
-    text-transform: uppercase;
+    white-space: nowrap;
     position: relative;
     z-index: 1;
+    opacity: 0.85;
 }
 </style>
 
@@ -377,10 +389,8 @@ body   { background: #0d0820 !important; }
             var v = (inp && inp.value || '').trim();
             window._pendingName = v.length > 0 ? v : '__skip__';
             ov.style.display = 'none';
-        } else if (e.key === 'Escape') {
-            window._pendingName = '__skip__';
-            ov.style.display = 'none';
         }
+        // Escape skip removed — there's a clickable SKIP button now.
     }, true);
 
     window.openNameEntry = function () {

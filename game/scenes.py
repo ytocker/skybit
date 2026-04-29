@@ -148,12 +148,12 @@ class App:
             if e.key == pygame.K_ESCAPE:
                 if self.state in (STATE_PLAY, STATE_PAUSE):
                     self._toggle_pause()
-                elif self.state == STATE_NAMEENTRY and _sys.platform != "emscripten":
-                    self._submit_name_native("")  # ESC = skip
                 else:
                     self._running = False
                 return
-            # Native name-entry keyboard: intercept before flap routing
+            # Native name-entry keyboard: intercept before flap routing.
+            # ENTER submits; ESC no longer skips — there's a clickable
+            # SKIP button now.
             if self.state == STATE_NAMEENTRY and _sys.platform != "emscripten":
                 if e.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                     self._submit_name_native(self._name_input_buf.strip())
@@ -165,9 +165,30 @@ class App:
             if e.key in (pygame.K_SPACE, pygame.K_UP, pygame.K_w):
                 self._flap_input()
         elif e.type == pygame.MOUSEBUTTONDOWN:
+            if self._handle_name_entry_click(e.pos):
+                return
             self._flap_input(e.pos)
         elif e.type == pygame.FINGERDOWN:
-            self._flap_input((int(e.x * W), int(e.y * H)))
+            pos = (int(e.x * W), int(e.y * H))
+            if self._handle_name_entry_click(pos):
+                return
+            self._flap_input(pos)
+
+    def _handle_name_entry_click(self, pos) -> bool:
+        """If we're on the native name-entry screen and the click hit the
+        SUBMIT or SKIP button, dispatch and return True. Returns False
+        otherwise so normal flap routing can proceed."""
+        import sys as _sys
+        if self.state != STATE_NAMEENTRY or _sys.platform == "emscripten":
+            return False
+        if self.hud.name_submit_rect.collidepoint(pos):
+            if self._name_input_buf.strip():
+                self._submit_name_native(self._name_input_buf.strip())
+            return True
+        if self.hud.name_skip_rect.collidepoint(pos):
+            self._submit_name_native("")
+            return True
+        return False
 
     # ── update ──────────────────────────────────────────────────────────────
 
