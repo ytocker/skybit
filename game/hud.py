@@ -115,48 +115,92 @@ def _draw_overlay_stars(surf, stars, t):
 
 
 def _draw_trophy(surf, cx, cy, size):
-    """Gold procedural trophy icon. `size` is approximate half-height."""
+    """Gold procedural trophy icon. `size` is approximate half-height.
+    Drawn fully symmetric about a vertical axis through (cx, cy):
+      * Cup widths use the same ±half-width on left & right
+      * Handles drawn on a temp surface and mirrored via transform.flip
+      * Stem / base / foot use odd widths so they centre exactly
+    """
     s = size
-    g = pygame.Surface((s * 2 + 4, s * 2 + 4), pygame.SRCALPHA)
-    gc = (s + 2, s + 2)
+    # Surface big enough for cup (full width 2s) + handle ears + foot overflow.
+    pad   = 6
+    g_w   = (s + pad) * 2 + 1   # odd → exact centre column
+    g_h   = s * 3 + 4
+    g     = pygame.Surface((g_w, g_h), pygame.SRCALPHA)
+    gx    = g_w // 2
+    gy    = s + 2
+
     GOLD  = (240, 192,  64, 255)
     DARK  = (140,  90,   8, 255)
     WHITE = (255, 248, 200, 180)
 
-    # Cup body — rounded trapezoid
+    # ── Cup body — symmetric trapezoid (wider at top) ──────────────────────
+    half_top = s
+    half_bot = s - 3
+    top_y = gy - s + 2
+    bot_y = gy + 2
     cup_pts = [
-        (gc[0] - s,     gc[1] - s + 2),
-        (gc[0] + s,     gc[1] - s + 2),
-        (gc[0] + s - 3, gc[1] + 2),
-        (gc[0] - s + 3, gc[1] + 2),
+        (gx - half_top, top_y),
+        (gx + half_top, top_y),
+        (gx + half_bot, bot_y),
+        (gx - half_bot, bot_y),
     ]
-    pygame.draw.polygon(g, DARK, [(x+1, y+1) for x, y in cup_pts])
+    # Symmetric drop shadow — grow the silhouette down + on both sides
+    cup_shadow = [
+        (gx - half_top - 1, top_y + 1),
+        (gx + half_top + 1, top_y + 1),
+        (gx + half_bot + 1, bot_y + 1),
+        (gx - half_bot - 1, bot_y + 1),
+    ]
+    pygame.draw.polygon(g, DARK, cup_shadow)
     pygame.draw.polygon(g, GOLD, cup_pts)
-    # Cup rim highlight
-    pygame.draw.line(g, WHITE, (gc[0] - s + 2, gc[1] - s + 3),
-                     (gc[0] + s - 2, gc[1] - s + 3), 1)
-    # Handles — small arcs on each side
-    for side in (-1, 1):
-        hx = gc[0] + side * (s - 1)
-        pygame.draw.arc(g, GOLD,
-                        (hx - 4 if side == 1 else hx,
-                         gc[1] - s + 4, 6, s - 2),
-                        math.pi * 0.25, math.pi * 0.75 if side == -1 else math.pi * 1.75,
-                        2)
-    # Stem
-    stem_x = gc[0] - 2
-    stem_y = gc[1] + 2
-    pygame.draw.rect(g, DARK,  (stem_x,     stem_y + 1, 5, s // 2 + 1))
-    pygame.draw.rect(g, GOLD,  (stem_x + 1, stem_y,     3, s // 2))
-    # Base
-    base_y = gc[1] + 2 + s // 2
-    pygame.draw.rect(g, DARK,  (gc[0] - s + 2, base_y + 1, (s - 1) * 2, 4))
-    pygame.draw.rect(g, GOLD,  (gc[0] - s + 2, base_y,     (s - 1) * 2, 3))
-    # Foot
-    pygame.draw.rect(g, DARK,  (gc[0] - s + 1, base_y + 4, (s - 1) * 2 + 2, 3))
-    pygame.draw.rect(g, GOLD,  (gc[0] - s + 1, base_y + 3, (s - 1) * 2 + 2, 3))
+    # pygame.draw.polygon excludes the right/bottom boundary by convention,
+    # which leaves a one-pixel gap on the right slope. Draw the slope as a
+    # line explicitly so left/right edges are pixel-symmetric.
+    pygame.draw.line(g, GOLD,
+                     (gx + half_top, top_y),
+                     (gx + half_bot, bot_y), 1)
+    pygame.draw.line(g, WHITE,
+                     (gx - half_top + 2, top_y + 1),
+                     (gx + half_top - 2, top_y + 1), 1)
 
-    surf.blit(g, (cx - s - 2, cy - s - 2))
+    # ── Handles — draw the left ear once, then horizontal-flip for right ──
+    h_w  = 5
+    h_h  = max(4, s - 2)
+    h_y  = top_y + 2
+    ear  = pygame.Surface((h_w, h_h), pygame.SRCALPHA)
+    # Left half of an ellipse — gives a nice C-shape opening right
+    pygame.draw.arc(ear, GOLD, (0, 0, h_w * 2 - 1, h_h),
+                    math.pi * 0.5, math.pi * 1.5, 2)
+    # Mirror about the cup's vertical centre. Left ear ends at gx - half_top;
+    # right ear starts at gx + half_top + 1 so the two ears occupy mirrored
+    # column ranges.
+    left_ear_x  = gx - half_top - h_w + 1
+    right_ear_x = gx + half_top
+    g.blit(ear, (left_ear_x, h_y))
+    g.blit(pygame.transform.flip(ear, True, False),
+           (right_ear_x, h_y))
+
+    # ── Stem — odd width, exact centre ────────────────────────────────────
+    stem_w  = 3
+    stem_h  = s // 2
+    stem_x  = gx - stem_w // 2
+    pygame.draw.rect(g, DARK,  (stem_x - 1, bot_y + 1, stem_w + 2, stem_h + 1))
+    pygame.draw.rect(g, GOLD,  (stem_x,     bot_y,     stem_w,     stem_h))
+
+    # ── Base + foot — both odd-width so they centre exactly ───────────────
+    base_w = (s - 1) * 2 + 1
+    base_x = gx - base_w // 2
+    base_y = bot_y + stem_h
+    pygame.draw.rect(g, DARK,  (base_x - 1, base_y + 1, base_w + 2, 4))
+    pygame.draw.rect(g, GOLD,  (base_x,     base_y,     base_w,     3))
+
+    foot_w = base_w + 2
+    foot_x = gx - foot_w // 2
+    pygame.draw.rect(g, DARK,  (foot_x - 1, base_y + 5, foot_w + 2, 3))
+    pygame.draw.rect(g, GOLD,  (foot_x,     base_y + 4, foot_w,     2))
+
+    surf.blit(g, (cx - gx, cy - gy))
 
 
 def _draw_mountain_silhouette(surf, alpha=200):
