@@ -600,7 +600,7 @@ class World:
         self.triple_timer = TRIPLE_DURATION
         self.shake_mag = max(self.shake_mag, 3.0)
         self.shake_t = max(self.shake_t, 0.25)
-        audio.play_mushroom()
+        audio.play_triple_coin()
         audio.play_poof()
         self._spawn_poof(self.bird.x, self.bird.y)
         self._pickup_burst(m, (UI_ORANGE, UI_GOLD, BIRD_RED, UI_CREAM))

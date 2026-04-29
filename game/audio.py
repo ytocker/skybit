@@ -42,7 +42,7 @@ _IS_BROWSER = sys.platform == "emscripten"
 _SOUND_DIR = os.path.join(os.path.dirname(__file__), "assets", "sounds")
 
 _SOUND_FILES = (
-    "flap", "coin", "coin_combo", "coin_triple", "mushroom",
+    "flap", "coin", "coin_combo", "coin_triple", "triple_coin",
     "magnet", "slowmo", "thunder", "death", "gameover",
     "poof", "ghost", "grow",
 )
@@ -317,7 +317,7 @@ def play_coin_triple(chain_step: int = 1) -> None:
     else:
         _play("coin_triple", 0.85)
 
-def play_mushroom() -> None:    _play("mushroom", 0.85)
+def play_triple_coin() -> None: _play("triple_coin", 0.85)
 def play_magnet() -> None:      _play("magnet", 0.75)
 def play_slowmo() -> None:      _play("slowmo", 0.75)
 def play_thunder() -> None:     _play("thunder", 0.85)

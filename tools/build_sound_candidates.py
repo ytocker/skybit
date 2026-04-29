@@ -216,7 +216,7 @@ def _spec():
             (5, "iface_confirm2+cn0",   [(If("confirmation_002"), 1.0), (S("computer_noise_000"), 0.3)],"subtle"),
         ],
 
-        "mushroom": [
+        "triple_coin": [
             (1, "up3+confirm4+sub",     [(D("phaser_up_3"), 1.0), (If("confirmation_004"), 1.0), ("synth:sub_bump_60_80", 0.5)], "subtle"),
             (2, "pwr8+ff2",             [(D("power_up_8"), 1.0), (S("force_field_002"), 0.3)],          "subtle"),
             (3, "nes_11_accent",        [(J("jingles_nes_11"), 1.0)]),
