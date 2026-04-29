@@ -654,9 +654,10 @@ class HUD:
             ("Time alive",     time_str),
             ("Coins",          str(world.coin_count)),
             ("Pillars cleared", str(world.pillars_passed)),
+            ("Power-ups",      str(sum(world.powerups_picked.values()))),
+            ("Max combo",      f"x{world.max_combo}" if world.max_combo > 1 else "—"),
+            ("Near misses",    str(world.near_misses)),
         ]
-        total_pu = sum(world.powerups_picked.values())
-        rows.append(("Power-ups", str(total_pu)))
 
         row_h = 32
         card_rect = pygame.Rect(18, card_y + 114, W - 36, len(rows) * row_h + 20)
