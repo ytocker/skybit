@@ -200,7 +200,8 @@ class App:
         self._new_best = score > self.session_best
         if self._new_best:
             self.session_best = score
-        audio.play_gameover()
+        # Game-over screen no longer plays its own jingle — death.ogg
+        # at the moment of impact carries the whole "run ended" cue.
         self.state = STATE_STATS
         self._stats_t = 0.0
 
