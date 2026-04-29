@@ -623,40 +623,28 @@ class HUD:
 
     def draw_stats(self, surf, world, dt, elapsed):
         self.title_t += dt
+        dim = pygame.Surface((W, H), pygame.SRCALPHA)
+        dim.fill((6, 1, 21, 190))
+        surf.blit(dim, (0, 0))
 
-        # Red gradient backdrop matching the welcome-screen button palette —
-        # the stats / run-summary screen now uses the brand red as its
-        # primary background tone, with gold / yellow text on top.
-        bg = pygame.Surface((W, H))
-        for y in range(H):
-            t = y / max(1, H - 1)
-            c = lerp_color(_BTN_TOP, _BTN_BOT, t)
-            pygame.draw.line(bg, c, (0, y), (W - 1, y))
-        surf.blit(bg, (0, 0))
-        # Soft top-edge orange accent to lift the gradient
-        pygame.draw.line(surf, _ORANGE_BORDER, (0, 0), (W - 1, 0), 2)
+        _draw_overlay_stars(surf, self._stars, self.title_t)
 
         # Slide-in animation from below
         slide_t = max(0.0, min(1.0, elapsed / 0.35))
         e = slide_t * slide_t * (3 - 2 * slide_t)
         card_y = int(58 + (1.0 - e) * 60)
 
-        # Header
+        # Header — gold with red outline (matches the TOP 10 / WELCOME styling)
         _outlined_text(surf, "RUN SUMMARY", (W // 2, card_y + 4),
                         size=24, px=2, shadow_offset=(2, 3))
 
-        # Score block — deep maroon panel keeps text legible on the red bg.
+        # Score block — dark panel with the score number outlined like TOP 10
         score_panel = pygame.Rect(W // 2 - 80, card_y + 28, 160, 68)
-        rounded_rect(surf, score_panel, 16, (60, 14, 4), 220)
-        pygame.draw.rect(surf, _ORANGE_BORDER, score_panel,
-                         width=2, border_radius=16)
-        lf = _font(12, False)
-        lbl = lf.render("S C O R E", True, _GOLD_BRIGHT)
-        lbl.set_alpha(220)
-        surf.blit(lbl, lbl.get_rect(center=(W // 2, card_y + 44)))
-        sf = _font(42, True)
-        sc = sf.render(str(world.score), True, _GOLD_BRIGHT)
-        surf.blit(sc, sc.get_rect(center=(W // 2, card_y + 76)))
+        _dark_panel(surf, score_panel, radius=16, alpha=200)
+        _outlined_text(surf, "S C O R E", (W // 2, card_y + 44),
+                       size=12, px=1, shadow_offset=(1, 2))
+        _outlined_text(surf, str(world.score), (W // 2, card_y + 76),
+                       size=34, px=2, shadow_offset=(2, 3))
 
         # Stats card
         mins = int(world.time_alive) // 60
@@ -675,41 +663,45 @@ class HUD:
 
         row_h = 32
         card_rect = pygame.Rect(18, card_y + 114, W - 36, len(rows) * row_h + 20)
-        rounded_rect(surf, card_rect, 16, (60, 14, 4), 220)
-        pygame.draw.rect(surf, _ORANGE_BORDER, card_rect,
-                         width=2, border_radius=16)
+        _dark_panel(surf, card_rect, radius=16, alpha=210)
 
-        f_key = _font(15, False)
-        f_val = _font(17, True)
         ry = card_rect.y + 14
         for i, (label, value) in enumerate(rows):
             if i > 0:
                 div = pygame.Surface((card_rect.width - 24, 1), pygame.SRCALPHA)
-                div.fill((*_ORANGE_BORDER, 80))
+                div.fill((*_ORANGE_BORDER, 35))
                 surf.blit(div, (card_rect.x + 12, ry - 4))
-            k = f_key.render(label.upper(), True, _GOLD_BRIGHT)
-            k.set_alpha(210)
-            v = f_val.render(value, True, _GOLD_BRIGHT)
-            surf.blit(k, (card_rect.x + 16, ry))
-            vr = v.get_rect()
-            vr.topright = (card_rect.right - 16, ry - 1)
-            surf.blit(v, vr.topleft)
+            # Per-character red-outline styling on every label and value —
+            # same writing style as the TOP 10 / RUN SUMMARY headers, just
+            # smaller. _outlined_text takes a centre point, so compute one
+            # from the desired left/right anchor.
+            kf = _font(13, True)
+            klbl = kf.render(label.upper(), True, _GOLD_BRIGHT)
+            kl_center = (card_rect.x + 16 + klbl.get_width() // 2, ry + klbl.get_height() // 2)
+            _outlined_text(surf, label.upper(), kl_center,
+                           size=13, px=1, shadow_offset=(1, 2))
+            vf = _font(15, True)
+            vimg = vf.render(value, True, _GOLD_BRIGHT)
+            vr_center = (card_rect.right - 16 - vimg.get_width() // 2, ry + vimg.get_height() // 2)
+            _outlined_text(surf, value, vr_center,
+                           size=15, px=1, shadow_offset=(1, 2))
             ry += row_h
 
-        # Tap-to-continue prompt — gold pulsing text (no white pill button,
-        # so every word on this screen is yellow per the theme).
+        # Tap-to-continue prompt — also outlined (gold + red) so every line
+        # on the screen shares the same writing style.
         if elapsed >= 0.6:
             alpha = max(80, min(255, int(150 + math.sin(self.title_t * 4) * 90)))
-            tf = _font(18, True)
-            t_img = tf.render("TAP TO CONTINUE", True, _GOLD_BRIGHT)
-            t_img.set_alpha(alpha)
-            r = t_img.get_rect(center=(W // 2, H - 50))
-            # Subtle dark-red outline so it pops on the gradient
-            for dx, dy in ((-2, 0), (2, 0), (0, -2), (0, 2)):
-                ot = tf.render("TAP TO CONTINUE", True, _RED_OUTLINE)
-                ot.set_alpha(alpha)
-                surf.blit(ot, (r.x + dx, r.y + dy))
-            surf.blit(t_img, r.topleft)
+            # Render the outlined text onto a temp surface so we can apply
+            # the pulsing alpha to the whole stack at once.
+            tmp_w, tmp_h = 280, 36
+            tmp = pygame.Surface((tmp_w, tmp_h), pygame.SRCALPHA)
+            _outlined_text(tmp, "TAP TO CONTINUE",
+                           (tmp_w // 2, tmp_h // 2),
+                           size=18, px=2, shadow_offset=(2, 3))
+            tmp.set_alpha(alpha)
+            surf.blit(tmp, tmp.get_rect(center=(W // 2, H - 50)))
+
+        _draw_mountain_silhouette(surf, alpha=160)
 
     def draw_gameover(self, surf, dt, score: int, new_best: bool):
         self.title_t += dt
