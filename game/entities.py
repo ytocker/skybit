@@ -652,42 +652,42 @@ class PowerUp:
     def _draw_reverse(self, surf):
         cx = int(self.x)
         cy = int(self.y)
+        R = MUSHROOM_R
         # Cyan aura behind the icon (additive, like slowmo's purple halo)
-        aura = pygame.Surface((MUSHROOM_R * 3, MUSHROOM_R * 3), pygame.SRCALPHA)
+        aura = pygame.Surface((R * 3, R * 3), pygame.SRCALPHA)
         pygame.draw.circle(aura, (80, 220, 235, 75),
                            (aura.get_width() // 2, aura.get_height() // 2),
-                           MUSHROOM_R + 4)
+                           R + 4)
         surf.blit(aura, (cx - aura.get_width() // 2, cy - aura.get_height() // 2),
                   special_flags=pygame.BLEND_ADD)
         # Disc backing — dark teal rim + lighter teal face
-        pygame.draw.circle(surf, (15, 60, 75), (cx, cy), MUSHROOM_R + 1)
-        pygame.draw.circle(surf, (40, 140, 170), (cx, cy), MUSHROOM_R - 1)
-        # Up arrow (top half)
-        col = (240, 250, 255)
+        pygame.draw.circle(surf, (15, 60, 75), (cx, cy), R + 1)
+        pygame.draw.circle(surf, (40, 140, 170), (cx, cy), R - 1)
+
+        col = (245, 252, 255)
         outline = (15, 50, 70)
-        # Up shaft
-        pygame.draw.rect(surf, outline, (cx - 3, cy - MUSHROOM_R + 6, 6, 8))
-        pygame.draw.rect(surf, col,     (cx - 2, cy - MUSHROOM_R + 6, 4, 8))
-        # Up head
-        up_head = [(cx - 6, cy - MUSHROOM_R + 7),
-                   (cx + 6, cy - MUSHROOM_R + 7),
-                   (cx, cy - MUSHROOM_R + 1)]
-        pygame.draw.polygon(surf, outline, up_head)
+
+        # UP arrow on the LEFT (head at top), DOWN arrow on the RIGHT
+        # (head at bottom). Side-by-side arrows read unambiguously as a
+        # "swap" / "flip" symbol — much clearer than stacking them.
+        lx = cx - 5  # left arrow column
+        rx = cx + 5  # right arrow column
+
+        # Up arrow (left): head at top, shaft below
+        up_head = [(lx - 4, cy - 4), (lx + 4, cy - 4), (lx, cy - 10)]
+        pygame.draw.polygon(surf, outline,
+                            [(lx - 5, cy - 3), (lx + 5, cy - 3), (lx, cy - 11)])
+        pygame.draw.polygon(surf, col, up_head)
+        pygame.draw.rect(surf, outline, (lx - 2, cy - 4, 5, 14))
+        pygame.draw.rect(surf, col,     (lx - 1, cy - 4, 3, 13))
+
+        # Down arrow (right): shaft above, head at bottom
+        pygame.draw.rect(surf, outline, (rx - 2, cy - 10, 5, 14))
+        pygame.draw.rect(surf, col,     (rx - 1, cy - 9, 3, 13))
+        pygame.draw.polygon(surf, outline,
+                            [(rx - 5, cy + 3), (rx + 5, cy + 3), (rx, cy + 11)])
         pygame.draw.polygon(surf, col,
-                            [(cx - 4, cy - MUSHROOM_R + 7),
-                             (cx + 4, cy - MUSHROOM_R + 7),
-                             (cx, cy - MUSHROOM_R + 3)])
-        # Down arrow (bottom half) — mirror
-        pygame.draw.rect(surf, outline, (cx - 3, cy - 1, 6, 8))
-        pygame.draw.rect(surf, col,     (cx - 2, cy - 1, 4, 8))
-        down_head = [(cx - 6, cy + MUSHROOM_R - 7),
-                     (cx + 6, cy + MUSHROOM_R - 7),
-                     (cx, cy + MUSHROOM_R - 1)]
-        pygame.draw.polygon(surf, outline, down_head)
-        pygame.draw.polygon(surf, col,
-                            [(cx - 4, cy + MUSHROOM_R - 7),
-                             (cx + 4, cy + MUSHROOM_R - 7),
-                             (cx, cy + MUSHROOM_R - 3)])
+                            [(rx - 4, cy + 4), (rx + 4, cy + 4), (rx, cy + 10)])
 
 
 # Back-compat alias — some callers (e.g. snapshot/playtest scripts) still say Mushroom.
