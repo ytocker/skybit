@@ -22,12 +22,13 @@ externally if a literal MP4 is needed.
 from __future__ import annotations
 
 import math
+import random
 import pygame
 
 from game.config import W, H, GROUND_Y
 from game.draw import (
     get_sky_surface_biome, draw_mountains, draw_cloud, draw_ground,
-    blit_glow, lerp_color,
+    blit_glow, lerp_color, rounded_rect_grad,
     UI_GOLD, UI_CREAM, WHITE, NEAR_BLACK,
 )
 from game import biome as _biome
@@ -185,135 +186,403 @@ def _build_mailbox() -> pygame.Surface:
     return surf
 
 
-def _build_skyhouse(kind: str = "home") -> pygame.Surface:
-    """A tiny cottage perched on a fluffy cloud. Two variants:
-      * "post" — pickup house with a teal roof and a small flag, where Pip
-        collects the parcel from Mr. Garrick.
-      * "home" — delivery destination with a red roof.
-    Cream walls, plank shading, chimney with a smoke puff, cross-frame
-    window, wooden door — shared between both variants. Differentiation is
-    intentionally just the roof and the optional flag, so the two houses
-    read as cousins rather than completely unrelated buildings."""
-    SIZE = 96
-    surf = pygame.Surface((SIZE, SIZE), pygame.SRCALPHA)
-    cx = SIZE // 2
+def _build_skyhouse(kind: str = "home"):
+    """A detailed cottage on a fluffy cloud with a porch deck. Two variants:
+      * "post" — pickup house: teal roof, yellow pennant flag, hanging
+        paper lantern over the porch, painted POST plaque above the door.
+      * "home" — delivery destination: red roof, no flag, no plaque.
+    Shared elements: multi-layer cloud, stone foundation, gradient plank
+    walls, dithered shingle roof, brick chimney with smoke puffs, shuttered
+    window + flowerbox, plank door with doormat, porch deck + railing,
+    moss strands. Returns (surface, anchors_dict) so beat callers can place
+    the parcel + Garrick at meaningful positions."""
+    SIZE_W, SIZE_H = 160, 120
+    surf = pygame.Surface((SIZE_W, SIZE_H), pygame.SRCALPHA)
+    rng = random.Random(hash(kind) & 0xFFFF)
 
-    OUTLINE   = ( 60,  38,  24)
-    WALL      = (232, 208, 168)
-    WALL_SHA  = (190, 160, 118)
+    OUTLINE   = ( 50,  32,  20)
+    OUTLINE_S = ( 80,  56,  36)
+    WALL_TOP  = (242, 220, 178)
+    WALL_BOT  = (210, 180, 140)
+    WALL_HI   = (255, 240, 210)
+    WALL_TRIM = (130,  85,  50)
+    PLANK_LN  = (180, 145, 100)
     if kind == "post":
-        ROOF      = ( 60, 130, 175)   # teal blue
-        ROOF_SHA  = ( 28,  78, 120)
+        ROOF      = ( 60, 130, 175)
+        ROOF_DK   = ( 28,  78, 120)
         ROOF_HI   = (110, 180, 220)
     else:  # "home"
-        ROOF      = (180,  62,  52)   # red
-        ROOF_SHA  = (120,  32,  28)
+        ROOF      = (180,  62,  52)
+        ROOF_DK   = (120,  32,  28)
         ROOF_HI   = (220, 100,  88)
-    DOOR      = ( 90,  55,  30)
+    DOOR      = ( 92,  56,  30)
+    DOOR_DK   = ( 60,  34,  18)
     DOOR_HI   = (135,  85,  52)
     WIN_FRAME = ( 72,  44,  24)
     WIN_GLASS = (170, 215, 240)
+    WIN_HI    = (220, 235, 250)
+    SHUTTER   = (160, 105,  60)
+    SHUTTER_D = (110,  68,  38)
     CLOUD     = (252, 252, 255)
-    CLOUD_SHA = (215, 220, 240)
-    CHIM      = (110,  72,  52)
+    CLOUD_HI  = (255, 255, 255)
+    CLOUD_SHA = (210, 215, 235)
+    CLOUD_DK  = (180, 188, 215)
+    BRICK     = (160,  78,  60)
+    BRICK_DK  = (110,  46,  34)
+    MORTAR    = ( 80,  50,  36)
+    STONE_LT  = (200, 188, 168)
+    STONE_DK  = (130, 118, 100)
+    PORCH     = (170, 130,  82)
+    PORCH_DK  = (115,  82,  48)
+    PORCH_HI  = (210, 170, 118)
+    BRASS     = (240, 200, 100)
+    BRASS_DK  = (170, 130,  60)
+    LEAF      = ( 95, 145,  72)
+    LEAF_DK   = ( 55,  95,  44)
 
-    # Cloud base — three stacked ellipses for a fluffy silhouette.
-    cl_y = 70
-    pygame.draw.ellipse(surf, CLOUD_SHA, (4,  cl_y + 4, 88, 18))
-    pygame.draw.ellipse(surf, CLOUD,     (8,  cl_y,     78, 18))
-    pygame.draw.ellipse(surf, CLOUD,     (0,  cl_y + 6, 32, 14))
-    pygame.draw.ellipse(surf, CLOUD,     (60, cl_y + 6, 36, 14))
+    # ── Cloud base — multi-layer fluffy silhouette with wisp tendrils ────
+    cl_y = 88
+    pygame.draw.ellipse(surf, CLOUD_DK,  (4,   cl_y + 8, 152, 18))
+    pygame.draw.ellipse(surf, CLOUD_SHA, (8,   cl_y + 4, 144, 20))
+    pygame.draw.ellipse(surf, CLOUD,     (12,  cl_y,     136, 20))
+    pygame.draw.ellipse(surf, CLOUD,     (0,   cl_y + 6,  44, 16))
+    pygame.draw.ellipse(surf, CLOUD,     (114, cl_y + 6,  46, 16))
+    # Wisp tendrils trailing left + right
+    pygame.draw.ellipse(surf, CLOUD_SHA, (-8,  cl_y + 12, 28, 8))
+    pygame.draw.ellipse(surf, CLOUD_SHA, (140, cl_y + 12, 24, 8))
+    # Top sheen highlights
+    pygame.draw.ellipse(surf, CLOUD_HI,  (24,  cl_y + 1,  60,  8))
+    pygame.draw.ellipse(surf, CLOUD_HI,  (96,  cl_y + 2,  50,  6))
 
     # House body
-    house_w, house_h = 46, 28
-    house_x = cx - house_w // 2
-    house_y = cl_y - house_h + 6
+    # ── House geometry: body sits on the LEFT half; porch extends RIGHT.
+    body_x, body_y = 14, 50
+    body_w, body_h = 60, 36
+
+    # ── Stone foundation band beneath the house body ────────────────────
+    found_y = body_y + body_h
     pygame.draw.rect(surf, OUTLINE,
-                     (house_x - 1, house_y, house_w + 2, house_h + 1))
-    pygame.draw.rect(surf, WALL,
-                     (house_x, house_y + 1, house_w, house_h - 1))
-    # Plank lines for texture
-    for i in range(3):
-        sy = house_y + 7 + i * 7
-        pygame.draw.line(surf, WALL_SHA,
-                         (house_x + 2, sy), (house_x + house_w - 3, sy), 1)
+                     (body_x - 2, found_y, body_w + 4, 5))
+    for sy in range(found_y + 1, found_y + 4):
+        col = lerp_color(STONE_LT, STONE_DK, (sy - found_y - 1) / 2)
+        pygame.draw.line(surf, col,
+                         (body_x - 1, sy), (body_x + body_w, sy), 1)
+    # Mortar nicks every ~7 px
+    for nx in range(body_x + 3, body_x + body_w, 7):
+        pygame.draw.line(surf, STONE_DK,
+                         (nx, found_y + 1), (nx, found_y + 3), 1)
 
-    # Roof — pitched triangular peak, dark outline behind a red fill.
-    roof_eave_l = (house_x - 5, house_y + 2)
-    roof_eave_r = (house_x + house_w + 5, house_y + 2)
-    roof_peak   = (cx, house_y - 16)
-    pygame.draw.polygon(surf, OUTLINE, [
-        (roof_eave_l[0] - 1, roof_eave_l[1] + 1),
-        (roof_peak[0],       roof_peak[1] - 1),
-        (roof_eave_r[0] + 1, roof_eave_r[1] + 1),
-    ])
-    pygame.draw.polygon(surf, ROOF, [roof_eave_l, roof_peak, roof_eave_r])
-    # A few shingle rows for texture (lines that shrink toward the peak).
-    for i in range(4):
-        sy = house_y - 1 - i * 3
-        delta = 5 + i * 5
-        pygame.draw.line(surf, ROOF_SHA,
-                         (house_x - 5 + delta, sy),
-                         (house_x + house_w + 5 - delta, sy), 1)
-    # Sun-side highlight along the left slope.
+    # ── Walls — vertical gradient + plank siding + corner trim ──────────
+    rounded_rect_grad(surf, (body_x, body_y, body_w, body_h),
+                      radius=2, top_color=WALL_TOP, bot_color=WALL_BOT)
+    pygame.draw.rect(surf, OUTLINE,
+                     (body_x - 1, body_y - 1, body_w + 2, body_h + 2), 1)
+    # Vertical plank siding lines every 6 px
+    for px in range(body_x + 6, body_x + body_w, 6):
+        pygame.draw.line(surf, PLANK_LN,
+                         (px, body_y + 2), (px, body_y + body_h - 2), 1)
+    # Sun-side eave highlight band
+    pygame.draw.line(surf, WALL_HI,
+                     (body_x + 1, body_y + 1),
+                     (body_x + body_w - 2, body_y + 1), 1)
+    # Darker corner trim columns
+    pygame.draw.rect(surf, WALL_TRIM, (body_x - 1, body_y, 2, body_h))
+    pygame.draw.rect(surf, WALL_TRIM,
+                     (body_x + body_w - 1, body_y, 2, body_h))
+
+    # ── Roof — main pitched gable with dithered alternating shingle rows
+    eave_l = (body_x - 6, body_y + 2)
+    eave_r = (body_x + body_w + 6, body_y + 2)
+    peak_x = body_x + body_w // 2 - 2
+    peak_y = body_y - 22
+    roof_outline = [
+        (eave_l[0] - 1, eave_l[1] + 1),
+        (peak_x,        peak_y - 1),
+        (eave_r[0] + 1, eave_r[1] + 1),
+    ]
+    pygame.draw.polygon(surf, OUTLINE, roof_outline)
+    pygame.draw.polygon(surf, ROOF, [eave_l, (peak_x, peak_y), eave_r])
+    # Shingle rows: alternating colour, slightly offset short segments.
+    # slope = how far up the roof this row is (0 at eaves, 1 at peak); rows
+    # narrow as they climb toward the peak.
+    roof_height = max(1, eave_l[1] - peak_y)
+    for i in range(8):
+        sy = body_y + 1 - i * 3
+        if sy < peak_y + 2:
+            break
+        slope = (eave_l[1] - sy) / roof_height
+        x_lo = int(eave_l[0] + (peak_x - eave_l[0]) * slope) + 1
+        x_hi = int(eave_r[0] + (peak_x - eave_r[0]) * slope) - 1
+        if x_hi - x_lo < 4:
+            continue
+        col = ROOF_DK if (i % 2 == 0) else ROOF_HI
+        x = x_lo + (i % 2) * 3
+        seg = 5
+        while x + seg < x_hi:
+            pygame.draw.line(surf, col, (x, sy), (x + seg - 1, sy), 1)
+            x += seg + 2
+    # Sun-side leading-slope highlight + dark eave shadow
     pygame.draw.line(surf, ROOF_HI,
-                     (roof_eave_l[0] + 2, roof_eave_l[1] + 1),
-                     (roof_peak[0] - 1,   roof_peak[1] + 2), 1)
+                     (eave_l[0] + 2, eave_l[1]),
+                     (peak_x - 1,    peak_y + 2), 1)
+    pygame.draw.line(surf, ROOF_DK,
+                     (eave_l[0], eave_l[1] + 2),
+                     (eave_r[0], eave_r[1] + 2), 1)
 
-    # Chimney with a small smoke puff.
-    chim_x, chim_y = cx + 8, roof_peak[1] + 2
-    pygame.draw.rect(surf, OUTLINE,  (chim_x - 1, chim_y - 1, 8, 10))
-    pygame.draw.rect(surf, CHIM,     (chim_x,     chim_y,     6,  9))
-    pygame.draw.rect(surf, OUTLINE,  (chim_x - 2, chim_y - 2, 10, 3))
-    pygame.draw.circle(surf, CLOUD, (chim_x + 3, chim_y - 6), 3)
-    pygame.draw.circle(surf, CLOUD, (chim_x + 6, chim_y - 11), 2)
+    # ── Brick chimney with stone cap + 3 smoke puffs ────────────────────
+    chim_x, chim_y_top, chim_w, chim_h = body_x + body_w - 14, peak_y + 2, 8, 18
+    pygame.draw.rect(surf, OUTLINE,
+                     (chim_x - 1, chim_y_top - 1, chim_w + 2, chim_h + 2))
+    pygame.draw.rect(surf, BRICK,
+                     (chim_x, chim_y_top, chim_w, chim_h))
+    # Brick courses (alternating dark/mortar lines)
+    for i, by in enumerate(range(chim_y_top + 2, chim_y_top + chim_h, 3)):
+        pygame.draw.line(surf, MORTAR,
+                         (chim_x, by), (chim_x + chim_w - 1, by), 1)
+        # Vertical offsets for the brick stagger
+        off = 3 if (i % 2 == 0) else 0
+        if chim_x + off < chim_x + chim_w - 1:
+            pygame.draw.line(surf, BRICK_DK,
+                             (chim_x + off, by + 1),
+                             (chim_x + off, by + 1), 1)
+    # Stone cap
+    pygame.draw.rect(surf, OUTLINE,
+                     (chim_x - 2, chim_y_top - 3, chim_w + 4, 3))
+    pygame.draw.rect(surf, STONE_LT,
+                     (chim_x - 1, chim_y_top - 2, chim_w + 2, 1))
+    # Smoke puffs (varying alpha + radius)
+    for i, (dx, dy, r, a) in enumerate(
+        ((1, -5, 3, 200), (3, -10, 4, 150), (5, -16, 5, 100))
+    ):
+        puff = pygame.Surface((r * 2 + 4, r * 2 + 4), pygame.SRCALPHA)
+        pygame.draw.circle(puff, (250, 250, 255, a),
+                           (r + 2, r + 2), r)
+        surf.blit(puff, (chim_x + dx - r, chim_y_top + dy - r))
 
-    # Window with a cross frame.
-    win_w, win_h = 10, 10
-    win_x = house_x + 5
-    win_y = house_y + 7
+    # ── Window with shutters + flowerbox ─────────────────────────────────
+    win_w, win_h = 14, 12
+    win_x = body_x + 8
+    win_y = body_y + 8
+    # Shutters on either side
+    for side, sx in (("L", win_x - 5), ("R", win_x + win_w + 1)):
+        pygame.draw.rect(surf, OUTLINE,
+                         (sx - 1, win_y - 1, 5, win_h + 2))
+        pygame.draw.rect(surf, SHUTTER, (sx, win_y, 4, win_h))
+        # Diagonal slats
+        for sl in range(0, win_h - 1, 2):
+            pygame.draw.line(surf, SHUTTER_D,
+                             (sx, win_y + sl + 1),
+                             (sx + 3, win_y + sl), 1)
+    # Window frame + glass
     pygame.draw.rect(surf, OUTLINE,
                      (win_x - 1, win_y - 1, win_w + 2, win_h + 2))
     pygame.draw.rect(surf, WIN_GLASS, (win_x, win_y, win_w, win_h))
+    # Reflection sheen
+    pygame.draw.line(surf, WIN_HI,
+                     (win_x + 1, win_y + 1),
+                     (win_x + win_w // 2 - 1, win_y + 1), 1)
+    pygame.draw.line(surf, WIN_HI,
+                     (win_x + 1, win_y + 1),
+                     (win_x + 1, win_y + win_h // 2 - 1), 1)
+    # Cross frame (mullions)
     pygame.draw.line(surf, WIN_FRAME,
                      (win_x + win_w // 2, win_y),
                      (win_x + win_w // 2, win_y + win_h - 1), 1)
     pygame.draw.line(surf, WIN_FRAME,
                      (win_x, win_y + win_h // 2),
                      (win_x + win_w - 1, win_y + win_h // 2), 1)
-
-    # Door, slightly right of centre so the doorstep isn't blocked by the
-    # parcel arriving on Pip's left talons.
-    door_w, door_h = 12, 18
-    door_x = house_x + house_w - door_w - 6
-    door_y = house_y + house_h - door_h
-    pygame.draw.rect(surf, OUTLINE,
-                     (door_x - 1, door_y, door_w + 2, door_h + 1))
-    pygame.draw.rect(surf, DOOR, (door_x, door_y + 1, door_w, door_h - 1))
-    pygame.draw.rect(surf, DOOR_HI, (door_x + 1, door_y + 2, 2, door_h - 4))
+    # Sill
+    pygame.draw.rect(surf, WALL_TRIM,
+                     (win_x - 2, win_y + win_h, win_w + 4, 2))
+    # Flower box below the sill — wood box + foliage clumps + flower dots
+    fb_x, fb_y, fb_w, fb_h = win_x - 2, win_y + win_h + 2, win_w + 4, 5
+    pygame.draw.rect(surf, OUTLINE, (fb_x - 1, fb_y - 1, fb_w + 2, fb_h + 1))
+    pygame.draw.rect(surf, DOOR_DK, (fb_x, fb_y, fb_w, fb_h))
     pygame.draw.line(surf, DOOR_HI,
-                     (door_x + 1, door_y + 1),
-                     (door_x + door_w - 2, door_y + 1), 1)
-    # Brass doorknob
-    pygame.draw.circle(surf, (240, 200, 100),
-                       (door_x + door_w - 2, door_y + door_h // 2), 1)
+                     (fb_x, fb_y), (fb_x + fb_w - 1, fb_y), 1)
+    # Foliage clumps spilling over
+    for cx_clump in (fb_x + 2, fb_x + fb_w // 2, fb_x + fb_w - 3):
+        pygame.draw.circle(surf, LEAF_DK, (cx_clump, fb_y - 1), 2)
+        pygame.draw.circle(surf, LEAF, (cx_clump - 1, fb_y - 2), 2)
+    # Flower dots — bougainvillea two-layer technique
+    flower_a = (255, 220,  90) if kind == "post" else (235, 130, 165)
+    flower_b = (180, 220, 255) if kind == "post" else (250, 235, 220)
+    for _ in range(7):
+        fx = rng.randint(fb_x + 1, fb_x + fb_w - 2)
+        fy = rng.randint(fb_y - 3, fb_y - 1)
+        pygame.draw.circle(surf, flower_a, (fx, fy), 1)
+        if rng.random() < 0.5:
+            pygame.draw.circle(surf, flower_b, (fx + 1, fy), 1)
 
-    # Post-office flag on the left eave so the pickup house reads at a
-    # glance as a different building from the delivery house.
+    # ── Door — taller plank door with threshold + brass knob + doormat ──
+    door_w, door_h = 14, 22
+    door_x = body_x + body_w - door_w - 6
+    door_y = body_y + body_h - door_h
+    # Frame
+    pygame.draw.rect(surf, OUTLINE,
+                     (door_x - 2, door_y - 1, door_w + 4, door_h + 1))
+    pygame.draw.rect(surf, WALL_TRIM,
+                     (door_x - 1, door_y, door_w + 2, door_h))
+    pygame.draw.rect(surf, DOOR, (door_x, door_y + 1, door_w, door_h - 1))
+    # Vertical plank lines on the door
+    for dx in (door_x + 4, door_x + 9):
+        pygame.draw.line(surf, DOOR_DK,
+                         (dx, door_y + 2), (dx, door_y + door_h - 2), 1)
+    # Top arched highlight band
+    pygame.draw.line(surf, DOOR_HI,
+                     (door_x + 1, door_y + 2),
+                     (door_x + door_w - 2, door_y + 2), 1)
+    # Brass knob + small kickplate
+    pygame.draw.circle(surf, BRASS,
+                       (door_x + door_w - 3, door_y + door_h // 2), 1)
+    pygame.draw.rect(surf, BRASS_DK,
+                     (door_x + 1, door_y + door_h - 4, door_w - 2, 2))
+    # Doormat — straw-coloured band on the foundation
+    mat_x, mat_y, mat_w, mat_h = door_x - 2, found_y + 1, door_w + 4, 3
+    pygame.draw.rect(surf, OUTLINE_S, (mat_x, mat_y, mat_w, mat_h))
+    for i in range(0, mat_w, 2):
+        pygame.draw.line(surf, BRASS_DK,
+                         (mat_x + i, mat_y + 1),
+                         (mat_x + i, mat_y + 1), 1)
+
+    # ── POST nameplate above the door (post variant only) ───────────────
     if kind == "post":
-        pole_x = roof_eave_l[0] + 3
-        pole_top = roof_peak[1] - 12
-        pole_bot = roof_eave_l[1]
-        pygame.draw.line(surf, OUTLINE, (pole_x, pole_top),
-                         (pole_x, pole_bot), 2)
-        # Triangular pennant
-        flag_pts = [(pole_x, pole_top + 1),
-                    (pole_x + 12, pole_top + 5),
-                    (pole_x, pole_top + 9)]
-        pygame.draw.polygon(surf, (220, 200, 90), flag_pts)
-        pygame.draw.polygon(surf, OUTLINE, flag_pts, 1)
+        sign_x, sign_y, sign_w, sign_h = door_x - 1, door_y - 8, door_w + 2, 6
+        pygame.draw.rect(surf, OUTLINE,
+                         (sign_x - 1, sign_y - 1, sign_w + 2, sign_h + 2))
+        pygame.draw.rect(surf, BRASS, (sign_x, sign_y, sign_w, sign_h))
+        pygame.draw.line(surf, BRASS_DK,
+                         (sign_x, sign_y + sign_h - 1),
+                         (sign_x + sign_w - 1, sign_y + sign_h - 1), 1)
+        # Pixel-painted POST glyphs (each letter is 3 px wide × 4 tall)
+        gy = sign_y + 1
+        gx = sign_x + 1
+        # P
+        for px, py in ((0,0),(1,0),(0,1),(2,1),(0,2),(1,2),(0,3)):
+            surf.set_at((gx + px, gy + py), OUTLINE)
+        # O
+        gx += 4
+        for px, py in ((0,0),(1,0),(2,0),(0,1),(2,1),(0,2),(2,2),(0,3),(1,3),(2,3)):
+            surf.set_at((gx + px, gy + py), OUTLINE)
+        # S
+        gx += 4
+        for px, py in ((1,0),(2,0),(0,1),(1,2),(2,2),(0,3),(1,3)):
+            surf.set_at((gx + px, gy + py), OUTLINE)
+        # T
+        gx += 4
+        for px, py in ((0,0),(1,0),(2,0),(1,1),(1,2),(1,3)):
+            surf.set_at((gx + px, gy + py), OUTLINE)
 
-    return surf
+    # ── Porch deck on the right of the house — planks + railing ─────────
+    porch_x_left  = body_x + body_w
+    porch_x_right = porch_x_left + 64
+    porch_top_y   = found_y + 1
+    porch_bot_y   = porch_top_y + 6
+    # Plank floor (4 horizontal planks with gaps)
+    pygame.draw.rect(surf, OUTLINE,
+                     (porch_x_left, porch_top_y - 1,
+                      porch_x_right - porch_x_left + 1,
+                      porch_bot_y - porch_top_y + 2))
+    pygame.draw.rect(surf, PORCH,
+                     (porch_x_left, porch_top_y,
+                      porch_x_right - porch_x_left, 6))
+    for i, py in enumerate((porch_top_y, porch_top_y + 2,
+                             porch_top_y + 4)):
+        col = PORCH_HI if (i % 2 == 0) else PORCH_DK
+        pygame.draw.line(surf, col,
+                         (porch_x_left, py), (porch_x_right - 1, py), 1)
+    # Top edge highlight (sunlit deck top)
+    pygame.draw.line(surf, PORCH_HI,
+                     (porch_x_left, porch_top_y),
+                     (porch_x_right - 1, porch_top_y), 1)
+    # Front rail running along the deck above the floor
+    rail_y = porch_top_y - 6
+    pygame.draw.line(surf, OUTLINE,
+                     (porch_x_left, rail_y),
+                     (porch_x_right - 1, rail_y), 1)
+    pygame.draw.line(surf, PORCH,
+                     (porch_x_left, rail_y - 1),
+                     (porch_x_right - 1, rail_y - 1), 1)
+    # Vertical balusters (slim wood posts)
+    for bx in range(porch_x_left + 4, porch_x_right - 2, 10):
+        pygame.draw.line(surf, OUTLINE,
+                         (bx, rail_y), (bx, porch_top_y - 1), 1)
+        pygame.draw.line(surf, PORCH_DK,
+                         (bx + 1, rail_y), (bx + 1, porch_top_y - 1), 1)
+    # End post (taller, supports the rail's right end)
+    end_post_x = porch_x_right - 2
+    pygame.draw.rect(surf, OUTLINE,
+                     (end_post_x - 1, rail_y - 6, 4, porch_top_y - rail_y + 6))
+    pygame.draw.rect(surf, PORCH,
+                     (end_post_x, rail_y - 5, 2, porch_top_y - rail_y + 5))
+
+    # ── Hanging lantern at the porch end (post variant only) ────────────
+    if kind == "post":
+        # Bracket arm reaching out from end post
+        bracket_x = end_post_x + 2
+        bracket_y = rail_y - 4
+        pygame.draw.line(surf, OUTLINE,
+                         (end_post_x + 1, bracket_y),
+                         (bracket_x + 4, bracket_y), 2)
+        # Lantern body
+        lan_cx, lan_cy = bracket_x + 5, bracket_y + 8
+        pygame.draw.line(surf, OUTLINE,
+                         (lan_cx, bracket_y), (lan_cx, lan_cy - 4), 1)
+        # Soft warm glow behind the lantern
+        blit_glow(surf, lan_cx, lan_cy, 8, (255, 220, 140), 100)
+        # Paper-lantern body (rounded teardrop)
+        pygame.draw.ellipse(surf, OUTLINE,
+                            (lan_cx - 4, lan_cy - 4, 9, 9))
+        pygame.draw.ellipse(surf, (255, 200, 110),
+                            (lan_cx - 3, lan_cy - 3, 7, 7))
+        pygame.draw.ellipse(surf, (255, 240, 180),
+                            (lan_cx - 2, lan_cy - 2, 4, 4))
+        # Top + bottom caps
+        pygame.draw.line(surf, OUTLINE,
+                         (lan_cx - 2, lan_cy - 4), (lan_cx + 2, lan_cy - 4), 1)
+        pygame.draw.line(surf, OUTLINE,
+                         (lan_cx - 1, lan_cy + 5), (lan_cx + 1, lan_cy + 5), 1)
+
+    # ── Pennant flag (post variant only) ─────────────────────────────────
+    chimney_top = (chim_x + chim_w // 2, chim_y_top - 3)
+    if kind == "post":
+        pole_top_y = chimney_top[1] - 14
+        pygame.draw.line(surf, OUTLINE,
+                         (chimney_top[0], pole_top_y),
+                         (chimney_top[0], chimney_top[1]), 2)
+        flag_pts = [(chimney_top[0],     pole_top_y + 1),
+                    (chimney_top[0] + 12, pole_top_y + 5),
+                    (chimney_top[0],     pole_top_y + 9)]
+        pygame.draw.polygon(surf, (235, 205,  90), flag_pts)
+        pygame.draw.polygon(surf, OUTLINE, flag_pts, 1)
+        # Flutter line
+        pygame.draw.line(surf, OUTLINE_S,
+                         (chimney_top[0] + 2, pole_top_y + 4),
+                         (chimney_top[0] + 9, pole_top_y + 5), 1)
+
+    # ── Foliage accents — moss strands + ivy spray ──────────────────────
+    # Moss strands hanging from the cloud lip
+    for mx in (24, 50, 102, 132):
+        h = 6 + (mx % 4)
+        pygame.draw.line(surf, LEAF_DK, (mx, cl_y + 5), (mx, cl_y + 5 + h), 1)
+        pygame.draw.circle(surf, LEAF,    (mx, cl_y + 5 + h), 2)
+        pygame.draw.circle(surf, LEAF_DK, (mx, cl_y + 5 + h), 2, 1)
+    # Ivy spray creeping up the right corner of the house body
+    ivy_x = body_x + body_w - 1
+    for dy in range(0, 18, 3):
+        pygame.draw.circle(surf, LEAF_DK,
+                           (ivy_x - (dy % 5 == 0), body_y + body_h - dy), 2)
+        pygame.draw.circle(surf, LEAF,
+                           (ivy_x - 1 - (dy % 5 == 0), body_y + body_h - dy - 1), 1)
+
+    # ── Anchors for callers (sprite-local coordinates) ──────────────────
+    anchors = {
+        "doorstep":     (door_x + door_w // 2, mat_y),
+        "porch_top":    (porch_x_left, porch_x_right, porch_top_y),
+        "garrick_stand": (porch_x_left + 20, porch_top_y),
+        "chimney_top":  chimney_top,
+    }
+    return surf, anchors
 
 
 def _build_garrick() -> pygame.Surface:
@@ -362,12 +631,28 @@ def _get_sprite(name: str) -> pygame.Surface:
         if name == "parcel":   s = _build_parcel()
         elif name == "mailbag": s = _build_mailbag()
         elif name == "mailbox": s = _build_mailbox()
-        elif name == "skyhouse_post": s = _build_skyhouse(kind="post")
-        elif name == "skyhouse_home": s = _build_skyhouse(kind="home")
+        elif name == "skyhouse_post":
+            s, _ = _build_skyhouse(kind="post")
+        elif name == "skyhouse_home":
+            s, _ = _build_skyhouse(kind="home")
         elif name == "garrick": s = _build_garrick()
         else: raise KeyError(name)
         _SPRITES[name] = s
     return s
+
+
+_HOUSE_ANCHORS: dict = {}
+
+
+def _get_house_anchors(kind: str) -> dict:
+    """Sprite-local anchor positions for the sky-house variants. Computed
+    by rebuilding the sprite once (cached in _HOUSE_ANCHORS), so callers
+    don't have to hard-code internal pixel offsets."""
+    a = _HOUSE_ANCHORS.get(kind)
+    if a is None:
+        _, a = _build_skyhouse(kind=kind)
+        _HOUSE_ANCHORS[kind] = a
+    return a
 
 
 class IntroScene:
@@ -541,69 +826,66 @@ def _beat_dawn(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
             pygame.draw.line(mist, (235, 220, 230, a), (0, i), (W, i))
         surf.blit(mist, (0, GROUND_Y - 200))
 
-    # Pickup post-house — slow weightless bob in mid-air.
+    # Pickup post-house — anchored on the LEFT, slightly above centre,
+    # with a slow weightless bob.
     house = _get_sprite("skyhouse_post")
-    house_cx = W // 2 + 12
-    house_cy = int(H * 0.50) + int(math.sin(scene.t * 0.7) * 2)
+    anc = _get_house_anchors("post")
+    house_cx = int(W * 0.30)
+    house_cy = int(H * 0.42) + int(math.sin(scene.t * 0.7) * 2)
     house_x = house_cx - house.get_width() // 2
     house_y = house_cy - house.get_height() // 2
     surf.blit(house, (house_x, house_y))
 
-    # Doorstep is fixed inside the 96-px sprite (see _build_skyhouse comment
-    # in beat 4) — duplicate the math so callers don't depend on internals.
-    doorstep_x = house_x + 25 + 46 - 12 - 6 + 12 // 2
-    doorstep_y = house_y + 76
+    doorstep_x = house_x + anc["doorstep"][0]
+    doorstep_y = house_y + anc["doorstep"][1]
 
-    # Parcel waits on the doorstep.
+    # Parcel waits on the doormat at the doorstep.
     par = _get_sprite("parcel")
     surf.blit(par, (doorstep_x - par.get_width() // 2,
-                    doorstep_y - par.get_height()))
+                    doorstep_y - par.get_height() + 1))
 
-    # Mr. Garrick hovers in the air to the left of the house, slow bob.
-    g = _get_sprite("garrick")
-    g_x = 28
-    g_y = house_y + 32 + int(math.sin(scene.t * 1.2) * 3)
+    # Mr. Garrick — STANDING on the porch deck (no bob, no hover).
+    # Scaled down so he fits the cottage at proper proportion.
+    g = pygame.transform.smoothscale(_get_sprite("garrick"), (38, 42))
+    stand_x_local, stand_y_local = anc["garrick_stand"]
+    g_x = house_x + stand_x_local - g.get_width() // 2
+    g_y = house_y + stand_y_local - g.get_height() + 4  # feet on the deck
     surf.blit(g, (g_x, g_y))
 
 
 # ── beat 2: The hand-off (2.5 – 4.5) ─────────────────────────────────────────
 
 def _beat_handoff(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
-    """Same pickup post-house as beat 1. Mr. Garrick is still hovering
-    nearby and gestures (earpiece crackle plays once during the beat).
-    Pip swoops in from off-screen, lifts the parcel off the doorstep, and
-    drifts onward with it tucked beneath him."""
+    """Same pickup post-house as beat 1. Mr. Garrick stands on the porch and
+    gestures (earpiece crackle plays once during the beat). Pip swoops in
+    from off-screen, lifts the parcel off the doorstep, and drifts to the
+    right of the porch — composed as the launch pose for the journey."""
     sky_phase = 0.00 + _smoothstep(u) * 0.10  # day → just into golden warmth
     _draw_world(surf, sky_phase, scroll=10.0 + u * 6.0,
                 cloud_phase=scene.t, ground=False)
 
-    # Reuse the EXACT post-house from beat 1 (same x, same y baseline).
+    # Reuse the EXACT post-house from beat 1.
     house = _get_sprite("skyhouse_post")
-    house_cx = W // 2 + 12
-    house_cy = int(H * 0.50) + int(math.sin(scene.t * 0.7) * 2)
+    anc = _get_house_anchors("post")
+    house_cx = int(W * 0.30)
+    house_cy = int(H * 0.42) + int(math.sin(scene.t * 0.7) * 2)
     house_x = house_cx - house.get_width() // 2
     house_y = house_cy - house.get_height() // 2
     surf.blit(house, (house_x, house_y))
 
-    doorstep_x = house_x + 25 + 46 - 12 - 6 + 12 // 2
-    doorstep_y = house_y + 76
+    doorstep_x = house_x + anc["doorstep"][0]
+    doorstep_y = house_y + anc["doorstep"][1]
+    porch_left, porch_right, porch_top = anc["porch_top"]
+    porch_top_x_right = house_x + porch_right
+    porch_top_y_world = house_y + porch_top
 
-    # Mr. Garrick hovers to the left of the house, sin-bob with a small
-    # flapping wing.
-    g = _get_sprite("garrick")
-    g_x = 28
-    g_base_y = house_y + 32
-    g_y = g_base_y + int(math.sin(scene.t * 1.5) * 4)
+    # Mr. Garrick STANDING on the porch — no bob, no wing flap, just a
+    # patient postmaster. Scaled to cottage proportion.
+    g = pygame.transform.smoothscale(_get_sprite("garrick"), (38, 42))
+    stand_x_local, stand_y_local = anc["garrick_stand"]
+    g_x = house_x + stand_x_local - g.get_width() // 2
+    g_y = house_y + stand_y_local - g.get_height() + 4
     surf.blit(g, (g_x, g_y))
-    wing_up = math.sin(scene.t * 8.0) > 0
-    if wing_up:
-        wing_pts = [(g_x + 22, g_y + 38), (g_x + 6, g_y + 24),
-                    (g_x + 18, g_y + 30), (g_x + 30, g_y + 36)]
-    else:
-        wing_pts = [(g_x + 22, g_y + 38), (g_x + 6, g_y + 50),
-                    (g_x + 18, g_y + 44), (g_x + 30, g_y + 38)]
-    pygame.draw.polygon(surf, (240, 200, 200), wing_pts)
-    pygame.draw.polygon(surf, (200, 150, 160), wing_pts, 1)
 
     # Speech-soundwave arc beside Garrick's beak (during earpiece crackle).
     if 0.20 < u < 0.70:
@@ -617,27 +899,26 @@ def _beat_handoff(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
                             arc.get_rect(), math.pi * 0.15, math.pi * 0.85, 2)
             surf.blit(arc, (g_x + g.get_width() - 6, g_y - radius // 2))
 
-    # Pip swoops in from off-screen-right, banks down to the doorstep,
-    # then begins to drift onward with the parcel tucked beneath him.
+    # Pip swoops in from off-screen-right, banks down beside the doorstep,
+    # picks up the parcel, then drifts to the right of the porch and ends
+    # the beat in a "ready to fly" pose at gameplay altitude.
     par = _get_sprite("parcel")
-    arrive_t = _clamp01(u / 0.55)
-    depart_t = _clamp01((u - 0.60) / 0.40)
-    pip_start = (W + 50, 70)
-    pip_dock  = (doorstep_x + 30, doorstep_y - 28)
-    pip_exit  = (doorstep_x + 80, doorstep_y - 70)
+    pip_start = (W + 50, 60)
+    pip_dock  = (doorstep_x, doorstep_y - 28)
+    pip_exit  = (porch_top_x_right + 30, porch_top_y_world - 50)
     if u < 0.60:
-        ease = _ease_out_cubic(arrive_t)
+        ease = _ease_out_cubic(_clamp01(u / 0.55))
         pip_x = pip_start[0] + (pip_dock[0] - pip_start[0]) * ease
         pip_y = pip_start[1] + (pip_dock[1] - pip_start[1]) * ease
         tilt = -10.0 * (1.0 - ease)
-        # Parcel still on the doorstep until Pip reaches it.
+        # Parcel still on the doormat until Pip reaches it.
         surf.blit(par, (doorstep_x - par.get_width() // 2,
-                        doorstep_y - par.get_height()))
+                        doorstep_y - par.get_height() + 1))
     else:
-        ease = _ease_out_cubic(depart_t)
+        ease = _ease_out_cubic(_clamp01((u - 0.60) / 0.40))
         pip_x = pip_dock[0] + (pip_exit[0] - pip_dock[0]) * ease
         pip_y = pip_dock[1] + (pip_exit[1] - pip_dock[1]) * ease
-        tilt = 4.0 * ease
+        tilt = 2.0 * ease
         # Parcel now travels with Pip — tucked beneath him.
         surf.blit(par, (int(pip_x) - par.get_width() // 2,
                         int(pip_y) + 10))
@@ -725,20 +1006,18 @@ def _beat_arrival(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
                 cloud_phase=scene.t, ground=False)
 
     # Floating sky-house, anchored mid-frame with a slow bob so it reads as
-    # weightless rather than pinned.
+    # weightless rather than pinned. Centred so it visually sits to the
+    # right of the pickup house's left-side anchor in beats 1-2.
     house = _get_sprite("skyhouse_home")
+    anc = _get_house_anchors("home")
     house_cx = W // 2
     house_cy = int(H * 0.55) + int(math.sin(scene.t * 0.9) * 3)
     house_x = house_cx - house.get_width() // 2
     house_y = house_cy - house.get_height() // 2
     surf.blit(house, (house_x, house_y))
 
-    # Doorstep position in surface space, derived from _build_skyhouse:
-    #   sprite is 96px, house body is 46px wide centred → starts at sprite x=25
-    #   door is 12px wide, anchored 6px from the right interior wall →
-    #   sprite x=53; door bottom == house bottom == sprite y=76.
-    doorstep_x = house_x + 25 + 46 - 12 - 6 + 12 // 2
-    doorstep_y = house_y + 76
+    doorstep_x = house_x + anc["doorstep"][0]
+    doorstep_y = house_y + anc["doorstep"][1]
 
     # Pip glides in from the upper-right, drops the parcel at the doorstep,
     # then continues onward and upward so he's clearly clear of the parcel.
