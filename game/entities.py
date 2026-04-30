@@ -78,9 +78,15 @@ class Bird:
         self.frame_t = (self.frame_t + dt * base_hz)
         self.flap_boost = max(0.0, self.flap_boost - dt * 1.8)
 
-    def draw(self, surf, shake_x=0, shake_y=0):
+    def draw(self, surf, shake_x=0, shake_y=0, flipped=False):
         frame_idx = int(self.frame_t) % len(parrot.FRAMES)
-        img = parrot.get_parrot(frame_idx, self.tilt_deg)
+        # When flipped (reverse-gravity buff), negate the tilt so a rising
+        # bird's head still leads in the direction of motion after the
+        # vertical mirror.
+        tilt = -self.tilt_deg if flipped else self.tilt_deg
+        img = parrot.get_parrot(frame_idx, tilt)
+        if flipped:
+            img = pygame.transform.flip(img, False, True)
         r = img.get_rect(center=(self.x + shake_x, self.y + shake_y))
         surf.blit(img, r.topleft)
 
@@ -184,6 +190,166 @@ class Coin:
 
 
 # ── PowerUp ──────────────────────────────────────────────────────────────────
+
+# Lazy-initialized high-resolution cache for the "reverse" power-up icon.
+# Rendered once at 4x super-sampling, smoothscaled down to give the disc and
+# arrows clean anti-aliased edges. Reused for both the in-world pickup and
+# the HUD active-buff badge.
+_REVERSE_ICON_CACHE: "dict[int, pygame.Surface]" = {}
+_REVERSE_AURA_CACHE: "pygame.Surface | None" = None
+
+
+def _build_reverse_icon(out_diameter: int) -> pygame.Surface:
+    """Glossy cyan disc with two arrows (up on the left, down on the right).
+    Drawn at 4x and downsampled for crisp edges."""
+    SS = 4
+    size = out_diameter * SS
+    surf = pygame.Surface((size, size), pygame.SRCALPHA)
+    cx = cy = size // 2
+    R = size // 2 - 2 * SS  # disc radius (leaves room for outer glow)
+
+    # Outer glow halo — additive-friendly faint rings.
+    for i in range(6, 0, -1):
+        a = 14 - i * 2
+        pygame.draw.circle(surf, (110, 230, 245, max(0, a)),
+                           (cx, cy), R + i * SS)
+    # Outer dark teal rim
+    pygame.draw.circle(surf, (8, 38, 58), (cx, cy), R + SS)
+    # Bright cyan ring just inside the rim
+    pygame.draw.circle(surf, (90, 220, 240), (cx, cy), R)
+
+    # Body radial gradient: bright top-left → deep teal bottom-right.
+    # Approximate with stacked offset circles of decreasing radius.
+    grad_steps = 22
+    for i in range(grad_steps):
+        t = i / (grad_steps - 1)
+        rr = int(R * (1.0 - t * 0.95))
+        if rr < 2:
+            break
+        col = (
+            int(70 + (10 - 70) * t),
+            int(195 + (75 - 195) * t),
+            int(225 + (115 - 225) * t),
+        )
+        # Offset toward bottom-right so the gradient reads as lit-from-top-left.
+        ox = int(R * 0.12 * t)
+        oy = int(R * 0.18 * t)
+        pygame.draw.circle(surf, col, (cx - ox, cy - oy), rr)
+
+    # Inner darker groove just inside the rim — gives the disc a beveled look.
+    pygame.draw.circle(surf, (10, 55, 80), (cx, cy), R - 1, max(2, SS // 2))
+
+    # Specular crescent on the upper portion (glossy highlight).
+    hl = pygame.Surface((size, size), pygame.SRCALPHA)
+    hl_rect = pygame.Rect(cx - int(R * 0.7), cy - int(R * 0.85),
+                          int(R * 1.4), int(R * 0.7))
+    pygame.draw.ellipse(hl, (255, 255, 255, 130), hl_rect)
+    # Mask the highlight to the disc shape so it never spills past the rim.
+    mask = pygame.Surface((size, size), pygame.SRCALPHA)
+    pygame.draw.circle(mask, (255, 255, 255, 255), (cx, cy), R - SS)
+    hl.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    surf.blit(hl, (0, 0))
+
+    # ── Arrows ────────────────────────────────────────────────────────────
+    arrow_fill    = (250, 253, 255)
+    arrow_outline = (8, 35, 55)
+    arrow_shadow  = (175, 220, 240)
+
+    # Geometry in big-surface units.
+    pad = R // 6
+    top_y = cy - R + pad + SS
+    bot_y = cy + R - pad - SS
+    head_h = (bot_y - top_y) * 4 // 10
+    shaft_w = R * 5 // 16
+    head_w = shaft_w * 5 // 2
+
+    lx = cx - R // 2 + R // 12   # left (up-arrow) column
+    rx = cx + R // 2 - R // 12   # right (down-arrow) column
+
+    def _arrow(surf, col_x, *, point_up: bool):
+        if point_up:
+            head_top = top_y
+            head_bot = top_y + head_h
+            shaft_top = head_bot - SS
+            shaft_bot = bot_y
+        else:
+            head_bot = bot_y
+            head_top = bot_y - head_h
+            shaft_top = top_y
+            shaft_bot = head_top + SS
+        # Outline (slightly larger silhouette)
+        ow = SS  # outline thickness
+        head_pts_out = [
+            (col_x - head_w // 2 - ow, head_bot + (ow if point_up else -ow)),
+            (col_x + head_w // 2 + ow, head_bot + (ow if point_up else -ow)),
+            (col_x, (head_top - ow) if point_up else (head_bot + ow)),
+        ]
+        if not point_up:
+            head_pts_out = [
+                (col_x - head_w // 2 - ow, head_top - ow),
+                (col_x + head_w // 2 + ow, head_top - ow),
+                (col_x, head_bot + ow),
+            ]
+        pygame.draw.polygon(surf, arrow_outline, head_pts_out)
+        pygame.draw.rect(surf, arrow_outline,
+                         (col_x - shaft_w // 2 - ow, shaft_top - ow,
+                          shaft_w + ow * 2,
+                          shaft_bot - shaft_top + ow * 2),
+                         border_radius=shaft_w // 3)
+        # Fill
+        if point_up:
+            head_pts = [
+                (col_x - head_w // 2, head_bot),
+                (col_x + head_w // 2, head_bot),
+                (col_x, head_top),
+            ]
+        else:
+            head_pts = [
+                (col_x - head_w // 2, head_top),
+                (col_x + head_w // 2, head_top),
+                (col_x, head_bot),
+            ]
+        pygame.draw.polygon(surf, arrow_fill, head_pts)
+        pygame.draw.rect(surf, arrow_fill,
+                         (col_x - shaft_w // 2, shaft_top,
+                          shaft_w, shaft_bot - shaft_top),
+                         border_radius=shaft_w // 3)
+        # Right-edge gentle shadow on the shaft so the arrow reads as 3-D.
+        pygame.draw.rect(surf, arrow_shadow,
+                         (col_x + shaft_w // 6, shaft_top + ow,
+                          shaft_w // 3, shaft_bot - shaft_top - ow * 2),
+                         border_radius=shaft_w // 4)
+
+    _arrow(surf, lx, point_up=True)
+    _arrow(surf, rx, point_up=False)
+
+    return pygame.transform.smoothscale(surf, (out_diameter, out_diameter))
+
+
+def _get_reverse_icon(diameter: int = (MUSHROOM_R + 2) * 2) -> pygame.Surface:
+    cached = _REVERSE_ICON_CACHE.get(diameter)
+    if cached is None:
+        cached = _build_reverse_icon(diameter)
+        _REVERSE_ICON_CACHE[diameter] = cached
+    return cached
+
+
+def _get_reverse_aura() -> pygame.Surface:
+    global _REVERSE_AURA_CACHE
+    if _REVERSE_AURA_CACHE is not None:
+        return _REVERSE_AURA_CACHE
+    R = MUSHROOM_R
+    SS = 4
+    size = (R * 3) * SS
+    big = pygame.Surface((size, size), pygame.SRCALPHA)
+    bcx = bcy = size // 2
+    for i, (rr_factor, alpha) in enumerate((
+            (1.45, 22), (1.30, 38), (1.15, 55), (1.00, 72))):
+        pygame.draw.circle(big, (90, 230, 245, alpha),
+                           (bcx, bcy), int(R * rr_factor * SS))
+    _REVERSE_AURA_CACHE = pygame.transform.smoothscale(big, (R * 3, R * 3))
+    return _REVERSE_AURA_CACHE
+
 
 class PowerUp:
     """A collectible buff. `kind` selects visuals and pickup effect:
@@ -319,42 +485,12 @@ class PowerUp:
     def _draw_reverse(self, surf):
         cx = int(self.x)
         cy = int(self.y)
-        R = MUSHROOM_R
-        # Cyan aura behind the icon (additive, like slowmo's purple halo)
-        aura = pygame.Surface((R * 3, R * 3), pygame.SRCALPHA)
-        pygame.draw.circle(aura, (80, 220, 235, 75),
-                           (aura.get_width() // 2, aura.get_height() // 2),
-                           R + 4)
+        icon = _get_reverse_icon()
+        # Soft cyan aura behind the icon (additive)
+        aura = _get_reverse_aura()
         surf.blit(aura, (cx - aura.get_width() // 2, cy - aura.get_height() // 2),
                   special_flags=pygame.BLEND_ADD)
-        # Disc backing — dark teal rim + lighter teal face
-        pygame.draw.circle(surf, (15, 60, 75), (cx, cy), R + 1)
-        pygame.draw.circle(surf, (40, 140, 170), (cx, cy), R - 1)
-
-        col = (245, 252, 255)
-        outline = (15, 50, 70)
-
-        # UP arrow on the LEFT (head at top), DOWN arrow on the RIGHT
-        # (head at bottom). Side-by-side arrows read unambiguously as a
-        # "swap" / "flip" symbol — much clearer than stacking them.
-        lx = cx - 5  # left arrow column
-        rx = cx + 5  # right arrow column
-
-        # Up arrow (left): head at top, shaft below
-        up_head = [(lx - 4, cy - 4), (lx + 4, cy - 4), (lx, cy - 10)]
-        pygame.draw.polygon(surf, outline,
-                            [(lx - 5, cy - 3), (lx + 5, cy - 3), (lx, cy - 11)])
-        pygame.draw.polygon(surf, col, up_head)
-        pygame.draw.rect(surf, outline, (lx - 2, cy - 4, 5, 14))
-        pygame.draw.rect(surf, col,     (lx - 1, cy - 4, 3, 13))
-
-        # Down arrow (right): shaft above, head at bottom
-        pygame.draw.rect(surf, outline, (rx - 2, cy - 10, 5, 14))
-        pygame.draw.rect(surf, col,     (rx - 1, cy - 9, 3, 13))
-        pygame.draw.polygon(surf, outline,
-                            [(rx - 5, cy + 3), (rx + 5, cy + 3), (rx, cy + 11)])
-        pygame.draw.polygon(surf, col,
-                            [(rx - 4, cy + 4), (rx + 4, cy + 4), (rx, cy + 10)])
+        surf.blit(icon, (cx - icon.get_width() // 2, cy - icon.get_height() // 2))
 
 
 # Back-compat alias — some callers (e.g. snapshot/playtest scripts) still say Mushroom.

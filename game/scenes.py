@@ -285,7 +285,8 @@ class App:
         for m in self.world.powerups:
             m.draw(self.screen)
 
-        self.world.bird.draw(self.screen, sx, sy)
+        self.world.bird.draw(self.screen, sx, sy,
+                             flipped=self.world.reverse_timer > 0)
 
         for p in self.world.particles:
             p.draw(self.screen)
