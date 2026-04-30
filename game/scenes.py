@@ -323,7 +323,6 @@ class App:
         import sys
         self._final_score = self.world.score
         self._name_input_buf = ""
-        self._stats_t = 0.0
         if sys.platform == "emscripten":
             # Browser: stay on the stats screen while an async task fetches
             # the top-10 from Supabase. When the task resolves it switches
