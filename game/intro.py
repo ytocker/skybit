@@ -350,14 +350,8 @@ def _build_skyhouse(kind: str = "home"):
                      (chim_x - 2, chim_y_top - 3, chim_w + 4, 3))
     pygame.draw.rect(surf, STONE_LT,
                      (chim_x - 1, chim_y_top - 2, chim_w + 2, 1))
-    # Smoke puffs (varying alpha + radius)
-    for i, (dx, dy, r, a) in enumerate(
-        ((1, -5, 3, 200), (3, -10, 4, 150), (5, -16, 5, 100))
-    ):
-        puff = pygame.Surface((r * 2 + 4, r * 2 + 4), pygame.SRCALPHA)
-        pygame.draw.circle(puff, (250, 250, 255, a),
-                           (r + 2, r + 2), r)
-        surf.blit(puff, (chim_x + dx - r, chim_y_top + dy - r))
+    # (Smoke puffs intentionally omitted — at sprite-pixel scale they
+    # rendered as semi-transparent rectangular blobs instead of soft puffs.)
 
     # ── Window with shutters + flowerbox ─────────────────────────────────
     win_w, win_h = 14, 12
@@ -812,19 +806,11 @@ def _beat_dawn(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
     """Predawn → first light. A tiny post-house floats in the sky with the
     parcel waiting on its doorstep; Mr. Garrick hovers nearby. The world
     wakes up; Pip hasn't arrived yet."""
-    # Sky lerps predawn (0.78) → day (0.00 / equivalently 1.00 wrapping).
-    phase = 0.78 + _smoothstep(u) * 0.22
+    # Pickup happens in clear daylight. The biome stays locked here — only
+    # the journey beat cycles through the day/night arc.
+    phase = 0.0
     _draw_world(surf, phase, scroll=u * 4.0, cloud_phase=scene.t,
                 ground=False)
-    # Soft mist band along the bottom — fades as light grows.
-    mist_a = int(180 * (1.0 - _smoothstep(u)))
-    if mist_a > 0:
-        mist = pygame.Surface((W, 220), pygame.SRCALPHA)
-        for i in range(220):
-            t = i / 219.0
-            a = int(mist_a * (1.0 - t) ** 1.4)
-            pygame.draw.line(mist, (235, 220, 230, a), (0, i), (W, i))
-        surf.blit(mist, (0, GROUND_Y - 200))
 
     # Pickup post-house — anchored on the LEFT, slightly above centre,
     # with a slow weightless bob.
@@ -860,7 +846,8 @@ def _beat_handoff(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
     gestures (earpiece crackle plays once during the beat). Pip swoops in
     from off-screen, lifts the parcel off the doorstep, and drifts to the
     right of the porch — composed as the launch pose for the journey."""
-    sky_phase = 0.00 + _smoothstep(u) * 0.10  # day → just into golden warmth
+    # Same locked clear-day biome as beat 1 — pickup never shifts colours.
+    sky_phase = 0.0
     _draw_world(surf, sky_phase, scroll=10.0 + u * 6.0,
                 cloud_phase=scene.t, ground=False)
 
@@ -927,13 +914,14 @@ def _beat_handoff(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
 
 # ── beat 3: The journey (4.5 – 10.0) ─────────────────────────────────────────
 
-# Phase waypoints across the beat: golden hour → sunset → night → sunrise.
+# Phase waypoints across the beat: clear day → golden hour → sunset → night.
+# The journey ends at night so beat 4 can deliver the parcel under starlight
+# without a biome jump. Pickup (beats 1-2) is locked at clear day.
 _JOURNEY_WAYPOINTS = (
-    (0.00, 0.10),  # u=0.00, just past day, warming
-    (0.20, 0.18),  # golden hour
-    (0.45, 0.32),  # sunset
-    (0.70, 0.62),  # night
-    (1.00, 0.90),  # sunrise
+    (0.00, 0.00),  # u=0.00, clear day (matches the locked pickup biome)
+    (0.30, 0.18),  # golden hour
+    (0.60, 0.32),  # sunset
+    (1.00, 0.62),  # night
 )
 
 
@@ -1001,7 +989,9 @@ def _beat_arrival(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
     """Pip glides up to a tiny cottage floating on a cloud and leaves the
     parcel on its doorstep. No pillar, no mailbox — the destination is a
     house in the sky."""
-    phase = 0.92 + u * 0.06  # locked into morning sunrise
+    # Delivery happens at night — the journey ended there, so beat 4 holds
+    # the same starlit phase Pip arrived under.
+    phase = 0.62
     _draw_world(surf, phase, scroll=400.0 + u * 30.0,
                 cloud_phase=scene.t, ground=False)
 
@@ -1051,8 +1041,8 @@ def _beat_title(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
     """Skybit logotype + subtitle + pulsing 'TAP TO FLY'. Pip drifts quietly
     across the lower frame. The pulse formula matches the menu so the cut is
     rhythm-continuous."""
-    # Sunrise sky frozen. Slight zoom-out illusion via gentle scroll.
-    phase = 0.95
+    # Title freezes on the same starlit night the parcel was delivered under.
+    phase = 0.62
     _draw_world(surf, phase, scroll=440.0 + scene.t * 12.0,
                 cloud_phase=scene.t, ground=False)
 
