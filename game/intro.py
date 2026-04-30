@@ -892,7 +892,9 @@ def _beat_handoff(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
     par = _get_sprite("parcel")
     pip_start = (W + 50, 60)
     pip_dock  = (doorstep_x, doorstep_y - 28)
-    pip_exit  = (porch_top_x_right + 30, porch_top_y_world - 50)
+    # Exit endpoint matches the journey's centre pose (H*0.42, ~W*0.48 with
+    # the sin-bob neutral) so the cut into beat 3 is positionally seamless.
+    pip_exit  = (int(W * 0.48), int(H * 0.42))
     # Pip's approach occupies most of the beat (u 0.0–0.75) so the swoop
     # never feels rushed; departure is the last quarter.
     if u < 0.78:
@@ -943,41 +945,39 @@ def _beat_journey(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
     """The heart of the cinematic. Pip glides serenely while the world cycles
     around him. Camera floats high — no ground in frame."""
     phase = _journey_phase(u)
-    # Scroll accelerates gently across the beat — a sense of forward progress
-    # without ever feeling fast.
-    scroll = 60.0 + u * 280.0 + scene.t * 30.0
+    # Scroll continues from beat 2's end value (16) so the cloud parallax
+    # doesn't pop at the cut — it then accelerates across the beat.
+    scroll = 16.0 + u * 280.0
     _draw_world(surf, phase, scroll=scroll, cloud_phase=scene.t, ground=False)
 
-    pal = _biome.palette_for_phase(phase)
+    # First slice of the beat: the pickup post-house is still drifting off
+    # the left edge as Pip "flies past" it, bridging the cut from beat 2.
+    if u < 0.18:
+        bridge_t = u / 0.18  # 0 at the cut, 1 when fully scrolled away
+        house = _get_sprite("skyhouse_post")
+        # Match beat 2's last anchor (W*0.30, H*0.42), then translate left.
+        anchor_cx = int(W * 0.30) - int(bridge_t * (W * 0.55))
+        anchor_cy = int(H * 0.42)
+        hx = anchor_cx - house.get_width() // 2
+        hy = anchor_cy - house.get_height() // 2
+        # Fade out the cottage as it slides away.
+        if bridge_t < 1.0:
+            faded = house.copy()
+            faded.set_alpha(int(255 * (1.0 - bridge_t)))
+            surf.blit(faded, (hx, hy))
 
-    # No pillars in the journey beat — pillars appear only at pickup (beats
-    # 1 + 2) and delivery (beat 4). Sky, clouds, mountains, motes, sun/moon,
-    # the flock and Pip carry the journey.
-
-    # Distant V-formation flock — drifts across once during the beat (u 0.55..0.85)
+    # Distant V-formation flock — drifts across once during the beat
     if 0.55 < u < 0.85:
         flock_u = (u - 0.55) / 0.30
         fx = W + 40 - flock_u * (W + 80)
         _draw_distant_flock(surf, scene.t, fx)
 
-    # Drifting glow motes — like dust in the light. Color tint follows phase.
-    # Cool blueish stars at night, warm gold at sunrise/golden hour.
-    if phase > 0.5 and phase < 0.78:
-        mote_color = (200, 215, 255)  # night moonlight
-        mote_count = 14
-    else:
-        mote_color = (255, 220, 160)
-        mote_count = 10
-    _draw_glow_motes(surf, scene.t, count=mote_count, color=mote_color)
-
-    # Pip — gentle sin-bob path centred at H*0.45, slow flap, almost-level
-    # tilt. He carries the parcel: a tiny golden glow follows just below him
-    # to suggest the bundle in his talons.
+    # Pip — gentle sin-bob path centred at H*0.42 (matches beat 2's exit
+    # altitude exactly so the cut is invisible). Slow flap, almost-level
+    # tilt; he carries the parcel tucked beneath him.
     pip_x = W * 0.48 + math.sin(scene.t * 0.8) * 18
-    pip_y = H * 0.45 + math.sin(scene.t * 1.5) * 14
+    pip_y = H * 0.42 + math.sin(scene.t * 1.5) * 14
     tilt = math.sin(scene.t * 1.5) * -6.0
-    # Carried parcel — tucked beneath Pip. He partially obscures it; that's
-    # the only overlap the parcel ever has with anything.
     par = _get_sprite("parcel")
     surf.blit(par, (int(pip_x) - par.get_width() // 2,
                     int(pip_y) + 10))
