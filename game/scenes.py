@@ -48,9 +48,9 @@ class App:
         self._finger_dedup_window = 0.5
         # Leaderboard state
         self._lb_scores: list = []
-        self._lb_loading = False
         self._lb_player_rank = -1
         self._start_name_entry = False
+        self._fetch_pending = False
         self._final_score = 0
         self._name_task = None  # strong ref prevents GC killing the task mid-flight
         self._play_log_task = None  # strong ref for the per-run telemetry POST
@@ -75,7 +75,7 @@ class App:
         elif self.state == STATE_PAUSE:
             self.state = STATE_PLAY
         elif self.state == STATE_STATS:
-            if self._stats_t >= 0.6:
+            if self._stats_t >= 0.6 and not self._fetch_pending:
                 self._advance_past_stats()
         elif self.state == STATE_NAMEENTRY:
             pass  # JS overlay handles input
@@ -243,17 +243,13 @@ class App:
         self._name_input_buf = ""
         self._stats_t = 0.0
         if sys.platform == "emscripten":
-            # Browser: enter the leaderboard immediately (with a loading
-            # indicator) while an async task fetches the top-10 from
-            # Supabase. The task switches state to STATE_NAMEENTRY if and
-            # only if the player qualifies, then back to STATE_LEADERBOARD
-            # after submission/skip. Non-qualifiers never see the name
-            # entry screen — the leaderboard just resolves in place.
-            self._lb_loading = True
+            # Browser: stay on the stats screen while an async task fetches
+            # the top-10 from Supabase. When the task resolves it switches
+            # state to STATE_NAMEENTRY (qualifiers) or STATE_LEADERBOARD
+            # (everyone else) — no transitional loading screen.
             self._lb_scores = []
             self._lb_player_rank = -1
-            self.state = STATE_LEADERBOARD
-            self._cooldown_t = 1.0
+            self._fetch_pending = True
             self._start_name_entry = True
         else:
             # Native: top-10 lives in local JSON, fetch is sync.
@@ -274,7 +270,6 @@ class App:
 
     def _show_leaderboard_native(self, scores, submitted: bool):
         self._lb_scores = scores
-        self._lb_loading = False
         if scores and submitted:
             self._lb_player_rank = next(
                 (i for i, e in enumerate(scores) if e["score"] == self._final_score),
@@ -317,9 +312,9 @@ class App:
             else:
                 self._lb_player_rank = -1
             self._lb_scores = scores
-            self._lb_loading = False
         except Exception:
-            self._lb_loading = False
+            pass
+        self._fetch_pending = False
         self.hud.title_t = 0.0
         self.state = STATE_LEADERBOARD
         self._cooldown_t = 1.0
@@ -446,7 +441,7 @@ class App:
             self.hud.draw_leaderboard(
                 self.screen, 1 / 60,
                 self._lb_scores, self._lb_player_rank,
-                self._lb_loading, self._cooldown_t,
+                self._cooldown_t,
             )
         else:  # GAMEOVER
             self.hud.draw_gameover(
