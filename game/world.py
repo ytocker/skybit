@@ -11,7 +11,7 @@ import pygame
 from game.config import (
     W, H, GROUND_Y, PIPE_W, PIPE_SPACING,
     GAP_START, GAP_MIN, SCROLL_BASE, SCROLL_MAX,
-    BIRD_X, BIRD_R, COIN_R, POWERUP_R,
+    BIRD_X, BIRD_R, COIN_R, POWERUP_R, PARCEL_R, PARCEL_Y_OFFSET,
     POWERUP_CHANCE, POWERUP_COOLDOWN,
     TRIPLE_DURATION, MAGNET_DURATION, MAGNET_RADIUS,
     SLOWMO_DURATION, SLOWMO_SCALE, KFC_DURATION, GHOST_DURATION,
@@ -453,8 +453,23 @@ class World:
             return
         if self.ghost_timer > 0:
             return  # phase through pipes while ghost is active
+        # Pip's hitboxes: body (existing) + parcel below him. The parcel
+        # offset rotates with his tilt so when he dives the parcel swings
+        # forward/down with him.
+        scale = GROW_SCALE if self.grow_timer > 0 else 1.0
+        parcel_offset = pygame.math.Vector2(
+            0, PARCEL_Y_OFFSET * scale).rotate(-self.bird.tilt_deg)
+        px = bx + parcel_offset.x
+        py = by + parcel_offset.y
+        pr = PARCEL_R * scale
+        # Parcel shouldn't graze the ground unless the bird already would
+        # have died (the bird circle's r > parcel offset+r in normal flight).
+        # Skip ground/ceiling re-check; only pipes are added.
         for p in self.pipes:
             if p.collides_circle(bx, by, br - 2):
+                self._die()
+                return
+            if p.collides_circle(px, py, pr - 1):
                 self._die()
                 return
 

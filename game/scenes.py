@@ -47,19 +47,8 @@ def _draw_opener(surf: pygame.Surface, world) -> None:
             surf.blit(faded, (hx, hy))
         else:
             surf.blit(house, (hx, hy))
-
-    # Parcel tucked under Pip, same offset the intro uses (10 px below the
-    # bird centre). Stops when the cottage finishes scrolling out.
-    par = _intro.get_sprite("parcel")
-    if alpha > 0:
-        px = int(world.bird.x) - par.get_width() // 2
-        py = int(world.bird.y) + 10
-        if alpha < 255:
-            faded = par.copy()
-            faded.set_alpha(alpha)
-            surf.blit(faded, (px, py))
-        else:
-            surf.blit(par, (px, py))
+    # The parcel itself is now drawn permanently by Bird.draw, so the
+    # opener no longer needs its own parcel pass.
 
 
 STATE_MENU = 0
