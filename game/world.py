@@ -753,9 +753,9 @@ class World:
         self.shake_mag = max(self.shake_mag, 2.5)
         self.shake_t = max(self.shake_t, 0.25)
         audio.play_slowmo()
-        self._pickup_burst(m, ((80, 220, 235), (40, 160, 200), WHITE, UI_CREAM))
+        self._pickup_burst(m, ((170, 90, 230), (110, 50, 180), (215, 165, 250), WHITE))
         self.float_texts.append(FloatText(
-            "FLIP!", m.x, m.y - 22, (120, 230, 240), size=24, life=1.3, vy=-30,
+            "FLIP!", m.x, m.y - 22, (190, 130, 245), size=24, life=1.3, vy=-30,
         ))
 
     # ── utility ──────────────────────────────────────────────────────────────
