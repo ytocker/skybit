@@ -440,6 +440,18 @@ class App:
         sx, sy = int(sx), int(sy)
         self._draw_background(self.screen)
 
+        # Menu scene = the gameplay opener as a static frame: pickup post-
+        # house on the left with Pip standing in front of it holding the
+        # parcel. No pillars or world entities until the user taps to start.
+        if self.state == STATE_MENU:
+            house = _intro.get_sprite("skyhouse_post")
+            hx = int(W * 0.30) - house.get_width() // 2
+            hy = int(H * 0.42) - house.get_height() // 2
+            self.screen.blit(house, (hx, hy))
+            self.world.bird.draw(self.screen, sx, sy)
+            self.hud.draw_menu(self.screen, 1 / 60, self.best)
+            return
+
         pipe_palette = self.world.biome_palette
         for p in self.world.pipes:
             p.draw(self.screen, pipe_palette)
