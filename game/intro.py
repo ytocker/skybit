@@ -63,20 +63,85 @@ _SPRITES: dict = {}
 
 
 def _build_parcel() -> pygame.Surface:
-    """A small kraft-paper cube with a red ribbon cross and a soft glow."""
-    surf = pygame.Surface((32, 32), pygame.SRCALPHA)
+    """A wrapped-present courier package: kraft-tan box with a red ribbon
+    cross and a red bow. Ported from v2_skybit's surprise-box drawing
+    geometry but with the question-mark glyph stripped out and a courier
+    colour palette."""
+    BOX_BASE   = (180, 130,  80)   # warm kraft tan
+    BOX_SHADE  = (110,  75,  40)
+    BOX_HI     = (220, 175, 120)
+    RIBBON     = (200,  50,  60)
+    RIBBON_HI  = (255, 110, 100)
+    BOW_FILL   = (200,  50,  60)
+    BOW_HI     = (255, 130, 120)
+    DK_OUTLINE = ( 26,  10,  12)
+
+    SIZE = 56
+    surf = pygame.Surface((SIZE, SIZE), pygame.SRCALPHA)
+
+    BOX_W, BOX_H = 40, 34
+    cx, cy = SIZE // 2, SIZE // 2 + 2
+    rect = pygame.Rect(cx - BOX_W // 2, cy - BOX_H // 2 + 2, BOX_W, BOX_H)
+
     # Drop shadow
-    pygame.draw.rect(surf, (0, 0, 0, 90), (5, 22, 22, 6), border_radius=2)
-    # Box body — warm tan with darker right face for a subtle 3D read
-    pygame.draw.rect(surf, (210, 165, 100), (5, 8, 22, 18), border_radius=2)
-    pygame.draw.polygon(surf, (170, 120, 70),
-                        [(27, 8), (27, 26), (24, 23), (24, 11)])
-    # Ribbon (red cross)
-    pygame.draw.rect(surf, (200, 45, 55), (5, 15, 22, 4))
-    pygame.draw.rect(surf, (200, 45, 55), (14, 8, 4, 18))
-    # Tiny bow on top
-    pygame.draw.polygon(surf, (220, 60, 70),
-                        [(13, 6), (16, 9), (19, 6), (16, 11)])
+    sh = pygame.Surface((BOX_W + 8, 10), pygame.SRCALPHA)
+    pygame.draw.ellipse(sh, (8, 4, 22, 130), sh.get_rect())
+    surf.blit(sh, (cx - (BOX_W + 8) // 2, rect.bottom - 4))
+
+    # Box body: dark frame, vertical-gradient fill, top sheen — same trick
+    # as the surprise-box reference.
+    pygame.draw.rect(surf, DK_OUTLINE, rect.inflate(4, 4), border_radius=8)
+    body = pygame.Surface((rect.w, rect.h), pygame.SRCALPHA)
+    for y in range(rect.h):
+        t = y / max(1, rect.h - 1)
+        col = lerp_color(BOX_BASE, BOX_SHADE, t) + (255,)
+        body.fill(col, pygame.Rect(0, y, rect.w, 1))
+    mask = pygame.Surface((rect.w, rect.h), pygame.SRCALPHA)
+    pygame.draw.rect(mask, (255, 255, 255, 255), mask.get_rect(),
+                     border_radius=6)
+    body.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+    surf.blit(body, rect.topleft)
+    pygame.draw.line(surf, BOX_HI,
+                     (rect.x + 4, rect.y + 3),
+                     (rect.right - 5, rect.y + 3), 2)
+
+    # Ribbon: vertical stripe down the middle
+    rv_w = 6
+    rvx = rect.centerx - rv_w // 2
+    pygame.draw.rect(surf, RIBBON, (rvx, rect.y, rv_w, rect.h))
+    pygame.draw.line(surf, RIBBON_HI,
+                     (rvx + 1, rect.y), (rvx + 1, rect.bottom - 1), 1)
+
+    # Ribbon: horizontal stripe across the middle
+    rh_w = 6
+    rhy = rect.y + rect.h // 2 - rh_w // 2
+    pygame.draw.rect(surf, RIBBON, (rect.x, rhy, rect.w, rh_w))
+    pygame.draw.line(surf, RIBBON_HI, (rect.x, rhy + 1),
+                     (rect.right - 1, rhy + 1), 1)
+
+    # Bow on top — puffy two-loop with a knot and trailing tails
+    bx, by = cx, rect.y - 6
+    pygame.draw.ellipse(surf, DK_OUTLINE,
+                        pygame.Rect(bx - 13, by - 6, 13, 12))
+    pygame.draw.ellipse(surf, BOW_FILL,
+                        pygame.Rect(bx - 12, by - 5, 11, 10))
+    pygame.draw.ellipse(surf, DK_OUTLINE,
+                        pygame.Rect(bx,       by - 6, 13, 12))
+    pygame.draw.ellipse(surf, BOW_FILL,
+                        pygame.Rect(bx + 1,   by - 5, 11, 10))
+    pygame.draw.ellipse(surf, BOW_HI, pygame.Rect(bx - 10, by - 4, 4, 3))
+    pygame.draw.ellipse(surf, BOW_HI, pygame.Rect(bx + 6,  by - 4, 4, 3))
+    pygame.draw.rect(surf, DK_OUTLINE, pygame.Rect(bx - 4, by - 6, 9, 12),
+                     border_radius=2)
+    pygame.draw.rect(surf, BOW_FILL,  pygame.Rect(bx - 3, by - 5, 7, 10),
+                     border_radius=2)
+    pygame.draw.line(surf, BOW_HI, (bx - 1, by - 4), (bx - 1, by + 3), 1)
+    # Trailing tails into the box
+    pygame.draw.line(surf, DK_OUTLINE, (bx - 2, by + 4), (bx - 7, by + 11), 4)
+    pygame.draw.line(surf, DK_OUTLINE, (bx + 2, by + 4), (bx + 7, by + 11), 4)
+    pygame.draw.line(surf, BOW_FILL,   (bx - 2, by + 4), (bx - 6, by + 10), 2)
+    pygame.draw.line(surf, BOW_FILL,   (bx + 2, by + 4), (bx + 6, by + 10), 2)
+
     return surf
 
 
@@ -351,7 +416,7 @@ def _beat_dawn(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
         surf,
         pygame.Rect(0, 0, 0, 0),  # no top pillar
         pygame.Rect(pillar_x, pillar_y, pillar_w, pillar_h),
-        pal, seed=4242,
+        pal, seed=0,  # variant 0 — basic undecorated pillar (no flags/banners/lanterns)
     )
     # Mailbag + parcel rest on the ledge.
     bag = _get_sprite("mailbag")
@@ -371,49 +436,54 @@ def _beat_dawn(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
 # ── beat 2: The hand-off (2.5 – 4.5) ─────────────────────────────────────────
 
 def _beat_handoff(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
-    """Pip stands by his mailbag; Mr. Garrick on a neighbour pillar gestures
-    once. A new parcel softly drops in beside the bag. Earpiece crackle
-    plays once during this beat (scheduled in `update`)."""
-    # World holds a calm early-morning palette.
-    phase = _biome.palette_for_phase  # alias just for symmetry
+    """Pip stays perched on the same pillar from beat 1. Mr. Garrick flies in
+    from the left, hovers beside the pillar, gestures, and a fresh parcel
+    arcs across into Pip's mailbag. Earpiece crackle plays once during this
+    beat (scheduled in `update`)."""
     sky_phase = 0.00 + _smoothstep(u) * 0.10  # day → just into golden warmth
     _draw_world(surf, sky_phase, scroll=10.0 + u * 6.0,
                 cloud_phase=scene.t, ground=False)
     pal = _biome.palette_for_phase(sky_phase)
 
-    # Two pillars side by side: hero on the right, Garrick's on the left.
-    hero_w, hero_h = 64, 210
-    hero_x = W // 2 + 18
-    hero_y = GROUND_Y - hero_h
+    # Reuse the EXACT pillar from beat 1 — same dims, same x, same seed.
+    pillar_w, pillar_h = 64, 200
+    pillar_x = W // 2 - pillar_w // 2 + 30
+    pillar_y = GROUND_Y - pillar_h
     draw_pillar_pair(surf, pygame.Rect(0, 0, 0, 0),
-                     pygame.Rect(hero_x, hero_y, hero_w, hero_h),
-                     pal, seed=4242)
+                     pygame.Rect(pillar_x, pillar_y, pillar_w, pillar_h),
+                     pal, seed=0)  # variant 0 — basic undecorated pillar
 
-    boss_w, boss_h = 70, 240
-    boss_x = 24
-    boss_y = GROUND_Y - boss_h
-    draw_pillar_pair(surf, pygame.Rect(0, 0, 0, 0),
-                     pygame.Rect(boss_x, boss_y, boss_w, boss_h),
-                     pal, seed=7777)
-
-    # Mailbag on the hero ledge.
+    # Mailbag on the ledge.
     bag = _get_sprite("mailbag")
-    surf.blit(bag, (hero_x - 4, hero_y - bag.get_height() + 8))
+    surf.blit(bag, (pillar_x - 4, pillar_y - bag.get_height() + 8))
 
-    # Pip — perched, tiny breath bob.
-    pip_x = hero_x + hero_w // 2 + 4
-    pip_y = hero_y - 18 + math.sin(scene.t * 2.0) * 1.0
+    # Pip — perched on the ledge, tiny breath bob.
+    pip_x = pillar_x + pillar_w // 2 + 4
+    pip_y = pillar_y - 18 + math.sin(scene.t * 2.0) * 1.0
     _draw_pip(surf, pip_x, pip_y, frame_t=scene.t * 1.5,
               tilt_deg=-4.0, scale=0.9)
 
-    # Mr. Garrick on his pillar.
+    # Mr. Garrick — hovering in the air to the left of the pillar with a
+    # slow sin-bob. Wing flap is drawn as a small wing polygon overlay that
+    # toggles up/down on a 4 Hz cycle.
     g = _get_sprite("garrick")
-    g_x = boss_x + boss_w // 2 - g.get_width() // 2
-    g_y = boss_y - g.get_height() + 12
+    g_x = 50
+    g_base_y = pillar_y - 30
+    bob = int(math.sin(scene.t * 1.5) * 6)
+    g_y = g_base_y + bob
     surf.blit(g, (g_x, g_y))
+    # Flapping wing — a small angular polygon that rises and falls.
+    wing_up = math.sin(scene.t * 8.0) > 0
+    if wing_up:
+        wing_pts = [(g_x + 22, g_y + 38), (g_x + 6, g_y + 24),
+                    (g_x + 18, g_y + 30), (g_x + 30, g_y + 36)]
+    else:
+        wing_pts = [(g_x + 22, g_y + 38), (g_x + 6, g_y + 50),
+                    (g_x + 18, g_y + 44), (g_x + 30, g_y + 38)]
+    pygame.draw.polygon(surf, (240, 200, 200), wing_pts)
+    pygame.draw.polygon(surf, (200, 150, 160), wing_pts, 1)
 
-    # A small "speech soundwave" arc above Garrick's beak — three short
-    # curves that pop on as the earpiece crackle plays. Comedic but quiet.
+    # Speech-soundwave arc beside Garrick's beak.
     if 0.20 < u < 0.70:
         wave_t = (u - 0.20) / 0.50
         n = int(_clamp01(wave_t * 3.5)) + 1
@@ -425,21 +495,29 @@ def _beat_handoff(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
                             arc.get_rect(), math.pi * 0.15, math.pi * 0.85, 2)
             surf.blit(arc, (g_x + g.get_width() - 6, g_y - radius // 2))
 
-    # Parcel "appears" beside the mailbag — drops the last 18 px with a
-    # gentle ease, no comedy bounce.
-    if u > 0.45:
-        drop_t = _ease_out_cubic((u - 0.45) / 0.55)
-        par = _get_sprite("parcel")
-        target_x = hero_x + hero_w - par.get_width() + 6
-        target_y = hero_y - par.get_height() + 8
-        py = target_y - int((1.0 - drop_t) * 28)
-        # Soft glow around it as it lands
-        if drop_t > 0.6:
-            glow_a = int(120 * (drop_t - 0.6) / 0.4)
-            blit_glow(surf, target_x + par.get_width() // 2,
-                      py + par.get_height() // 2,
-                      22, (255, 215, 110), glow_a)
-        surf.blit(par, (target_x, py))
+    # Parcel arcs from Garrick's beak across to the mailbag on Pip's ledge.
+    par = _get_sprite("parcel")
+    target_x = pillar_x + pillar_w - par.get_width() + 6
+    target_y = pillar_y - par.get_height() + 8
+    if u < 0.45:
+        # Parcel still beside Garrick (his "outbox")
+        carry_x = g_x + g.get_width() - 18
+        carry_y = g_y + 14
+        surf.blit(par, (carry_x, carry_y))
+    elif u < 0.95:
+        a = (u - 0.45) / 0.50
+        ea = _ease_out_cubic(a)
+        sx = g_x + g.get_width() - 18
+        sy = g_y + 14
+        cx = sx + (target_x - sx) * ea
+        cy = sy + (target_y - sy) * ea - int(math.sin(a * math.pi) * 22)
+        surf.blit(par, (int(cx), int(cy)))
+    else:
+        glow_a = int(80 * (u - 0.95) / 0.05)
+        blit_glow(surf, target_x + par.get_width() // 2,
+                  target_y + par.get_height() // 2,
+                  22, (255, 215, 110), glow_a)
+        surf.blit(par, (target_x, target_y))
 
 
 # ── beat 3: The journey (4.5 – 10.0) ─────────────────────────────────────────
@@ -477,14 +555,9 @@ def _beat_journey(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
 
     pal = _biome.palette_for_phase(phase)
 
-    # Three distant pillar silhouettes scroll past at slow parallax.
-    pillar_speed = 22.0
-    for i in range(4):
-        # Each pillar has a stable offset; the loop wraps every (W + 200).
-        base = i * 180 + 80
-        x = int(((base - scroll * 0.18 - i * 8) % (W + 220)) - 110)
-        h = 200 - (i * 18) % 60
-        _draw_distant_pillar(surf, x, pal, h_top=0, h_bot=h)
+    # No pillars in the journey beat — pillars appear only at pickup (beats
+    # 1 + 2) and delivery (beat 4). Sky, clouds, mountains, motes, sun/moon,
+    # the flock and Pip carry the journey.
 
     # Distant V-formation flock — drifts across once during the beat (u 0.55..0.85)
     if 0.55 < u < 0.85:
@@ -535,7 +608,7 @@ def _beat_arrival(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
     pillar_y = GROUND_Y - pillar_h
     draw_pillar_pair(surf, pygame.Rect(0, 0, 0, 0),
                      pygame.Rect(pillar_x, pillar_y, pillar_w, pillar_h),
-                     pal, seed=9112)
+                     pal, seed=0)  # variant 0 — basic undecorated pillar
 
     # Mailbox on the ledge.
     mb = _get_sprite("mailbox")
