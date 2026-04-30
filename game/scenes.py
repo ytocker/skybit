@@ -14,7 +14,6 @@ from game.world import World
 from game.hud import HUD, _font
 from game import audio
 from game import play_log
-from game.save_state import load_save, save_save
 
 
 STATE_MENU = 0
@@ -38,17 +37,13 @@ class App:
         self.hud = HUD()
         self.session_best = 0
         self._new_best = False
-        # First-launch gate for the intro cinematic. The flag is persisted
-        # in skybit_save.json so subsequent launches skip straight to the
-        # menu.
-        self.save = load_save()
-        if not self.save.get("intro_seen"):
-            from game.intro import IntroScene
-            self.intro: object | None = IntroScene()
-            self.state = STATE_INTRO
-        else:
-            self.intro = None
-            self.state = STATE_MENU
+        # Intro plays once per program launch — start every session in
+        # STATE_INTRO. Within the session (consecutive games after death,
+        # menu-tap → play → die → menu) the intro is never replayed since
+        # the App stays alive and we already moved past STATE_INTRO.
+        from game.intro import IntroScene
+        self.intro: object | None = IntroScene()
+        self.state = STATE_INTRO
         self._cloud_phase = 0.0
         self._running = True
         self._stats_t = 0.0
@@ -115,13 +110,11 @@ class App:
         self.state = STATE_PLAY
 
     def _finish_intro(self):
-        """Mark the intro as seen and hand off to the menu. Called when the
-        cinematic auto-completes at DURATION, or when the user taps to skip."""
+        """Hand off to the menu. Called on auto-completion or skip. The
+        intro is dropped so this session won't render it again."""
         if self.intro is not None:
             self.intro.skip()
         self.intro = None
-        self.save["intro_seen"] = True
-        save_save(self.save)
         self.state = STATE_MENU
 
     def _restart(self):

@@ -1076,19 +1076,29 @@ def _dispatch_beat(scene: "IntroScene", surf: pygame.Surface) -> None:
 
 
 def _draw_skip_pill(surf: pygame.Surface, t: float) -> None:
-    if t < 1.5:
+    """Short SKIP pill at the bottom of the intro screen. Fades in at
+    t=1.0 s (so the user has a moment to see the cinematic before the
+    button suggests bailing). The pill is purely a visual affordance —
+    the App's input handler treats any tap during STATE_INTRO as a skip,
+    not just clicks on this rect."""
+    if t < 1.0:
         return
-    fade = _clamp01((t - 1.5) / 0.4)
-    alpha = int(140 * fade)
-    if alpha <= 0:
+    fade = _clamp01((t - 1.0) / 0.4)
+    alpha_text = int(220 * fade)
+    alpha_pill = int(170 * fade)
+    if alpha_text <= 0:
         return
-    f = _font(12, True)
+    f = _font(13, True)
     label = f.render("SKIP", True, WHITE)
-    label.set_alpha(alpha)
-    pad_w, pad_h = label.get_width() + 18, label.get_height() + 8
+    label.set_alpha(alpha_text)
+    pad_w = label.get_width() + 26
+    pad_h = label.get_height() + 10
     pill = pygame.Surface((pad_w, pad_h), pygame.SRCALPHA)
-    pygame.draw.ellipse(pill, (0, 0, 20, int(120 * fade)), pill.get_rect())
-    px = W - pad_w - 14
-    py = 18
+    pygame.draw.ellipse(pill, (0, 0, 20, alpha_pill), pill.get_rect())
+    pygame.draw.ellipse(pill, (255, 255, 255, alpha_pill // 3),
+                        pill.get_rect(), 1)
+    px = (W - pad_w) // 2
+    py = H - pad_h - 18
     surf.blit(pill, (px, py))
-    surf.blit(label, (px + 9, py + 4))
+    surf.blit(label, (px + (pad_w - label.get_width()) // 2,
+                      py + (pad_h - label.get_height()) // 2))
