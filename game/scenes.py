@@ -14,6 +14,7 @@ from game.world import World
 from game.hud import HUD, _font
 from game import audio
 from game import play_log
+from game.save_state import load_save, save_save
 
 
 STATE_MENU = 0
@@ -23,6 +24,7 @@ STATE_GAMEOVER = 3
 STATE_PAUSE = 4
 STATE_STATS = 5
 STATE_LEADERBOARD = 6
+STATE_INTRO = 7
 
 
 class App:
@@ -36,7 +38,17 @@ class App:
         self.hud = HUD()
         self.session_best = 0
         self._new_best = False
-        self.state = STATE_MENU
+        # First-launch gate for the intro cinematic. The flag is persisted
+        # in skybit_save.json so subsequent launches skip straight to the
+        # menu.
+        self.save = load_save()
+        if not self.save.get("intro_seen"):
+            from game.intro import IntroScene
+            self.intro: object | None = IntroScene()
+            self.state = STATE_INTRO
+        else:
+            self.intro = None
+            self.state = STATE_MENU
         self._cloud_phase = 0.0
         self._running = True
         self._stats_t = 0.0
@@ -65,6 +77,12 @@ class App:
     # ── input ────────────────────────────────────────────────────────────────
 
     def _flap_input(self, pos=None):
+        if self.state == STATE_INTRO:
+            # Any tap during the cinematic skips it and lands on the menu —
+            # the menu is where SKYBIT + the description + the click-to-start
+            # prompt live. The intro is recorded as seen so it never replays.
+            self._finish_intro()
+            return
         if self.state == STATE_MENU:
             self._start_play()
         elif self.state == STATE_PLAY:
@@ -95,6 +113,16 @@ class App:
     def _start_play(self):
         self.world = World()
         self.state = STATE_PLAY
+
+    def _finish_intro(self):
+        """Mark the intro as seen and hand off to the menu. Called when the
+        cinematic auto-completes at DURATION, or when the user taps to skip."""
+        if self.intro is not None:
+            self.intro.skip()
+        self.intro = None
+        self.save["intro_seen"] = True
+        save_save(self.save)
+        self.state = STATE_MENU
 
     def _restart(self):
         self.world = World()
@@ -196,6 +224,15 @@ class App:
 
     def _update(self, dt):
         self._cloud_phase += dt
+        if self.state == STATE_INTRO:
+            if self.intro is None:
+                # Defensive: should never happen, but recover gracefully.
+                self._finish_intro()
+                return
+            self.intro.update(dt)
+            if self.intro.done:
+                self._finish_intro()
+            return
         if self.state == STATE_MENU:
             self.world.world_idle_tick(dt)
         elif self.state == STATE_PLAY:
@@ -366,6 +403,11 @@ class App:
                     palette['ground_top'], palette['ground_mid'], (60, 40, 25))
 
     def _render(self):
+        # Intro renders its own self-contained scene (sky + pillars + cottage
+        # + parrot etc.) and bypasses the in-game world draw entirely.
+        if self.state == STATE_INTRO and self.intro is not None:
+            self.intro.render(self.screen)
+            return
         sx, sy = self.world.shake_offset() if self.state == STATE_PLAY else (0, 0)
         sx, sy = int(sx), int(sy)
         self._draw_background(self.screen)
