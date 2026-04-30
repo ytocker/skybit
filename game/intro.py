@@ -861,24 +861,32 @@ def _beat_handoff(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
     g_y = house_y + stand_y_local - g.get_height() + 4
     surf.blit(g, (g_x, g_y))
 
-    # Pip swoops in from off-screen-right, banks down beside the doorstep,
-    # picks up the parcel, then drifts to the right of the porch and ends
-    # the beat in a "ready to fly" pose at gameplay altitude.
+    # Pip swoops in from off-screen-LEFT, arcs up and over the cottage roof,
+    # then descends to land on the porch beside the doorstep where the parcel
+    # is waiting. Final exit drifts him to the journey's bob position.
     par = _get_sprite("parcel")
-    pip_start = (W + 50, 60)
-    pip_dock  = (doorstep_x, doorstep_y - 28)
+    pip_start = (-50, 90)
+    pip_dock  = (doorstep_x + 22, doorstep_y - 16)   # porch-level hover beside doorstep
     # Exit endpoint tracks the journey's live sin-bob position so the cut
     # into beat 3 is positionally seamless even mid-bob.
     journey_x = W * 0.48 + math.sin(scene.t * 0.8) * 18
     journey_y = H * 0.42 + math.sin(scene.t * 1.5) * 14
     pip_exit  = (journey_x, journey_y)
-    # Pip's approach occupies most of the beat (u 0.0–0.75) so the swoop
-    # never feels rushed; departure is the last quarter.
+    # Approach occupies most of the beat (u 0.0–0.75) so the swoop never
+    # feels rushed; departure is the last quarter. Add a vertical arc — Pip
+    # dips UP over the cottage roof in the middle of the path before
+    # descending to the porch — so the landing reads as a natural glide
+    # rather than a straight line.
+    APPROACH_ARC = 30  # px of upward dip at midpoint of the approach
     if u < 0.78:
         ease = _smoothstep(_clamp01(u / 0.75))
         pip_x = pip_start[0] + (pip_dock[0] - pip_start[0]) * ease
-        pip_y = pip_start[1] + (pip_dock[1] - pip_start[1]) * ease
-        tilt = -10.0 * (1.0 - ease)
+        pip_y_lerp = pip_start[1] + (pip_dock[1] - pip_start[1]) * ease
+        # Negative offset = arc UP through the middle of the flight
+        pip_y = pip_y_lerp - math.sin(ease * math.pi) * APPROACH_ARC
+        # Tilt: head slightly down during the long descent, leveling to
+        # zero as Pip touches down on the porch.
+        tilt = -8.0 * (1.0 - ease)
         # Parcel still on the doormat until Pip reaches it.
         surf.blit(par, (doorstep_x - par.get_width() // 2,
                         doorstep_y - par.get_height() + 1))
@@ -886,7 +894,8 @@ def _beat_handoff(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
         ease = _smoothstep(_clamp01((u - 0.78) / 0.22))
         pip_x = pip_dock[0] + (pip_exit[0] - pip_dock[0]) * ease
         pip_y = pip_dock[1] + (pip_exit[1] - pip_dock[1]) * ease
-        tilt = 2.0 * ease
+        # Banks slightly up as he lifts off carrying the parcel.
+        tilt = 4.0 * ease
         # Parcel now travels with Pip — tucked beneath him.
         surf.blit(par, (int(pip_x) - par.get_width() // 2,
                         int(pip_y) + 10))
