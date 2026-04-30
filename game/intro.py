@@ -185,10 +185,15 @@ def _build_mailbox() -> pygame.Surface:
     return surf
 
 
-def _build_skyhouse() -> pygame.Surface:
-    """A tiny cottage perched on a fluffy cloud — Pip's delivery destination.
-    Cream walls, red shingled roof, a chimney with a smoke puff, a window,
-    and a wooden door for the parcel to be left at."""
+def _build_skyhouse(kind: str = "home") -> pygame.Surface:
+    """A tiny cottage perched on a fluffy cloud. Two variants:
+      * "post" — pickup house with a teal roof and a small flag, where Pip
+        collects the parcel from Mr. Garrick.
+      * "home" — delivery destination with a red roof.
+    Cream walls, plank shading, chimney with a smoke puff, cross-frame
+    window, wooden door — shared between both variants. Differentiation is
+    intentionally just the roof and the optional flag, so the two houses
+    read as cousins rather than completely unrelated buildings."""
     SIZE = 96
     surf = pygame.Surface((SIZE, SIZE), pygame.SRCALPHA)
     cx = SIZE // 2
@@ -196,9 +201,14 @@ def _build_skyhouse() -> pygame.Surface:
     OUTLINE   = ( 60,  38,  24)
     WALL      = (232, 208, 168)
     WALL_SHA  = (190, 160, 118)
-    ROOF      = (180,  62,  52)
-    ROOF_SHA  = (120,  32,  28)
-    ROOF_HI   = (220, 100,  88)
+    if kind == "post":
+        ROOF      = ( 60, 130, 175)   # teal blue
+        ROOF_SHA  = ( 28,  78, 120)
+        ROOF_HI   = (110, 180, 220)
+    else:  # "home"
+        ROOF      = (180,  62,  52)   # red
+        ROOF_SHA  = (120,  32,  28)
+        ROOF_HI   = (220, 100,  88)
     DOOR      = ( 90,  55,  30)
     DOOR_HI   = (135,  85,  52)
     WIN_FRAME = ( 72,  44,  24)
@@ -288,6 +298,21 @@ def _build_skyhouse() -> pygame.Surface:
     pygame.draw.circle(surf, (240, 200, 100),
                        (door_x + door_w - 2, door_y + door_h // 2), 1)
 
+    # Post-office flag on the left eave so the pickup house reads at a
+    # glance as a different building from the delivery house.
+    if kind == "post":
+        pole_x = roof_eave_l[0] + 3
+        pole_top = roof_peak[1] - 12
+        pole_bot = roof_eave_l[1]
+        pygame.draw.line(surf, OUTLINE, (pole_x, pole_top),
+                         (pole_x, pole_bot), 2)
+        # Triangular pennant
+        flag_pts = [(pole_x, pole_top + 1),
+                    (pole_x + 12, pole_top + 5),
+                    (pole_x, pole_top + 9)]
+        pygame.draw.polygon(surf, (220, 200, 90), flag_pts)
+        pygame.draw.polygon(surf, OUTLINE, flag_pts, 1)
+
     return surf
 
 
@@ -337,7 +362,8 @@ def _get_sprite(name: str) -> pygame.Surface:
         if name == "parcel":   s = _build_parcel()
         elif name == "mailbag": s = _build_mailbag()
         elif name == "mailbox": s = _build_mailbox()
-        elif name == "skyhouse": s = _build_skyhouse()
+        elif name == "skyhouse_post": s = _build_skyhouse(kind="post")
+        elif name == "skyhouse_home": s = _build_skyhouse(kind="home")
         elif name == "garrick": s = _build_garrick()
         else: raise KeyError(name)
         _SPRITES[name] = s
@@ -498,8 +524,9 @@ def _draw_distant_flock(surf: pygame.Surface, t: float, x_off: float) -> None:
 # ── beat 1: Dawn at the perch (0.0 – 2.5) ────────────────────────────────────
 
 def _beat_dawn(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
-    """Predawn → first light. A single weathered pillar holds the mailbag and
-    a softly-glowing parcel. No characters yet; the world simply wakes up."""
+    """Predawn → first light. A tiny post-house floats in the sky with the
+    parcel waiting on its doorstep; Mr. Garrick hovers nearby. The world
+    wakes up; Pip hasn't arrived yet."""
     # Sky lerps predawn (0.78) → day (0.00 / equivalently 1.00 wrapping).
     phase = 0.78 + _smoothstep(u) * 0.22
     _draw_world(surf, phase, scroll=u * 4.0, cloud_phase=scene.t,
@@ -513,71 +540,61 @@ def _beat_dawn(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
             a = int(mist_a * (1.0 - t) ** 1.4)
             pygame.draw.line(mist, (235, 220, 230, a), (0, i), (W, i))
         surf.blit(mist, (0, GROUND_Y - 200))
-    # The hero pillar — central, near-camera. Anchored slightly right of
-    # centre so the parcel reads "on a ledge" rather than "balanced on a
-    # spike". `draw_pillar_pair` only paints the half it's given a non-zero
-    # rect for, so we draw just the bottom pillar to keep the sky open.
-    pal = _biome.palette_for_phase(phase)
-    pillar_w = 64
-    pillar_h = 200
-    pillar_x = W // 2 - pillar_w // 2 + 30
-    pillar_y = GROUND_Y - pillar_h
-    draw_pillar_pair(
-        surf,
-        pygame.Rect(0, 0, 0, 0),  # no top pillar
-        pygame.Rect(pillar_x, pillar_y, pillar_w, pillar_h),
-        pal, seed=0,  # variant 0 — basic undecorated pillar (no flags/banners/lanterns)
-    )
-    # Mailbag + parcel rest on the ledge.
-    bag = _get_sprite("mailbag")
+
+    # Pickup post-house — slow weightless bob in mid-air.
+    house = _get_sprite("skyhouse_post")
+    house_cx = W // 2 + 12
+    house_cy = int(H * 0.50) + int(math.sin(scene.t * 0.7) * 2)
+    house_x = house_cx - house.get_width() // 2
+    house_y = house_cy - house.get_height() // 2
+    surf.blit(house, (house_x, house_y))
+
+    # Doorstep is fixed inside the 96-px sprite (see _build_skyhouse comment
+    # in beat 4) — duplicate the math so callers don't depend on internals.
+    doorstep_x = house_x + 25 + 46 - 12 - 6 + 12 // 2
+    doorstep_y = house_y + 76
+
+    # Parcel waits on the doorstep.
     par = _get_sprite("parcel")
-    ledge_y = pillar_y - 6
-    surf.blit(bag, (pillar_x - 4, ledge_y - bag.get_height() + 8))
-    par_x = pillar_x + pillar_w - par.get_width() + 6
-    par_y = ledge_y - par.get_height() + 8
-    surf.blit(par, (par_x, par_y))
+    surf.blit(par, (doorstep_x - par.get_width() // 2,
+                    doorstep_y - par.get_height()))
+
+    # Mr. Garrick hovers in the air to the left of the house, slow bob.
+    g = _get_sprite("garrick")
+    g_x = 28
+    g_y = house_y + 32 + int(math.sin(scene.t * 1.2) * 3)
+    surf.blit(g, (g_x, g_y))
 
 
 # ── beat 2: The hand-off (2.5 – 4.5) ─────────────────────────────────────────
 
 def _beat_handoff(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
-    """Pip stays perched on the same pillar from beat 1. Mr. Garrick flies in
-    from the left, hovers beside the pillar, gestures, and a fresh parcel
-    arcs across into Pip's mailbag. Earpiece crackle plays once during this
-    beat (scheduled in `update`)."""
+    """Same pickup post-house as beat 1. Mr. Garrick is still hovering
+    nearby and gestures (earpiece crackle plays once during the beat).
+    Pip swoops in from off-screen, lifts the parcel off the doorstep, and
+    drifts onward with it tucked beneath him."""
     sky_phase = 0.00 + _smoothstep(u) * 0.10  # day → just into golden warmth
     _draw_world(surf, sky_phase, scroll=10.0 + u * 6.0,
                 cloud_phase=scene.t, ground=False)
-    pal = _biome.palette_for_phase(sky_phase)
 
-    # Reuse the EXACT pillar from beat 1 — same dims, same x, same seed.
-    pillar_w, pillar_h = 64, 200
-    pillar_x = W // 2 - pillar_w // 2 + 30
-    pillar_y = GROUND_Y - pillar_h
-    draw_pillar_pair(surf, pygame.Rect(0, 0, 0, 0),
-                     pygame.Rect(pillar_x, pillar_y, pillar_w, pillar_h),
-                     pal, seed=0)  # variant 0 — basic undecorated pillar
+    # Reuse the EXACT post-house from beat 1 (same x, same y baseline).
+    house = _get_sprite("skyhouse_post")
+    house_cx = W // 2 + 12
+    house_cy = int(H * 0.50) + int(math.sin(scene.t * 0.7) * 2)
+    house_x = house_cx - house.get_width() // 2
+    house_y = house_cy - house.get_height() // 2
+    surf.blit(house, (house_x, house_y))
 
-    # Mailbag on the ledge.
-    bag = _get_sprite("mailbag")
-    surf.blit(bag, (pillar_x - 4, pillar_y - bag.get_height() + 8))
+    doorstep_x = house_x + 25 + 46 - 12 - 6 + 12 // 2
+    doorstep_y = house_y + 76
 
-    # Pip — perched on the ledge, tiny breath bob.
-    pip_x = pillar_x + pillar_w // 2 + 4
-    pip_y = pillar_y - 18 + math.sin(scene.t * 2.0) * 1.0
-    _draw_pip(surf, pip_x, pip_y, frame_t=scene.t * 1.5,
-              tilt_deg=-4.0, scale=0.9)
-
-    # Mr. Garrick — hovering in the air to the left of the pillar with a
-    # slow sin-bob. Wing flap is drawn as a small wing polygon overlay that
-    # toggles up/down on a 4 Hz cycle.
+    # Mr. Garrick hovers to the left of the house, sin-bob with a small
+    # flapping wing.
     g = _get_sprite("garrick")
-    g_x = 50
-    g_base_y = pillar_y - 30
-    bob = int(math.sin(scene.t * 1.5) * 6)
-    g_y = g_base_y + bob
+    g_x = 28
+    g_base_y = house_y + 32
+    g_y = g_base_y + int(math.sin(scene.t * 1.5) * 4)
     surf.blit(g, (g_x, g_y))
-    # Flapping wing — a small angular polygon that rises and falls.
     wing_up = math.sin(scene.t * 8.0) > 0
     if wing_up:
         wing_pts = [(g_x + 22, g_y + 38), (g_x + 6, g_y + 24),
@@ -588,7 +605,7 @@ def _beat_handoff(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
     pygame.draw.polygon(surf, (240, 200, 200), wing_pts)
     pygame.draw.polygon(surf, (200, 150, 160), wing_pts, 1)
 
-    # Speech-soundwave arc beside Garrick's beak.
+    # Speech-soundwave arc beside Garrick's beak (during earpiece crackle).
     if 0.20 < u < 0.70:
         wave_t = (u - 0.20) / 0.50
         n = int(_clamp01(wave_t * 3.5)) + 1
@@ -600,25 +617,31 @@ def _beat_handoff(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
                             arc.get_rect(), math.pi * 0.15, math.pi * 0.85, 2)
             surf.blit(arc, (g_x + g.get_width() - 6, g_y - radius // 2))
 
-    # Parcel arcs from Garrick's beak across to the mailbag on Pip's ledge.
+    # Pip swoops in from off-screen-right, banks down to the doorstep,
+    # then begins to drift onward with the parcel tucked beneath him.
     par = _get_sprite("parcel")
-    target_x = pillar_x + pillar_w - par.get_width() + 6
-    target_y = pillar_y - par.get_height() + 8
-    if u < 0.45:
-        # Parcel still beside Garrick (his "outbox")
-        carry_x = g_x + g.get_width() - 18
-        carry_y = g_y + 14
-        surf.blit(par, (carry_x, carry_y))
-    elif u < 0.95:
-        a = (u - 0.45) / 0.50
-        ea = _ease_out_cubic(a)
-        sx = g_x + g.get_width() - 18
-        sy = g_y + 14
-        cx = sx + (target_x - sx) * ea
-        cy = sy + (target_y - sy) * ea - int(math.sin(a * math.pi) * 22)
-        surf.blit(par, (int(cx), int(cy)))
+    arrive_t = _clamp01(u / 0.55)
+    depart_t = _clamp01((u - 0.60) / 0.40)
+    pip_start = (W + 50, 70)
+    pip_dock  = (doorstep_x + 30, doorstep_y - 28)
+    pip_exit  = (doorstep_x + 80, doorstep_y - 70)
+    if u < 0.60:
+        ease = _ease_out_cubic(arrive_t)
+        pip_x = pip_start[0] + (pip_dock[0] - pip_start[0]) * ease
+        pip_y = pip_start[1] + (pip_dock[1] - pip_start[1]) * ease
+        tilt = -10.0 * (1.0 - ease)
+        # Parcel still on the doorstep until Pip reaches it.
+        surf.blit(par, (doorstep_x - par.get_width() // 2,
+                        doorstep_y - par.get_height()))
     else:
-        surf.blit(par, (target_x, target_y))
+        ease = _ease_out_cubic(depart_t)
+        pip_x = pip_dock[0] + (pip_exit[0] - pip_dock[0]) * ease
+        pip_y = pip_dock[1] + (pip_exit[1] - pip_dock[1]) * ease
+        tilt = 4.0 * ease
+        # Parcel now travels with Pip — tucked beneath him.
+        surf.blit(par, (int(pip_x) - par.get_width() // 2,
+                        int(pip_y) + 10))
+    _draw_pip(surf, pip_x, pip_y, frame_t=scene.t * 4.0, tilt_deg=tilt)
 
 
 # ── beat 3: The journey (4.5 – 10.0) ─────────────────────────────────────────
@@ -703,7 +726,7 @@ def _beat_arrival(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
 
     # Floating sky-house, anchored mid-frame with a slow bob so it reads as
     # weightless rather than pinned.
-    house = _get_sprite("skyhouse")
+    house = _get_sprite("skyhouse_home")
     house_cx = W // 2
     house_cy = int(H * 0.55) + int(math.sin(scene.t * 0.9) * 3)
     house_x = house_cx - house.get_width() // 2
