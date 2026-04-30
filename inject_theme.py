@@ -69,8 +69,23 @@ NAME_OVERLAY = """
              L1040,110 L1120,138 L1200,105 L1280,128 L1360,112 L1440,125 L1440,200 Z"
           fill="#0a1208" opacity="0.75"/>
   </svg>
-  <p class="ne-celebrate">YOU MADE THE TOP 10!</p>
-  <p class="ne-title">WELCOME TO TOP 10!</p>
+  <svg class="ne-trophy" viewBox="0 0 60 72"
+       xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="M10 18 Q 3 18 3 26 Q 3 35 11 36" fill="none"
+          stroke="#f0c040" stroke-width="3" stroke-linecap="round"/>
+    <path d="M50 18 Q 57 18 57 26 Q 57 35 49 36" fill="none"
+          stroke="#f0c040" stroke-width="3" stroke-linecap="round"/>
+    <polygon points="9,14 51,14 47,42 13,42"
+             fill="#f0c040" stroke="#8c5a08" stroke-width="1.2"/>
+    <line x1="14" y1="16" x2="46" y2="16" stroke="#fff8c8" stroke-width="1.2"/>
+    <rect x="27" y="42" width="6" height="11"
+          fill="#f0c040" stroke="#8c5a08" stroke-width="1"/>
+    <rect x="18" y="53" width="24" height="5"
+          fill="#f0c040" stroke="#8c5a08" stroke-width="1"/>
+    <rect x="14" y="58" width="32" height="5"
+          fill="#f0c040" stroke="#8c5a08" stroke-width="1"/>
+  </svg>
+  <p class="ne-headline">You made it to the top 10!</p>
   <input id="name-input" maxlength="10" autocomplete="off" spellcheck="false"
          placeholder="TYPE YOUR NAME…"/>
   <p id="name-counter">0 / 10</p>
@@ -199,40 +214,32 @@ body   { background: #0d0820 !important; }
     font-family: Arial, sans-serif;
     -webkit-tap-highlight-color: transparent;
 }
-.ne-celebrate {
-    font-family: Arial Black, Arial, sans-serif;
-    font-size: clamp(16px, 4.4vw, 22px);
-    font-weight: 900;
-    letter-spacing: 3px;
-    color: #ffd84a;
-    margin: 0 0 18px;
-    text-shadow:
-        0 0 12px rgba(255, 216, 74, 0.55),
-        0 2px 0 #a82010,
-        0 4px 8px rgba(0, 0, 0, 0.7);
-    animation: pulse-btn 1.8s ease-in-out infinite;
+.ne-trophy {
+    width: clamp(56px, 14vw, 80px);
+    height: auto;
+    margin: 0 0 14px;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.6));
     pointer-events: none;
-    text-transform: uppercase;
     position: relative;
     z-index: 1;
 }
-.ne-title {
+.ne-headline {
     font-family: Arial Black, Arial, sans-serif;
-    font-size: clamp(28px, 7vw, 38px);
+    font-size: clamp(20px, 5.4vw, 28px);
     font-weight: 900;
-    letter-spacing: 5px;
+    letter-spacing: 2px;
     color: #f0c040;
-    margin: 0 0 8px;
+    margin: 0 0 24px;
     text-shadow:
         -2px  0   0 #a82010,
          2px  0   0 #a82010,
          0   -2px 0 #a82010,
          0    2px 0 #a82010,
          0    7px 10px rgba(0, 0, 0, 0.8);
-    animation: float-title 3.4s ease-in-out infinite;
     pointer-events: none;
     position: relative;
     z-index: 1;
+    text-align: center;
 }
 .ne-sub {
     font-size: 12px;
