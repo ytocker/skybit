@@ -483,7 +483,8 @@ class App:
         if self.state == STATE_PLAY:
             _draw_opener(self.screen, self.world)
 
-        self.world.bird.draw(self.screen, sx, sy)
+        self.world.bird.draw(self.screen, sx, sy,
+                             flipped=self.world.reverse_timer > 0)
 
         for p in self.world.particles:
             p.draw(self.screen)

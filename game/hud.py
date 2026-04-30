@@ -398,16 +398,13 @@ def _draw_buff_icon(surf, rect, kind):
         scaled = pygame.transform.smoothscale(icon, (20, 20))
         surf.blit(scaled, (cx - 10, cy - 10))
     elif kind == "reverse":
-        col = (140, 235, 245)
-        # Up arrow (left), down arrow (right) — same layout as the world icon
-        lx = cx - 4
-        rx = cx + 4
-        pygame.draw.rect(surf, col, (lx - 1, cy - 4, 2, 11))
-        pygame.draw.polygon(surf, col,
-                            [(lx - 3, cy - 3), (lx + 3, cy - 3), (lx, cy - 8)])
-        pygame.draw.rect(surf, col, (rx - 1, cy - 7, 2, 11))
-        pygame.draw.polygon(surf, col,
-                            [(rx - 3, cy + 3), (rx + 3, cy + 3), (rx, cy + 8)])
+        # Reuse the cached high-resolution disc + arrows from the world
+        # pickup, scaled to fit the badge slot.
+        from game.entities import _get_reverse_icon
+        diameter = min(rect.width, rect.height) - 2
+        icon = _get_reverse_icon(diameter)
+        surf.blit(icon, (cx - icon.get_width() // 2,
+                         cy - icon.get_height() // 2))
 
 
 class PauseButton:
