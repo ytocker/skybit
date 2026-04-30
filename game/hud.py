@@ -135,6 +135,49 @@ class PauseButton:
             pygame.draw.rect(surf, WHITE, (cx + 3, cy - 10, 5, 20), border_radius=2)
 
 
+def draw_title_overlay(surf, title_t: float, *, best: int = 0,
+                       logo_alpha: int = 255, subtitle_alpha: int = 255,
+                       prompt_alpha: int = 255) -> None:
+    """Shared "Skybit + tagline + tap-to-start" overlay used by both the
+    menu (`HUD.draw_menu`) and the intro's title beat. The alpha kwargs
+    let the intro fade each element in independently while the menu always
+    passes 255s so the cut between them is invisible."""
+    # Title pulsing — same cadence in both contexts.
+    pulse = 1.0 + math.sin(title_t * 2.4) * 0.04
+    draw_skybit_wordmark(surf, W // 2, 180, scale=pulse,
+                         alpha=int(logo_alpha))
+
+    # Subtitle.
+    if subtitle_alpha > 0:
+        f = _font(18, True)
+        sub = f.render("A Pip the Punctual Adventure", True, UI_CREAM)
+        sub.set_alpha(int(subtitle_alpha))
+        surf.blit(sub, sub.get_rect(center=(W // 2, 228)).topleft)
+
+    # Tap-to-start prompt — pulses on its own 3.6 Hz cadence.
+    if prompt_alpha > 0:
+        pulse_a = 160 + math.sin(title_t * 3.6) * 90
+        a = int(pulse_a * (prompt_alpha / 255.0))
+        a = max(0, min(255, a))
+        f2 = _font(24, True)
+        prompt = f2.render("TAP  ·  SPACE  ·  CLICK", True, WHITE)
+        prompt.set_alpha(a)
+        surf.blit(prompt, prompt.get_rect(center=(W // 2, H - 170)).topleft)
+        f3 = _font(16, True)
+        sub2 = f3.render("to flap and start", True, UI_CREAM)
+        sub2.set_alpha(int(prompt_alpha))
+        surf.blit(sub2, sub2.get_rect(center=(W // 2, H - 142)).topleft)
+
+    # Best-score pill (only if a score has been recorded).
+    if best > 0 and prompt_alpha > 0:
+        hi_rect = pygame.Rect(W // 2 - 60, H - 100, 120, 40)
+        rounded_rect(surf, hi_rect, 12, (15, 25, 60), 180)
+        _text(surf, "BEST", (hi_rect.centerx, hi_rect.y + 12),
+              size=14, color=UI_CREAM, shadow=False)
+        _text(surf, str(best), (hi_rect.centerx, hi_rect.y + 28),
+              size=18, color=UI_GOLD, shadow=False)
+
+
 class HUD:
     def __init__(self):
         self.pause_btn = PauseButton()
@@ -329,49 +372,6 @@ class HUD:
         dim.fill((0, 0, 10, 70))
         surf.blit(dim, (0, 0))
         draw_title_overlay(surf, self.title_t, best=best)
-
-
-def draw_title_overlay(surf, title_t: float, *, best: int = 0,
-                       logo_alpha: int = 255, subtitle_alpha: int = 255,
-                       prompt_alpha: int = 255) -> None:
-    """Shared "Skybit + tagline + tap-to-start" overlay used by both the
-    menu (`HUD.draw_menu`) and the intro's title beat. The alpha kwargs
-    let the intro fade each element in independently while the menu always
-    passes 255s so the cut between them is invisible."""
-    # Title pulsing — same cadence in both contexts.
-    pulse = 1.0 + math.sin(title_t * 2.4) * 0.04
-    draw_skybit_wordmark(surf, W // 2, 180, scale=pulse,
-                         alpha=int(logo_alpha))
-
-    # Subtitle.
-    if subtitle_alpha > 0:
-        f = _font(18, True)
-        sub = f.render("A Pip the Punctual Adventure", True, UI_CREAM)
-        sub.set_alpha(int(subtitle_alpha))
-        surf.blit(sub, sub.get_rect(center=(W // 2, 228)).topleft)
-
-    # Tap-to-start prompt — pulses on its own 3.6 Hz cadence.
-    if prompt_alpha > 0:
-        pulse_a = 160 + math.sin(title_t * 3.6) * 90
-        a = int(pulse_a * (prompt_alpha / 255.0))
-        a = max(0, min(255, a))
-        f2 = _font(24, True)
-        prompt = f2.render("TAP  ·  SPACE  ·  CLICK", True, WHITE)
-        prompt.set_alpha(a)
-        surf.blit(prompt, prompt.get_rect(center=(W // 2, H - 170)).topleft)
-        f3 = _font(16, True)
-        sub2 = f3.render("to flap and start", True, UI_CREAM)
-        sub2.set_alpha(int(prompt_alpha))
-        surf.blit(sub2, sub2.get_rect(center=(W // 2, H - 142)).topleft)
-
-    # Best-score pill (only if a score has been recorded).
-    if best > 0 and prompt_alpha > 0:
-        hi_rect = pygame.Rect(W // 2 - 60, H - 100, 120, 40)
-        rounded_rect(surf, hi_rect, 12, (15, 25, 60), 180)
-        _text(surf, "BEST", (hi_rect.centerx, hi_rect.y + 12),
-              size=14, color=UI_CREAM, shadow=False)
-        _text(surf, str(best), (hi_rect.centerx, hi_rect.y + 28),
-              size=18, color=UI_GOLD, shadow=False)
 
     def draw_stats(self, surf, world, dt, elapsed):
         """Post-run summary: score + coins + combo + pillars + time + near-misses

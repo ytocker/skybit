@@ -35,7 +35,6 @@ from game import biome as _biome
 from game import parrot as _parrot
 from game.pillar_variants import draw_pillar_pair
 from game.hud import draw_skybit_wordmark, draw_title_overlay, _font
-from game import audio as _audio
 
 
 DURATION = 12.0
@@ -665,8 +664,6 @@ class IntroScene:
     def __init__(self):
         self.t = 0.0
         self.done = False
-        self._pad_started = False
-        self._crackle_t = -1.0  # earpiece crackle scheduled inside beat 2
         self._title_t = 0.0
         # Best score is injected by the App so the title overlay can show
         # the BEST pill identical to the menu's. Defaults to 0 (no pill).
@@ -682,24 +679,10 @@ class IntroScene:
     def update(self, dt: float) -> None:
         self.t += dt
         self._title_t += dt
-        # Kick off the ambient pad once on the first frame so it has the full
-        # length of the cinematic to breathe.
-        if not self._pad_started:
-            try:
-                _audio.play_intro_pad()
-            except Exception:
-                pass
-            self._pad_started = True
-        # One earpiece crackle during beat 2 (the hand-off, t=1.0–4.0).
-        if 2.4 <= self.t < 2.45 and self._crackle_t < 0:
-            try:
-                _audio.play_intro_crackle()
-            except Exception:
-                pass
-            self._crackle_t = self.t
-        # Beat 5 holds indefinitely once the title is up — `done` is now
-        # only set when the user taps. The intro therefore never
-        # auto-completes; tap-to-start is the contract.
+        # Intro is silent — no ambient pad, no earpiece crackle. Beat 5
+        # holds indefinitely once the title is up; `done` is only set
+        # when the user taps. The intro therefore never auto-completes;
+        # tap-to-start is the contract.
 
     def skip(self) -> None:
         self.done = True
@@ -857,10 +840,10 @@ def _beat_dawn(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
 # ── beat 2: The hand-off (2.5 – 4.5) ─────────────────────────────────────────
 
 def _beat_handoff(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
-    """Same pickup post-house as beat 1. Mr. Garrick stands on the porch and
-    gestures (earpiece crackle plays once during the beat). Pip swoops in
-    from off-screen, lifts the parcel off the doorstep, and drifts to the
-    right of the porch — composed as the launch pose for the journey."""
+    """Same pickup post-house as beat 1. Mr. Garrick stands on the porch.
+    Pip swoops in from off-screen, lifts the parcel off the doorstep, and
+    drifts to the right of the porch — composed as the launch pose for
+    the journey."""
     # Same locked clear-day biome as beat 1 — pickup never shifts colours.
     sky_phase = 0.0
     _draw_world(surf, sky_phase, scroll=10.0 + u * 6.0,
@@ -888,18 +871,6 @@ def _beat_handoff(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
     g_x = house_x + stand_x_local - g.get_width() // 2
     g_y = house_y + stand_y_local - g.get_height() + 4
     surf.blit(g, (g_x, g_y))
-
-    # Speech-soundwave arc beside Garrick's beak (during earpiece crackle).
-    if 0.20 < u < 0.70:
-        wave_t = (u - 0.20) / 0.50
-        n = int(_clamp01(wave_t * 3.5)) + 1
-        for i in range(n):
-            radius = 7 + i * 5
-            alpha = max(0, 200 - i * 60)
-            arc = pygame.Surface((radius * 2 + 4, radius + 4), pygame.SRCALPHA)
-            pygame.draw.arc(arc, (255, 240, 220, alpha),
-                            arc.get_rect(), math.pi * 0.15, math.pi * 0.85, 2)
-            surf.blit(arc, (g_x + g.get_width() - 6, g_y - radius // 2))
 
     # Pip swoops in from off-screen-right, banks down beside the doorstep,
     # picks up the parcel, then drifts to the right of the porch and ends
