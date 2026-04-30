@@ -292,30 +292,18 @@ _CLOUD_VARIANTS: list[list[tuple[float, float, float, int]]] = [
 
 def draw_cloud(surf, x, y, scale=1.0, variant: int = 0):
     """Draw a stylised cloud. `variant` picks one of the hand-tuned shapes
-    so scenes don't paint the same 5-circle blob repeatedly. All puffs are
-    composited into one full-alpha mask first, then the assembled cloud is
-    blit'd with a single global alpha — that way the constituent circles
-    aren't visible inside the silhouette (no per-circle alpha contrast)."""
+    so scenes don't paint the same 5-circle blob repeatedly. Each puff is
+    composited with its OWN alpha (from the variant tuple), giving the
+    cloud soft edges where small puffs overlap larger ones."""
     puffs = _CLOUD_VARIANTS[variant % len(_CLOUD_VARIANTS)]
-    # Compute a bounding box for the whole cloud in local coords so we can
-    # size the temp surface tightly.
-    xs = [p[0] - p[2] for p in puffs] + [p[0] + p[2] for p in puffs]
-    ys = [p[1] - p[2] for p in puffs] + [p[1] + p[2] for p in puffs]
-    pad = 2
-    bx_min, bx_max = min(xs) - pad, max(xs) + pad
-    by_min, by_max = min(ys) - pad, max(ys) + pad
-    bw = int((bx_max - bx_min) * scale) + 2
-    bh = int((by_max - by_min) * scale) + 2
-    cloud = pygame.Surface((bw, bh), pygame.SRCALPHA)
-    for ox, oy, r, _a in puffs:
+    for ox, oy, r, a in puffs:
         rr = max(2, int(r * scale))
-        cx = int((ox - bx_min) * scale)
-        cy = int((oy - by_min) * scale)
-        pygame.draw.circle(cloud, (255, 255, 255, 255), (cx, cy), rr)
-    # One global alpha for the whole cloud so it sits softly on the sky
-    # without revealing the stacked-circles construction.
-    cloud.set_alpha(240)
-    surf.blit(cloud, (int(x + bx_min * scale), int(y + by_min * scale)))
+        s = pygame.Surface((rr * 2 + 2, rr * 2 + 2), pygame.SRCALPHA)
+        pygame.draw.circle(s, (255, 255, 255, a), (rr + 1, rr + 1), rr)
+        surf.blit(s, (int(x + ox * scale) - rr - 1,
+                      int(y + oy * scale) - rr - 1))
+    # No underside shadow band — that solid-fill rectangle read as a hard
+    # blue bar pinned to the cloud's bottom rather than as soft shading.
 
 
 # ── ground drawing ───────────────────────────────────────────────────────────
