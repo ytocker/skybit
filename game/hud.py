@@ -608,7 +608,7 @@ class HUD:
         for ft in world.float_texts:
             ft.draw(surf)
 
-    def draw_stats(self, surf, world, dt, elapsed):
+    def draw_stats(self, surf, world, dt, elapsed, show_prompt: bool = True):
         self.title_t += dt
         dim = pygame.Surface((W, H), pygame.SRCALPHA)
         dim.fill((6, 1, 21, 190))
@@ -676,7 +676,7 @@ class HUD:
 
         # Tap-to-continue prompt — also outlined (gold + red) so every line
         # on the screen shares the same writing style.
-        if elapsed >= 0.6:
+        if elapsed >= 0.6 and show_prompt:
             alpha = max(80, min(255, int(150 + math.sin(self.title_t * 4) * 90)))
             # Render the outlined text onto a temp surface so we can apply
             # the pulsing alpha to the whole stack at once.

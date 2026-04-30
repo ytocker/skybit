@@ -431,7 +431,8 @@ class App:
             self.hud.draw_play(self.screen, self.world, self.best, paused=True)
             self.hud.draw_pause_overlay(self.screen)
         elif self.state == STATE_STATS:
-            self.hud.draw_stats(self.screen, self.world, 1 / 60, self._stats_t)
+            self.hud.draw_stats(self.screen, self.world, 1 / 60, self._stats_t,
+                                show_prompt=not self._fetch_pending)
         elif self.state == STATE_NAMEENTRY:
             import sys as _sys
             if _sys.platform != "emscripten":
