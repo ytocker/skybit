@@ -11,7 +11,7 @@ import pygame
 from game.config import (
     W, H, GROUND_Y, PIPE_W, PIPE_SPACING,
     GAP_START, GAP_MIN, SCROLL_BASE, SCROLL_MAX,
-    BIRD_X, BIRD_R, COIN_R, POWERUP_R,
+    BIRD_X, BIRD_R, COIN_R, POWERUP_R, PARCEL_R, PARCEL_Y_OFFSET,
     POWERUP_CHANCE, POWERUP_COOLDOWN,
     TRIPLE_DURATION, MAGNET_DURATION, MAGNET_RADIUS,
     SLOWMO_DURATION, SLOWMO_SCALE, KFC_DURATION, GHOST_DURATION,
@@ -37,6 +37,12 @@ def _lerp(a, b, t):
 
 
 class World:
+    # Seconds AFTER the ready_t (1.0 s) freeze before the first pipe should
+    # enter the visible frame. The intro hands gameplay the cottage + parcel
+    # composition; this grace period gives the opener overlay time to scroll
+    # the cottage off-screen before pillars take over.
+    SPAWN_GRACE = 1.5
+
     def __init__(self):
         self.bird = Bird()
         self.pipes: list[Pipe] = []
@@ -75,7 +81,14 @@ class World:
         self.shake_t = 0.0
 
         # Real elapsed gameplay seconds — drives the day/night biome cycle.
+        # Held at 0 while ready_t > 0 so the sky doesn't tick over while
+        # the player is still on the start-of-run prompt.
         self.biome_time = 0.0
+
+        # Always-ticking clock used for purely-cosmetic idle animations
+        # (bird bob during the ready wait) so they keep moving even while
+        # biome_time is frozen.
+        self._idle_t = 0.0
 
         self.weather = Weather()
 
@@ -123,7 +136,11 @@ class World:
     # ── spawning ─────────────────────────────────────────────────────────────
 
     def _seed_first_pipes(self):
-        x = W + 60
+        # Push the seed pipes further off-screen by SPAWN_GRACE seconds of
+        # scroll so the gameplay opener (cottage + parcel) has clean air
+        # behind Pip before the first pillar arrives.
+        offset = int(self.SPAWN_GRACE * SCROLL_BASE)
+        x = W + 60 + offset
         for _ in range(3):
             self._spawn_pipe(x)
             x += PIPE_SPACING
@@ -270,7 +287,13 @@ class World:
     # ── update ──────────────────────────────────────────────────────────────
 
     def update(self, dt):
-        self.biome_time += dt
+        self._idle_t += dt
+        # The biome cycle only advances once the run has actually started.
+        # While ready_t > 0 the sky stays frozen at the dawn palette — the
+        # day/night arc was rolling forward earlier even when Pip was
+        # still on the post-house porch waiting for input.
+        if self.ready_t <= 0:
+            self.biome_time += dt
         # Slowmo scales the *world* (scroll, entity velocity, entity spin,
         # pickup physics) — not the bird's input physics. Lets players
         # still flap responsively while everything else crawls.
@@ -280,12 +303,13 @@ class World:
         self.weather.update(sdt, self.biome_phase)
 
         # While the "get ready" prompt is up, hold everything still except
-        # a tiny idle animation on the bird.
+        # a tiny idle animation on the bird. The freeze waits indefinitely
+        # for the player's first flap (no auto-expiring countdown).
         if self.ready_t > 0 and not self.game_over:
-            self.ready_t = max(0.0, self.ready_t - dt)
-            # Gentle bob without physics integration.
+            # Gentle bob without physics integration. Driven by idle_t so it
+            # keeps moving even though biome_time is frozen.
             self.bird.vy = 0
-            self.bird.y = H * 0.42 + math.sin(self.biome_time * 4.0) * 6
+            self.bird.y = H * 0.42 + math.sin(self._idle_t * 4.0) * 6
             self.bird.frame_t += dt * 6.0
             # Keep particles / float-texts ticking so nothing freezes visually.
             for p in self.particles:
@@ -443,8 +467,23 @@ class World:
             return
         if self.ghost_timer > 0:
             return  # phase through pipes while ghost is active
+        # Pip's hitboxes: body (existing) + parcel below him. The parcel
+        # offset rotates with his tilt so when he dives the parcel swings
+        # forward/down with him.
+        scale = GROW_SCALE if self.grow_timer > 0 else 1.0
+        parcel_offset = pygame.math.Vector2(
+            0, PARCEL_Y_OFFSET * scale).rotate(-self.bird.tilt_deg)
+        px = bx + parcel_offset.x
+        py = by + parcel_offset.y
+        pr = PARCEL_R * scale
+        # Parcel shouldn't graze the ground unless the bird already would
+        # have died (the bird circle's r > parcel offset+r in normal flight).
+        # Skip ground/ceiling re-check; only pipes are added.
         for p in self.pipes:
             if p.collides_circle(bx, by, br - 2):
+                self._die()
+                return
+            if p.collides_circle(px, py, pr - 1):
                 self._die()
                 return
 

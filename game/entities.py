@@ -163,6 +163,37 @@ class Bird:
         r = img.get_rect(center=(self.x + shake_x, self.y + shake_y))
         surf.blit(img, r.topleft)
 
+        # Parcel — Pip's permanent companion. Tucked below his centre with
+        # a tilt-aware offset so it banks with him; mode-coloured to match
+        # the active palette; alpha-breathes in ghost mode; grow-scaled.
+        if self.kfc_active:
+            mode = "kfc"
+        elif self.ghost_active:
+            mode = "ghost"
+        elif self.triple_active:
+            mode = "triple"
+        else:
+            mode = "normal"
+        parcel = parrot.get_parcel(mode)
+        from game.config import GROW_SCALE, PARCEL_Y_OFFSET
+        scale = GROW_SCALE if self.grow_active else 1.0
+        if scale != 1.0:
+            pw, ph = parcel.get_size()
+            parcel = pygame.transform.smoothscale(
+                parcel, (int(pw * scale), int(ph * scale)))
+        # Tilt-aware offset: the parcel orbits Pip's centre as he banks.
+        offset = pygame.math.Vector2(0, PARCEL_Y_OFFSET * scale)
+        offset = offset.rotate(-self.tilt_deg)
+        # Rotate the parcel sprite to match tilt so the gift bow keeps
+        # pointing "up" relative to Pip.
+        parcel_rot = pygame.transform.rotate(parcel, self.tilt_deg)
+        if self.ghost_active:
+            parcel_rot = parcel_rot.copy()
+            parcel_rot.set_alpha(int(90 + pulse * 80))
+        pr = parcel_rot.get_rect(center=(self.x + shake_x + offset.x,
+                                         self.y + shake_y + offset.y))
+        surf.blit(parcel_rot, pr.topleft)
+
 
 # ── Pipe (nature pillar) ─────────────────────────────────────────────────────
 

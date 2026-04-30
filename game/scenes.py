@@ -14,6 +14,41 @@ from game.world import World
 from game.hud import HUD, _font
 from game import audio
 from game import play_log
+from game.config import BIRD_X, SCROLL_BASE
+from game import intro as _intro
+
+# Pixels of `bg_scroll` covered while the gameplay opener is active. After
+# the post-ready grace window, the cottage is fully off-screen-left and the
+# overlay shuts itself off.
+_OPENER_SCROLL_END = int(World.SPAWN_GRACE * SCROLL_BASE)
+
+
+def _draw_opener(surf: pygame.Surface, world) -> None:
+    """Gameplay opener — cottage drifting off-screen-left + parcel tucked
+    beneath Pip. Mirrors the intro's beat-2 ending so the cut from menu →
+    play preserves the cinematic's final image. Runs for the first
+    ``World.SPAWN_GRACE`` seconds after the ready_t freeze expires."""
+    progress = world.bg_scroll / _OPENER_SCROLL_END
+    if progress >= 1.0:
+        return
+    # Fade out over the last 30% so the cottage doesn't snap-disappear.
+    fade = 1.0 if progress < 0.7 else max(0.0, 1.0 - (progress - 0.7) / 0.3)
+    alpha = int(255 * fade)
+
+    house = _intro.get_sprite("skyhouse_post")
+    house_cx = int(W * 0.30) - int(world.bg_scroll)
+    house_cy = int(H * 0.42)
+    hx = house_cx - house.get_width() // 2
+    hy = house_cy - house.get_height() // 2
+    if hx + house.get_width() > 0 and alpha > 0:
+        if alpha < 255:
+            faded = house.copy()
+            faded.set_alpha(alpha)
+            surf.blit(faded, (hx, hy))
+        else:
+            surf.blit(house, (hx, hy))
+    # The parcel itself is now drawn permanently by Bird.draw, so the
+    # opener no longer needs its own parcel pass.
 
 
 STATE_MENU = 0
@@ -23,6 +58,7 @@ STATE_GAMEOVER = 3
 STATE_PAUSE = 4
 STATE_STATS = 5
 STATE_LEADERBOARD = 6
+STATE_INTRO = 7
 
 
 class App:
@@ -36,7 +72,13 @@ class App:
         self.hud = HUD()
         self.session_best = 0
         self._new_best = False
-        self.state = STATE_MENU
+        # Intro plays once per program launch — start every session in
+        # STATE_INTRO. Within the session (consecutive games after death,
+        # menu-tap → play → die → menu) the intro is never replayed since
+        # the App stays alive and we already moved past STATE_INTRO.
+        from game.intro import IntroScene
+        self.intro: object | None = IntroScene()
+        self.state = STATE_INTRO
         self._cloud_phase = 0.0
         self._running = True
         self._stats_t = 0.0
@@ -65,6 +107,12 @@ class App:
     # ── input ────────────────────────────────────────────────────────────────
 
     def _flap_input(self, pos=None):
+        if self.state == STATE_INTRO:
+            # Any tap during the cinematic skips it and lands on the menu —
+            # the menu is where SKYBIT + the description + the click-to-start
+            # prompt live. The intro is recorded as seen so it never replays.
+            self._finish_intro()
+            return
         if self.state == STATE_MENU:
             self._start_play()
         elif self.state == STATE_PLAY:
@@ -93,11 +141,30 @@ class App:
             self.state = STATE_PLAY
 
     def _start_play(self):
+        # The menu IS the start-of-game screen, so the click that brought
+        # us here counts as the first flap — drop the ready_t freeze and
+        # apply an initial flap so Pip launches immediately. The gameplay
+        # opener (post-house drifting off-screen-left) still plays for
+        # the first ~2.5 s of bg_scroll.
         self.world = World()
+        self.world.ready_t = 0.0
+        self.world.flap()
         self.state = STATE_PLAY
 
+    def _finish_intro(self):
+        """Hand off to the menu. Called on auto-completion or skip. The
+        intro is dropped so this session won't render it again."""
+        if self.intro is not None:
+            self.intro.skip()
+        self.intro = None
+        self.state = STATE_MENU
+
     def _restart(self):
+        # Same contract as `_start_play`: the tap that triggered the
+        # restart counts as the first flap, no ready freeze.
         self.world = World()
+        self.world.ready_t = 0.0
+        self.world.flap()
         self.state = STATE_PLAY
 
     # ── run loop ────────────────────────────────────────────────────────────
@@ -196,6 +263,15 @@ class App:
 
     def _update(self, dt):
         self._cloud_phase += dt
+        if self.state == STATE_INTRO:
+            if self.intro is None:
+                # Defensive: should never happen, but recover gracefully.
+                self._finish_intro()
+                return
+            self.intro.update(dt)
+            if self.intro.done:
+                self._finish_intro()
+            return
         if self.state == STATE_MENU:
             self.world.world_idle_tick(dt)
         elif self.state == STATE_PLAY:
@@ -366,9 +442,26 @@ class App:
                     palette['ground_top'], palette['ground_mid'], (60, 40, 25))
 
     def _render(self):
+        # Intro renders its own self-contained scene (sky + pillars + cottage
+        # + parrot etc.) and bypasses the in-game world draw entirely.
+        if self.state == STATE_INTRO and self.intro is not None:
+            self.intro.render(self.screen)
+            return
         sx, sy = self.world.shake_offset() if self.state == STATE_PLAY else (0, 0)
         sx, sy = int(sx), int(sy)
         self._draw_background(self.screen)
+
+        # Menu scene = the gameplay opener as a static frame: pickup post-
+        # house on the left with Pip standing in front of it holding the
+        # parcel. No pillars or world entities until the user taps to start.
+        if self.state == STATE_MENU:
+            house = _intro.get_sprite("skyhouse_post")
+            hx = int(W * 0.30) - house.get_width() // 2
+            hy = int(H * 0.42) - house.get_height() // 2
+            self.screen.blit(house, (hx, hy))
+            self.world.bird.draw(self.screen, sx, sy)
+            self.hud.draw_menu(self.screen, 1 / 60, self.best)
+            return
 
         pipe_palette = self.world.biome_palette
         for p in self.world.pipes:
@@ -383,6 +476,12 @@ class App:
             c.draw(self.screen, kfc_active=kfc_active)
         for m in self.world.powerups:
             m.draw(self.screen)
+
+        # Gameplay opener: pickup post-house drifting off-screen-left + the
+        # parcel tucked under Pip. Active only during STATE_PLAY's first
+        # ~2.5 s, mirroring the intro's beat-2 closing image.
+        if self.state == STATE_PLAY:
+            _draw_opener(self.screen, self.world)
 
         self.world.bird.draw(self.screen, sx, sy)
 

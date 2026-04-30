@@ -20,6 +20,12 @@ GAP_MIN       = 115
 BIRD_X = 90
 BIRD_R = 14
 
+# Pip carries the parcel for the entire run. The parcel's collision
+# footprint is a second circle below the bird; pillars touching that
+# circle are also lethal.
+PARCEL_R          = 9    # forgiving (parcel sprite is 22 px so r=11 would catch its corners)
+PARCEL_Y_OFFSET   = 12   # px below bird-centre to parcel-centre (matches intro composition)
+
 COIN_R             = 11
 
 # Coin-rush: every Nth pipe gets a wider gap filled with a dense coin arc.

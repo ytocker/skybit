@@ -292,20 +292,18 @@ _CLOUD_VARIANTS: list[list[tuple[float, float, float, int]]] = [
 
 def draw_cloud(surf, x, y, scale=1.0, variant: int = 0):
     """Draw a stylised cloud. `variant` picks one of the hand-tuned shapes
-    so scenes don't paint the same 5-circle blob repeatedly."""
+    so scenes don't paint the same 5-circle blob repeatedly. Each puff is
+    composited with its OWN alpha (from the variant tuple), giving the
+    cloud soft edges where small puffs overlap larger ones."""
     puffs = _CLOUD_VARIANTS[variant % len(_CLOUD_VARIANTS)]
-    max_ox = max(p[0] for p in puffs)
     for ox, oy, r, a in puffs:
         rr = max(2, int(r * scale))
         s = pygame.Surface((rr * 2 + 2, rr * 2 + 2), pygame.SRCALPHA)
         pygame.draw.circle(s, (255, 255, 255, a), (rr + 1, rr + 1), rr)
         surf.blit(s, (int(x + ox * scale) - rr - 1,
                       int(y + oy * scale) - rr - 1))
-    # Soft shadow underside stretched to the variant's footprint
-    sh_w = max(40, int((max_ox + 24) * scale))
-    shadow = pygame.Surface((sh_w, int(14 * scale)), pygame.SRCALPHA)
-    shadow.fill((130, 170, 220, 55))
-    surf.blit(shadow, (int(x - 4 * scale), int(y + 14 * scale)))
+    # No underside shadow band — that solid-fill rectangle read as a hard
+    # blue bar pinned to the cloud's bottom rather than as soft shading.
 
 
 # ── ground drawing ───────────────────────────────────────────────────────────
