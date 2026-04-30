@@ -87,15 +87,16 @@ def _draw_buff_icon(surf, rect, kind):
         pygame.draw.rect(surf, (120, 60, 30), (cx - 7, cy - 9, 14, 2))
         pygame.draw.rect(surf, (120, 60, 30), (cx - 7, cy + 7, 14, 2))
     elif kind == "reverse":
-        col = (120, 230, 240)
-        # Up arrow (top half)
-        pygame.draw.rect(surf, col, (cx - 1, cy - 8, 2, 7))
+        col = (140, 235, 245)
+        # Up arrow (left), down arrow (right) — same layout as the world icon
+        lx = cx - 4
+        rx = cx + 4
+        pygame.draw.rect(surf, col, (lx - 1, cy - 4, 2, 11))
         pygame.draw.polygon(surf, col,
-                            [(cx - 4, cy - 4), (cx + 4, cy - 4), (cx, cy - 9)])
-        # Down arrow (bottom half) — mirror
-        pygame.draw.rect(surf, col, (cx - 1, cy + 1, 2, 7))
+                            [(lx - 3, cy - 3), (lx + 3, cy - 3), (lx, cy - 8)])
+        pygame.draw.rect(surf, col, (rx - 1, cy - 7, 2, 11))
         pygame.draw.polygon(surf, col,
-                            [(cx - 4, cy + 4), (cx + 4, cy + 4), (cx, cy + 9)])
+                            [(rx - 3, cy + 3), (rx + 3, cy + 3), (rx, cy + 8)])
 
 
 class PauseButton:
