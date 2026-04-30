@@ -19,6 +19,12 @@ jobs:
       - name: Build WASM bundle
         run: pip install 'pygbag==0.9.2' && python -m pygbag --build main.py
 
+      - name: Inject theme and Supabase leaderboard
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: python inject_theme.py
+
       - name: Deploy to Netlify
         uses: nwtgck/actions-netlify@v3
         with:
