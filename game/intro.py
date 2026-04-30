@@ -958,25 +958,6 @@ def _beat_journey(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
         fx = W + 40 - flock_u * (W + 80)
         _draw_distant_flock(surf, scene.t, fx)
 
-    # Last half of the journey: the destination home cottage appears as a
-    # small hazy silhouette on the horizon and grows as Pip "flies toward"
-    # it, so by the cut into beat 4 the cottage is already in place at full
-    # size. Replaces the previous rise-from-below pop in beat 4.
-    if u >= 0.50:
-        approach = _smoothstep((u - 0.50) / 0.50)
-        home = _get_sprite("skyhouse_home")
-        scale = 0.28 + 0.72 * approach          # 0.28 distant → 1.0 near
-        sw = int(home.get_width() * scale)
-        sh = int(home.get_height() * scale)
-        home_scaled = pygame.transform.smoothscale(home, (sw, sh))
-        # Hazy alpha while distant; full opacity when near.
-        home_scaled.set_alpha(int(170 + 85 * approach))
-        # Cottage anchored to its beat-4 settled position so the cut is
-        # positionally seamless. A subtle bob like beat 4's.
-        home_cx = W // 2
-        home_cy = int(H * 0.55) + int(math.sin(scene.t * 0.9) * 3)
-        surf.blit(home_scaled, (home_cx - sw // 2, home_cy - sh // 2))
-
     # Pip — gentle sin-bob path centred at H*0.42 (matches beat 2's exit
     # altitude exactly so the cut is invisible). Slow flap, almost-level
     # tilt; he carries the parcel tucked beneath him.
@@ -1003,23 +984,30 @@ def _beat_arrival(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
     _draw_world(surf, phase, scroll=296.0 + u * 30.0,
                 cloud_phase=scene.t, ground=True)
 
-    # Floating sky-house, centred. The cottage was approached gradually
-    # during the last half of the journey beat (it grew from a distant
-    # silhouette to full size), so the cut here is positionally seamless
-    # — it just keeps bobbing.
+    # Floating sky-house, centred. During the first 18% of the beat the
+    # cottage rises into frame from below (it was off-screen during the
+    # journey), then settles into its weightless bob. Doorstep coords
+    # below use the SETTLED position so Pip's drop target doesn't shift
+    # while the cottage is animating in.
     house = _get_sprite("skyhouse_home")
     anc = _get_house_anchors("home")
     house_cx = W // 2
     house_cy_settled = int(H * 0.55)
-    house_cy_now = house_cy_settled + int(math.sin(scene.t * 0.9) * 3)
+    if u < 0.18:
+        bridge_t = u / 0.18
+        rise = (1.0 - _smoothstep(bridge_t)) * 100  # 100 px below at u=0
+        house_cy_now = house_cy_settled + int(rise)
+    else:
+        house_cy_now = house_cy_settled + int(math.sin(scene.t * 0.9) * 3)
     house_x = house_cx - house.get_width() // 2
     house_y_now = house_cy_now - house.get_height() // 2
     surf.blit(house, (house_x, house_y_now))
 
-    # Doorstep follows the live cottage bob so Pip's drop target stays
-    # anchored to the visible doormat.
+    # Settled doorstep — Pip's flight target is fixed regardless of the
+    # cottage's bridge-in animation.
+    house_y_settled = house_cy_settled - house.get_height() // 2
     doorstep_x = house_x + anc["doorstep"][0]
-    doorstep_y = house_y_now + anc["doorstep"][1]
+    doorstep_y = house_y_settled + anc["doorstep"][1]
 
     # Pip's start pose tracks the journey's live sin-bob so the cut from
     # beat 3 is seamless even mid-bob. Pip glides from there down to the
