@@ -37,6 +37,12 @@ def _lerp(a, b, t):
 
 
 class World:
+    # Seconds AFTER the ready_t (1.0 s) freeze before the first pipe should
+    # enter the visible frame. The intro hands gameplay the cottage + parcel
+    # composition; this grace period gives the opener overlay time to scroll
+    # the cottage off-screen before pillars take over.
+    SPAWN_GRACE = 1.5
+
     def __init__(self):
         self.bird = Bird()
         self.pipes: list[Pipe] = []
@@ -123,7 +129,11 @@ class World:
     # ── spawning ─────────────────────────────────────────────────────────────
 
     def _seed_first_pipes(self):
-        x = W + 60
+        # Push the seed pipes further off-screen by SPAWN_GRACE seconds of
+        # scroll so the gameplay opener (cottage + parcel) has clean air
+        # behind Pip before the first pillar arrives.
+        offset = int(self.SPAWN_GRACE * SCROLL_BASE)
+        x = W + 60 + offset
         for _ in range(3):
             self._spawn_pipe(x)
             x += PIPE_SPACING

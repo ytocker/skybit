@@ -14,6 +14,52 @@ from game.world import World
 from game.hud import HUD, _font
 from game import audio
 from game import play_log
+from game.config import BIRD_X, SCROLL_BASE
+from game import intro as _intro
+
+# Pixels of `bg_scroll` covered while the gameplay opener is active. After
+# the post-ready grace window, the cottage is fully off-screen-left and the
+# overlay shuts itself off.
+_OPENER_SCROLL_END = int(World.SPAWN_GRACE * SCROLL_BASE)
+
+
+def _draw_opener(surf: pygame.Surface, world) -> None:
+    """Gameplay opener — cottage drifting off-screen-left + parcel tucked
+    beneath Pip. Mirrors the intro's beat-2 ending so the cut from menu →
+    play preserves the cinematic's final image. Runs for the first
+    ``World.SPAWN_GRACE`` seconds after the ready_t freeze expires."""
+    progress = world.bg_scroll / _OPENER_SCROLL_END
+    if progress >= 1.0:
+        return
+    # Fade out over the last 30% so the cottage doesn't snap-disappear.
+    fade = 1.0 if progress < 0.7 else max(0.0, 1.0 - (progress - 0.7) / 0.3)
+    alpha = int(255 * fade)
+
+    house = _intro.get_sprite("skyhouse_post")
+    house_cx = int(W * 0.30) - int(world.bg_scroll)
+    house_cy = int(H * 0.42)
+    hx = house_cx - house.get_width() // 2
+    hy = house_cy - house.get_height() // 2
+    if hx + house.get_width() > 0 and alpha > 0:
+        if alpha < 255:
+            faded = house.copy()
+            faded.set_alpha(alpha)
+            surf.blit(faded, (hx, hy))
+        else:
+            surf.blit(house, (hx, hy))
+
+    # Parcel tucked under Pip, same offset the intro uses (10 px below the
+    # bird centre). Stops when the cottage finishes scrolling out.
+    par = _intro.get_sprite("parcel")
+    if alpha > 0:
+        px = int(world.bird.x) - par.get_width() // 2
+        py = int(world.bird.y) + 10
+        if alpha < 255:
+            faded = par.copy()
+            faded.set_alpha(alpha)
+            surf.blit(faded, (px, py))
+        else:
+            surf.blit(par, (px, py))
 
 
 STATE_MENU = 0
@@ -418,6 +464,12 @@ class App:
             c.draw(self.screen, kfc_active=kfc_active)
         for m in self.world.powerups:
             m.draw(self.screen)
+
+        # Gameplay opener: pickup post-house drifting off-screen-left + the
+        # parcel tucked under Pip. Active only during STATE_PLAY's first
+        # ~2.5 s, mirroring the intro's beat-2 closing image.
+        if self.state == STATE_PLAY:
+            _draw_opener(self.screen, self.world)
 
         self.world.bird.draw(self.screen, sx, sy)
 

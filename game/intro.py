@@ -648,6 +648,12 @@ def _get_house_anchors(kind: str) -> dict:
     return a
 
 
+# Public re-exports — `scenes.py` reuses these for the gameplay opener
+# (cottage + parcel rendered for the first ~2.5 s of STATE_PLAY).
+get_sprite = _get_sprite
+get_house_anchors = _get_house_anchors
+
+
 class IntroScene:
     """Owns the entire frame for the intro state.
 
