@@ -141,7 +141,14 @@ class App:
             self.state = STATE_PLAY
 
     def _start_play(self):
+        # The menu IS the start-of-game screen, so the click that brought
+        # us here counts as the first flap — drop the ready_t freeze and
+        # apply an initial flap so Pip launches immediately. The gameplay
+        # opener (post-house drifting off-screen-left) still plays for
+        # the first ~2.5 s of bg_scroll.
         self.world = World()
+        self.world.ready_t = 0.0
+        self.world.flap()
         self.state = STATE_PLAY
 
     def _finish_intro(self):
@@ -153,7 +160,11 @@ class App:
         self.state = STATE_MENU
 
     def _restart(self):
+        # Same contract as `_start_play`: the tap that triggered the
+        # restart counts as the first flap, no ready freeze.
         self.world = World()
+        self.world.ready_t = 0.0
+        self.world.flap()
         self.state = STATE_PLAY
 
     # ── run loop ────────────────────────────────────────────────────────────
