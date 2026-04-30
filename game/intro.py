@@ -1023,11 +1023,13 @@ def _beat_arrival(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
     start_x = W * 0.48 + math.sin(scene.t * 0.8) * 18
     start_y = H * 0.42 + math.sin(scene.t * 1.5) * 14
     drop_x, drop_y = doorstep_x + 38, doorstep_y - 30
-    exit_x, exit_y = doorstep_x + 80, doorstep_y - 70
-    # Same pacing as beat 2: arrival uses most of the beat, drop + exit
-    # is the final stretch.
-    if u < 0.75:
-        ease = _smoothstep(u / 0.72)
+    # Exit endpoint takes Pip clear off the upper-right edge of the
+    # screen so the intro ends on his departure.
+    exit_x, exit_y = W + 80, doorstep_y - 180
+    # Three phases: approach (u 0–0.40), pause at doorstep delivering the
+    # parcel (0.40–0.55), exit off-screen (0.55–1.00).
+    if u < 0.40:
+        ease = _smoothstep(u / 0.40)
         pip_x = start_x + (drop_x - start_x) * ease
         pip_y = start_y + (drop_y - start_y) * ease
         tilt = -10.0 * (1.0 - ease)
@@ -1035,59 +1037,44 @@ def _beat_arrival(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
         carry_y = int(pip_y) + 10
         surf.blit(par, (carry_x, carry_y))
         _draw_pip(surf, pip_x, pip_y, frame_t=scene.t * 4.0, tilt_deg=tilt)
+    elif u < 0.55:
+        # Brief pause at the doorstep — parcel just delivered, Pip is
+        # hovering for a beat before lifting off.
+        rest_x = doorstep_x - par.get_width() // 2
+        rest_y = doorstep_y - par.get_height()
+        surf.blit(par, (rest_x, rest_y))
+        _draw_pip(surf, drop_x, drop_y, frame_t=scene.t * 4.0, tilt_deg=0)
     else:
         rest_x = doorstep_x - par.get_width() // 2
         rest_y = doorstep_y - par.get_height()
         surf.blit(par, (rest_x, rest_y))
-        ease = _smoothstep((u - 0.75) / 0.25)
+        ease = _smoothstep((u - 0.55) / 0.45)
         pip_x = drop_x + (exit_x - drop_x) * ease
         pip_y = drop_y + (exit_y - drop_y) * ease
-        tilt = 6.0 * ease  # banks up as he flies off
+        tilt = 14.0 * ease  # banks up as he soars off-screen
         _draw_pip(surf, pip_x, pip_y, frame_t=scene.t * 4.0, tilt_deg=tilt)
-
-
-# ── beat 5: Title (11.0 – 12.0) ──────────────────────────────────────────────
-
-def _beat_title(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
-    """Cinematic close-out: hold on the same starlit night the parcel was
-    delivered under for ~1 s, dim the scene gently, then auto-finish so the
-    App can hand off to the menu (which is the actual click-to-start
-    title screen showing SKYBIT + the subtitle + the tap prompt)."""
-    phase = 0.62
-    _draw_world(surf, phase, scroll=440.0 + scene.t * 12.0,
-                cloud_phase=scene.t, ground=True)
-
-    # Gentle dim toward the menu's tint so the cut into STATE_MENU isn't
-    # a jarring brightness pop.
-    dim_a = int(110 * _smoothstep(_clamp01(u)))
-    dim = pygame.Surface((W, H), pygame.SRCALPHA)
-    dim.fill((6, 1, 21, dim_a))
-    surf.blit(dim, (0, 0))
 
 
 # ── final beat dispatcher ────────────────────────────────────────────────────
 
 def _dispatch_beat(scene: "IntroScene", surf: pygame.Surface) -> None:
     t = scene.t
-    # Beat windows (rebalanced so dawn doesn't stall and Pip's arrivals
-    # in the hand-off + delivery have time to glide in gracefully):
-    #   dawn      0.0–1.0 (1.0s)
-    #   handoff   1.0–4.0 (3.0s) — Pip's pickup arrival uses most of this
-    #   journey   4.0–9.0 (5.0s)
-    #   arrival   9.0–11.0 (2.0s) — Pip's delivery arrival is unhurried
-    #   title    11.0–12.0 (1.0s)
+    # Beat windows. The intro now ends as Pip flies off-screen at the end
+    # of beat 4 — there is no separate "title" beat any more.
+    #   dawn      0.0–1.0  (1.0s)
+    #   handoff   1.0–4.0  (3.0s) — Pip's pickup arrival uses most of this
+    #   journey   4.0–9.0  (5.0s)
+    #   arrival   9.0–12.0 (3.0s) — approach, deliver, exit off-screen
     if t < 1.0:
         _beat_dawn(scene, surf, t / 1.0)
     elif t < 4.0:
         _beat_handoff(scene, surf, (t - 1.0) / 3.0)
     elif t < 9.0:
         _beat_journey(scene, surf, (t - 4.0) / 5.0)
-    elif t < 11.0:
-        _beat_arrival(scene, surf, (t - 9.0) / 2.0)
     elif t < DURATION:
-        _beat_title(scene, surf, (t - 11.0) / 1.0)
+        _beat_arrival(scene, surf, (t - 9.0) / 3.0)
     else:
-        _beat_title(scene, surf, 1.0)
+        _beat_arrival(scene, surf, 1.0)
 
 
 def _draw_skip_pill(surf: pygame.Surface, t: float) -> None:

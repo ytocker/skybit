@@ -479,15 +479,14 @@ class HUD:
         _outlined_text(surf, "SKYBIT", (W // 2, 126 + float_y),
                         size=int(72 * pulse), px=3)
 
-        # Subtitle
-        sub_f = _font(14, False)
-        sub = sub_f.render("P O C K E T   S K Y   F L Y E R", True, _GOLD_MUTED)
-        sub.set_alpha(200)
-        surf.blit(sub, sub.get_rect(center=(W // 2, 178)))
+        # Subtitle — same gold-on-red outline as SKYBIT, just smaller and
+        # with a tighter pixel outline so it reads as a partner line.
+        _outlined_text(surf, "POCKET SKY FLYER", (W // 2, 184),
+                        size=22, px=2, shadow_offset=(2, 3))
 
         # Divider
         pygame.draw.line(surf, (*_ORANGE_BORDER, 120),
-                         (W // 2 - 70, 198), (W // 2 + 70, 198), 1)
+                         (W // 2 - 70, 208), (W // 2 + 70, 208), 1)
 
         # Tap-to-play pill (pulsing)
         btn_alpha = int(180 + math.sin(self.title_t * 3.6) * 70)
