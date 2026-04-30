@@ -26,9 +26,27 @@ Requires Python 3.9+ and Pygame 2.x.
 
 ---
 
+## Intro Cinematic
+
+A 12-second hand-drawn intro plays on the **first launch of each session** (subsequent in-session restarts skip it; the menu is the entry point on every later run). Five beats:
+
+| Beat | Window      | Scene |
+|------|-------------|-------|
+| Dawn      | 0.0 – 1.0 s   | Clear-day post-house in the sky with the parcel waiting on the doorstep; Mr. Garrick standing on the porch |
+| Hand-off  | 1.0 – 4.0 s   | Pip swoops in, lifts the parcel from the doorstep, drifts to the right of the porch |
+| Journey   | 4.0 – 9.0 s   | Flight through golden hour → sunset → night |
+| Arrival   | 9.0 – 11.0 s  | Pip glides down to a starlit home cottage and sets the parcel on its doorstep |
+| Title     | 11.0 – 12.0 s | Dim handoff into the menu (SKYBIT title + tap-to-start) |
+
+A small **SKIP** pill at the bottom of the screen lets the player jump straight to the menu at any point. Tapping anywhere skips too.
+
+A recorded preview is in [`docs/intro_preview.mp4`](docs/intro_preview.mp4).
+
+---
+
 ## How to Play
 
-Press **Space / Up / W** or click/tap to flap. A pulsing **TAP TO FLY** prompt holds the world still for a moment when a run starts.
+Press **Space / Up / W** or click/tap to flap. The first frame of every run holds on a "ready" pose — Pip standing on the pickup porch with the parcel beneath him, "TAP TO FLY" prompt pulsing. The world waits **indefinitely** until the player's first flap; there's no countdown.
 
 | Action | Input                  |
 |--------|------------------------|
@@ -74,6 +92,23 @@ Every 15th pipe triggers a **Coin Rush** — a wider gap (×1.30) filled with a 
 
 ---
 
+## Pip Carries the Parcel
+
+Pip carries the wrapped parcel **for the entire run** — under his body, banking with his tilt, scaling with him in Grow, breathing with him in Ghost. The first ~2.5 s of every run plays the **gameplay opener**: the pickup post-house drifts off-screen-left while Pip "leaves the doorstep", continuing the intro's final image. Pillars are suppressed during the opener, then start scrolling in once the cottage is gone.
+
+The parcel's palette swaps to match every visual mode so it never reads as a tinted overlay:
+
+| Mode    | Box                | Ribbon / Bow       |
+|---------|--------------------|--------------------|
+| Normal  | Kraft tan          | Red                |
+| KFC     | Fried-amber crust  | Dark brown         |
+| Ghost   | Spectral cyan      | Pale cyan + alpha breath |
+| Triple  | Kraft tan          | Gold (matches the stovepipe hat) |
+
+The parcel is also **part of Pip's collision footprint** — a pillar that grazes the parcel below him is just as lethal as one that catches his body. The bird circle stays as today; a second `PARCEL_R = 9` circle at `PARCEL_Y_OFFSET = 12` below his centre joins the pipe-collision check, with the offset rotating to match his tilt.
+
+---
+
 ## Run Summary
 
 After death the game lands on a **Stats screen** (gold-on-red theme) with the run's score, best, and a stack of stat rows: Time alive, Coins, Pillars cleared, Power-ups grabbed, Near misses. The screen waits for a tap before continuing — no auto-advance. Mountain silhouettes layer behind the cards on the same parallax used by the menu.
@@ -91,7 +126,9 @@ Curated CC0 OGG samples played through two backends:
 
 Both backends play at neutral pitch and degrade silently when the audio device can't be opened (headless snapshots, missing JS helper, etc.).
 
-Events: flap, coin, coin triple, triple-coin pickup, magnet, slowmo, ghost wail, grow, KFC, thunder, poof, death, gameover.
+The **intro cinematic is silent** — no music or SFX. Gameplay audio kicks in on the first flap.
+
+Gameplay events: flap, coin, coin triple, triple-coin pickup, magnet, slowmo, ghost wail, grow, KFC, thunder, poof, death, gameover.
 
 ---
 
@@ -149,11 +186,15 @@ game/
 ├── biome.py                   Day/night palette keyframes + phase interpolation
 ├── draw.py                    Low-level drawing helpers: gradients, glows,
 │                              mountains, clouds, ground, pillar bodies
-├── parrot.py                  4-frame scarlet-macaw sprite + ghost/KFC tints
+├── parrot.py                  4-frame scarlet-macaw sprite + ghost/KFC/hat
+│                              tints + 4 mode-coloured parcel variants
+├── intro.py                   12-second opening cinematic (5 beats) with
+│                              skip pill — first launch each session
 ├── entities.py                Bird, Pipe, Coin, PowerUp, Particle, FloatText
 ├── pillar_variants.py         8 procedural stone-pillar silhouette variants
-├── world.py                   Simulation: scroll, spawn, collision, pickups,
-│                              difficulty ramp, screen shake, FX
+├── world.py                   Simulation: scroll, spawn, collision (bird +
+│                              parcel circles), pickups, difficulty ramp,
+│                              screen shake, FX
 ├── weather.py                 Rain, fog, thunder weather layers
 ├── hud.py                     Score, HUD pills, buff strip, pause button,
 │                              mountain silhouette, all overlay screens
