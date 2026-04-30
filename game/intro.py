@@ -628,20 +628,15 @@ def _beat_arrival(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
     _draw_pip(surf, pip_x, pip_y, frame_t=scene.t * 4.0, tilt_deg=tilt)
 
     # Parcel transitions from "in talons" to "delivered". After u≈0.55 the
-    # parcel sits on top of the mailbox and glows.
+    # parcel sits on top of the mailbox.
     par = _get_sprite("parcel")
     if u < 0.55:
         carry_x = int(pip_x) - par.get_width() // 2
         carry_y = int(pip_y) + 10
         surf.blit(par, (carry_x, carry_y))
     else:
-        deliv_t = (u - 0.55) / 0.45
         rest_x = mb_x + (mb.get_width() - par.get_width()) // 2
         rest_y = mb_y - par.get_height() + 6
-        glow_a = int(180 * deliv_t)
-        blit_glow(surf, rest_x + par.get_width() // 2,
-                  rest_y + par.get_height() // 2, 26,
-                  (255, 215, 110), glow_a)
         surf.blit(par, (rest_x, rest_y))
 
 
