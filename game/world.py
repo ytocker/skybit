@@ -81,7 +81,14 @@ class World:
         self.shake_t = 0.0
 
         # Real elapsed gameplay seconds — drives the day/night biome cycle.
+        # Held at 0 while ready_t > 0 so the sky doesn't tick over while
+        # the player is still on the start-of-run prompt.
         self.biome_time = 0.0
+
+        # Always-ticking clock used for purely-cosmetic idle animations
+        # (bird bob during the ready wait) so they keep moving even while
+        # biome_time is frozen.
+        self._idle_t = 0.0
 
         self.weather = Weather()
 
@@ -280,7 +287,13 @@ class World:
     # ── update ──────────────────────────────────────────────────────────────
 
     def update(self, dt):
-        self.biome_time += dt
+        self._idle_t += dt
+        # The biome cycle only advances once the run has actually started.
+        # While ready_t > 0 the sky stays frozen at the dawn palette — the
+        # day/night arc was rolling forward earlier even when Pip was
+        # still on the post-house porch waiting for input.
+        if self.ready_t <= 0:
+            self.biome_time += dt
         # Slowmo scales the *world* (scroll, entity velocity, entity spin,
         # pickup physics) — not the bird's input physics. Lets players
         # still flap responsively while everything else crawls.
@@ -293,9 +306,10 @@ class World:
         # a tiny idle animation on the bird. The freeze waits indefinitely
         # for the player's first flap (no auto-expiring countdown).
         if self.ready_t > 0 and not self.game_over:
-            # Gentle bob without physics integration.
+            # Gentle bob without physics integration. Driven by idle_t so it
+            # keeps moving even though biome_time is frozen.
             self.bird.vy = 0
-            self.bird.y = H * 0.42 + math.sin(self.biome_time * 4.0) * 6
+            self.bird.y = H * 0.42 + math.sin(self._idle_t * 4.0) * 6
             self.bird.frame_t += dt * 6.0
             # Keep particles / float-texts ticking so nothing freezes visually.
             for p in self.particles:

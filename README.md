@@ -186,10 +186,10 @@ game/
 ├── biome.py                   Day/night palette keyframes + phase interpolation
 ├── draw.py                    Low-level drawing helpers: gradients, glows,
 │                              mountains, clouds, ground, pillar bodies
+├── intro.py                   12-second cinematic (5 beats) + sky-house
+│                              sprites + skip pill — plays on every launch
 ├── parrot.py                  4-frame scarlet-macaw sprite + ghost/KFC/hat
 │                              tints + 4 mode-coloured parcel variants
-├── intro.py                   12-second opening cinematic (5 beats) with
-│                              skip pill — first launch each session
 ├── entities.py                Bird, Pipe, Coin, PowerUp, Particle, FloatText
 ├── pillar_variants.py         8 procedural stone-pillar silhouette variants
 ├── world.py                   Simulation: scroll, spawn, collision (bird +
