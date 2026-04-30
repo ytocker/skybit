@@ -3,7 +3,7 @@ import math
 import os
 import pygame
 
-from game.config import W, H, TRIPLE_DURATION, MAGNET_DURATION, SLOWMO_DURATION
+from game.config import W, H, TRIPLE_DURATION, MAGNET_DURATION, SLOWMO_DURATION, REVERSE_DURATION
 from game.draw import (
     rounded_rect, rounded_rect_grad, lerp_color,
     UI_SCORE, UI_GOLD, UI_ORANGE, UI_SHADOW, UI_CREAM, UI_RED,
@@ -86,6 +86,16 @@ def _draw_buff_icon(surf, rect, kind):
         pygame.draw.line(surf, (255, 230, 150), (cx, cy - 4), (cx, cy + 4), 2)
         pygame.draw.rect(surf, (120, 60, 30), (cx - 7, cy - 9, 14, 2))
         pygame.draw.rect(surf, (120, 60, 30), (cx - 7, cy + 7, 14, 2))
+    elif kind == "reverse":
+        col = (120, 230, 240)
+        # Up arrow (top half)
+        pygame.draw.rect(surf, col, (cx - 1, cy - 8, 2, 7))
+        pygame.draw.polygon(surf, col,
+                            [(cx - 4, cy - 4), (cx + 4, cy - 4), (cx, cy - 9)])
+        # Down arrow (bottom half) — mirror
+        pygame.draw.rect(surf, col, (cx - 1, cy + 1, 2, 7))
+        pygame.draw.polygon(surf, col,
+                            [(cx - 4, cy + 4), (cx + 4, cy + 4), (cx, cy + 9)])
 
 
 class PauseButton:
@@ -259,6 +269,8 @@ class HUD:
             active.append(("magnet", world.magnet_timer, MAGNET_DURATION))
         if world.slowmo_timer > 0:
             active.append(("slowmo", world.slowmo_timer, SLOWMO_DURATION))
+        if world.reverse_timer > 0:
+            active.append(("reverse", world.reverse_timer, REVERSE_DURATION))
         if active:
             slot_w, slot_h = 28, 32
             gap = 6

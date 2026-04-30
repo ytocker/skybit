@@ -14,7 +14,7 @@ from game.config import (
     BIRD_X, BIRD_R, COIN_R, MUSHROOM_R,
     MUSHROOM_CHANCE, MUSHROOM_COOLDOWN,
     TRIPLE_DURATION, MAGNET_DURATION, MAGNET_RADIUS,
-    SLOWMO_DURATION, SLOWMO_SCALE,
+    SLOWMO_DURATION, SLOWMO_SCALE, REVERSE_DURATION,
     POWERUP_WEIGHTS, COMBO_WINDOW,
     COIN_RUSH_INTERVAL, COIN_RUSH_GAP_BOOST, COIN_RUSH_COINS,
 )
@@ -55,6 +55,7 @@ class World:
         self.triple_timer = 0.0
         self.magnet_timer = 0.0
         self.slowmo_timer = 0.0
+        self.reverse_timer = 0.0
         self.mushroom_cooldown = 0.0
 
         # Coin-rush counter: increments each spawn; every Nth pipe is a rush.
@@ -65,7 +66,7 @@ class World:
         self.pillars_passed = 0
         self.time_alive = 0.0
         self.near_misses = 0
-        self.powerups_picked = {"triple": 0, "magnet": 0, "slowmo": 0}
+        self.powerups_picked = {"triple": 0, "magnet": 0, "slowmo": 0, "reverse": 0}
         # Transient flag so near-miss detection fires once per pillar.
         self._near_miss_flags: dict[int, bool] = {}
 
@@ -227,7 +228,8 @@ class World:
             # kicks the world into motion immediately.
             if self.ready_t > 0:
                 self.ready_t = 0.0
-            self.bird.flap()
+            sign = -1 if self.reverse_timer > 0 else 1
+            self.bird.flap(gravity_sign=sign)
             audio.play_flap()
 
     # ── update ──────────────────────────────────────────────────────────────
@@ -260,7 +262,8 @@ class World:
             return
 
         if not self.game_over:
-            self.bird.update(dt)  # bird physics at real time
+            sign = -1 if self.reverse_timer > 0 else 1
+            self.bird.update(dt, gravity_sign=sign)  # bird physics at real time
 
             speed = self._current_scroll() if not self.game_over else 0
             self.bg_scroll += speed * sdt
@@ -330,6 +333,8 @@ class World:
                 self.magnet_timer = max(0.0, self.magnet_timer - dt)
             if self.slowmo_timer > 0:
                 self.slowmo_timer = max(0.0, self.slowmo_timer - dt)
+            if self.reverse_timer > 0:
+                self.reverse_timer = max(0.0, self.reverse_timer - dt)
             if self.mushroom_cooldown > 0:
                 self.mushroom_cooldown -= dt
             if self.combo_timer > 0:
@@ -516,6 +521,8 @@ class World:
             self._activate_magnet(m)
         elif m.kind == "slowmo":
             self._activate_slowmo(m)
+        elif m.kind == "reverse":
+            self._activate_reverse(m)
 
     def _pickup_burst(self, m, colors, n=30, speed_hi=320, grav=150):
         for _ in range(n):
@@ -558,6 +565,18 @@ class World:
         self._pickup_burst(m, ((180, 100, 255), (120, 60, 200), WHITE, UI_CREAM))
         self.float_texts.append(FloatText(
             "SLOW-MO!", m.x, m.y - 22, (200, 140, 255), size=24, life=1.3, vy=-30,
+        ))
+
+    def _activate_reverse(self, m):
+        self.reverse_timer = REVERSE_DURATION
+        # Zero vy so the flip feels snappy instead of inheriting downward speed.
+        self.bird.vy = 0.0
+        self.shake_mag = max(self.shake_mag, 2.5)
+        self.shake_t = max(self.shake_t, 0.25)
+        audio.play_slowmo()
+        self._pickup_burst(m, ((80, 220, 235), (40, 160, 200), WHITE, UI_CREAM))
+        self.float_texts.append(FloatText(
+            "FLIP!", m.x, m.y - 22, (120, 230, 240), size=24, life=1.3, vy=-30,
         ))
 
     # ── utility ──────────────────────────────────────────────────────────────

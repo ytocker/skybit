@@ -57,13 +57,17 @@ class Bird:
         t = max(-0.5, min(0.75, self.vy / 500.0))
         return -t * 55.0
 
-    def flap(self):
+    def flap(self, gravity_sign=1):
         if self.alive:
-            self.vy = FLAP_V
+            self.vy = FLAP_V * gravity_sign
             self.flap_boost = 0.45
 
-    def update(self, dt):
-        self.vy = min(self.vy + GRAVITY * dt, MAX_FALL)
+    def update(self, dt, gravity_sign=1):
+        new_vy = self.vy + GRAVITY * gravity_sign * dt
+        if gravity_sign >= 0:
+            self.vy = min(new_vy, MAX_FALL)
+        else:
+            self.vy = max(new_vy, -MAX_FALL)
         self.y += self.vy * dt
 
         base_hz = 9.0 + self.flap_boost * 20.0
@@ -186,6 +190,7 @@ class PowerUp:
        triple  — red mushroom, 3x coin value for TRIPLE_DURATION
        magnet  — red horseshoe, pulls coins in for MAGNET_DURATION
        slowmo  — purple hourglass, 0.5x world scroll for SLOWMO_DURATION
+       reverse — cyan double-arrow, flips Pip's gravity for REVERSE_DURATION
     """
     def __init__(self, x, y, kind="triple"):
         self.x = x
@@ -204,6 +209,8 @@ class PowerUp:
             self._draw_magnet(surf)
         elif self.kind == "slowmo":
             self._draw_slowmo(surf)
+        elif self.kind == "reverse":
+            self._draw_reverse(surf)
 
     # ── sprite variants ─────────────────────────────────────────────────────
     def _draw_mushroom(self, surf):
@@ -308,6 +315,46 @@ class PowerUp:
         pygame.draw.rect(surf, (180, 110, 60), (cx - MUSHROOM_R + 1,
                                                  cy - MUSHROOM_R - 1,
                                                  MUSHROOM_R * 2 - 2, 2))
+
+    def _draw_reverse(self, surf):
+        cx = int(self.x)
+        cy = int(self.y)
+        # Cyan aura behind the icon (additive, like slowmo's purple halo)
+        aura = pygame.Surface((MUSHROOM_R * 3, MUSHROOM_R * 3), pygame.SRCALPHA)
+        pygame.draw.circle(aura, (80, 220, 235, 75),
+                           (aura.get_width() // 2, aura.get_height() // 2),
+                           MUSHROOM_R + 4)
+        surf.blit(aura, (cx - aura.get_width() // 2, cy - aura.get_height() // 2),
+                  special_flags=pygame.BLEND_ADD)
+        # Disc backing — dark teal rim + lighter teal face
+        pygame.draw.circle(surf, (15, 60, 75), (cx, cy), MUSHROOM_R + 1)
+        pygame.draw.circle(surf, (40, 140, 170), (cx, cy), MUSHROOM_R - 1)
+        # Up arrow (top half)
+        col = (240, 250, 255)
+        outline = (15, 50, 70)
+        # Up shaft
+        pygame.draw.rect(surf, outline, (cx - 3, cy - MUSHROOM_R + 6, 6, 8))
+        pygame.draw.rect(surf, col,     (cx - 2, cy - MUSHROOM_R + 6, 4, 8))
+        # Up head
+        up_head = [(cx - 6, cy - MUSHROOM_R + 7),
+                   (cx + 6, cy - MUSHROOM_R + 7),
+                   (cx, cy - MUSHROOM_R + 1)]
+        pygame.draw.polygon(surf, outline, up_head)
+        pygame.draw.polygon(surf, col,
+                            [(cx - 4, cy - MUSHROOM_R + 7),
+                             (cx + 4, cy - MUSHROOM_R + 7),
+                             (cx, cy - MUSHROOM_R + 3)])
+        # Down arrow (bottom half) — mirror
+        pygame.draw.rect(surf, outline, (cx - 3, cy - 1, 6, 8))
+        pygame.draw.rect(surf, col,     (cx - 2, cy - 1, 4, 8))
+        down_head = [(cx - 6, cy + MUSHROOM_R - 7),
+                     (cx + 6, cy + MUSHROOM_R - 7),
+                     (cx, cy + MUSHROOM_R - 1)]
+        pygame.draw.polygon(surf, outline, down_head)
+        pygame.draw.polygon(surf, col,
+                            [(cx - 4, cy + MUSHROOM_R - 7),
+                             (cx + 4, cy + MUSHROOM_R - 7),
+                             (cx, cy + MUSHROOM_R - 3)])
 
 
 # Back-compat alias — some callers (e.g. snapshot/playtest scripts) still say Mushroom.
