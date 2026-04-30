@@ -260,15 +260,47 @@ class HUD:
                                  border_radius=8, width=2)
                 surf.blit(ring, (bx - 5, by - 3))
 
-        # Active-buff strip (magnet + slowmo badges). Triple has its own
-        # bigger timer bar above, so we don't duplicate it here.
+        # Reverse-gravity timer bar — same prominent treatment as 3X POWER,
+        # stacked just below it so both can show simultaneously. Purple
+        # gradient depletes lavender → magenta → red.
+        if world.reverse_timer > 0:
+            frac = world.reverse_timer / REVERSE_DURATION
+            bw = 168
+            bx = (W - bw) // 2
+            by = 156 if world.triple_timer > 0 else 128
+            label_col = UI_RED if frac < 0.25 else (215, 160, 250)
+            _text(surf, f"FLIP!  {world.reverse_timer:.1f}s",
+                  (W // 2, by - 10), size=13, color=label_col, shadow=True)
+            track_rect = pygame.Rect(bx - 2, by, bw + 4, 12)
+            rounded_rect(surf, track_rect, 6, (20, 25, 50), 200)
+            if frac > 0.5:
+                fill_lo = (130, 50, 200)
+                fill_hi = (215, 165, 252)
+            elif frac > 0.25:
+                t = (frac - 0.25) / 0.25
+                fill_lo = lerp_color(UI_RED, (130, 50, 200), t)
+                fill_hi = lerp_color((230, 80, 160), (215, 165, 252), t)
+            else:
+                fill_lo = (180, 20, 60)
+                fill_hi = UI_RED
+            fill = pygame.Rect(bx, by + 2, int(bw * frac), 8)
+            if fill.width > 0:
+                rounded_rect_grad(surf, fill, 4, fill_hi, fill_lo)
+            if frac < 0.25:
+                pulse = 0.5 + 0.5 * math.sin(self.title_t * 14)
+                ring_a = int(140 * pulse)
+                ring = pygame.Surface((bw + 10, 18), pygame.SRCALPHA)
+                pygame.draw.rect(ring, (*UI_RED, ring_a), ring.get_rect(),
+                                 border_radius=8, width=2)
+                surf.blit(ring, (bx - 5, by - 3))
+
+        # Active-buff strip (magnet + slowmo badges). Triple and reverse have
+        # their own bigger timer bars above, so they're not duplicated here.
         active = []
         if world.magnet_timer > 0:
             active.append(("magnet", world.magnet_timer, MAGNET_DURATION))
         if world.slowmo_timer > 0:
             active.append(("slowmo", world.slowmo_timer, SLOWMO_DURATION))
-        if world.reverse_timer > 0:
-            active.append(("reverse", world.reverse_timer, REVERSE_DURATION))
         if active:
             slot_w, slot_h = 28, 32
             gap = 6

@@ -204,83 +204,129 @@ def _build_reverse_icon(out_diameter: int) -> pygame.Surface:
     size = out_diameter * SS
     surf = pygame.Surface((size, size), pygame.SRCALPHA)
     cx = cy = size // 2
-    # Use a "radius" of half the surface (minus a tiny inset so the arrow tips
-    # don't clip the edge). This sets the arrow column geometry, not a disc.
     R = size // 2 - SS
 
-    purple_core    = (170, 90, 230)
-    purple_outline = (75, 25, 120)
-    purple_hl      = (215, 165, 250)
-
-    # Geometry in big-surface units.
+    # Geometry — slim, elegant arrows.
     top_y  = cy - R + SS
     bot_y  = cy + R - SS
-    head_h = (bot_y - top_y) * 4 // 10
-    shaft_w = R * 5 // 14
-    head_w  = shaft_w * 5 // 2
+    span   = bot_y - top_y
+    head_h = span * 42 // 100
+    shaft_w = R * 9 // 28
+    head_w  = shaft_w * 26 // 10
 
-    lx = cx - R // 2 - R // 16   # left (up-arrow) column
-    rx = cx + R // 2 + R // 16   # right (down-arrow) column
+    lx = cx - R // 2 - R // 14   # left (up-arrow) column
+    rx = cx + R // 2 + R // 14   # right (down-arrow) column
+
+    # Palette — vivid purple with a magenta-ward gradient.
+    grad_top    = (215, 165, 252)   # bright lavender (highlight end)
+    grad_mid    = (175, 95, 235)
+    grad_bot    = (110, 45, 180)    # deep violet (shaded end)
+    outline_dk  = (45, 12, 80)
+    sheen       = (245, 220, 255)
+
+    def _silhouette(col_x: int, *, point_up: bool, expand: int = 0):
+        """Return the polygon points for the unified arrow silhouette,
+        optionally expanded by `expand` pixels (used to draw the outline)."""
+        e = expand
+        sw = shaft_w + e * 2
+        hw = head_w + e * 2
+        if point_up:
+            tip   = (col_x, top_y - e)
+            base  = bot_y + e
+            sh_l  = col_x - sw // 2
+            sh_r  = col_x + sw // 2
+            hd_l  = col_x - hw // 2
+            hd_r  = col_x + hw // 2
+            sh_y  = top_y + head_h - e // 2
+            return [
+                tip,
+                (hd_r, sh_y),
+                (sh_r, sh_y),
+                (sh_r, base),
+                (sh_l, base),
+                (sh_l, sh_y),
+                (hd_l, sh_y),
+            ]
+        else:
+            tip   = (col_x, bot_y + e)
+            base  = top_y - e
+            sh_l  = col_x - sw // 2
+            sh_r  = col_x + sw // 2
+            hd_l  = col_x - hw // 2
+            hd_r  = col_x + hw // 2
+            sh_y  = bot_y - head_h + e // 2
+            return [
+                tip,
+                (hd_l, sh_y),
+                (sh_l, sh_y),
+                (sh_l, base),
+                (sh_r, base),
+                (sh_r, sh_y),
+                (hd_r, sh_y),
+            ]
 
     def _arrow(col_x: int, *, point_up: bool):
+        # 1) Outline silhouette (slightly expanded, dark violet).
+        pygame.draw.polygon(surf, outline_dk,
+                            _silhouette(col_x, point_up=point_up, expand=SS))
+
+        # 2) Vertical gradient fill — light at the head, dark at the tail
+        #    when the arrow points up; reversed for the down arrow so the
+        #    "leading" tip always reads brightest.
+        body = _silhouette(col_x, point_up=point_up, expand=0)
+        body_surf = pygame.Surface((size, size), pygame.SRCALPHA)
+        # Scanline gradient: lerp grad_top → grad_mid → grad_bot from top to bottom
+        # of the arrow's vertical extent. Reverse order for down-arrows.
+        ys = [p[1] for p in body]
+        y0, y1 = min(ys), max(ys)
+        for y in range(y0, y1 + 1):
+            t = (y - y0) / max(1, (y1 - y0))
+            if not point_up:
+                t = 1.0 - t
+            if t < 0.5:
+                u = t * 2
+                col = (
+                    int(grad_top[0] + (grad_mid[0] - grad_top[0]) * u),
+                    int(grad_top[1] + (grad_mid[1] - grad_top[1]) * u),
+                    int(grad_top[2] + (grad_mid[2] - grad_top[2]) * u),
+                )
+            else:
+                u = (t - 0.5) * 2
+                col = (
+                    int(grad_mid[0] + (grad_bot[0] - grad_mid[0]) * u),
+                    int(grad_mid[1] + (grad_bot[1] - grad_mid[1]) * u),
+                    int(grad_mid[2] + (grad_bot[2] - grad_mid[2]) * u),
+                )
+            pygame.draw.line(body_surf, col, (0, y), (size, y))
+        # Mask the gradient strip to the arrow polygon.
+        mask = pygame.Surface((size, size), pygame.SRCALPHA)
+        pygame.draw.polygon(mask, (255, 255, 255, 255), body)
+        body_surf.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        surf.blit(body_surf, (0, 0))
+
+        # 3) Specular sheen on the leading edge — a thin lighter ribbon
+        #    along the left side of the shaft + along the inner edge of one
+        #    head wing, giving the arrow a 3-D feel without a background.
         if point_up:
-            head_top  = top_y
-            head_bot  = top_y + head_h
-            shaft_top = head_bot - SS
-            shaft_bot = bot_y
+            sh_y = top_y + head_h
+            pygame.draw.line(surf, sheen,
+                             (col_x - shaft_w // 2 + SS, sh_y + SS),
+                             (col_x - shaft_w // 2 + SS, bot_y - SS),
+                             max(2, SS // 2))
+            pygame.draw.line(surf, sheen,
+                             (col_x - SS, top_y + SS * 2),
+                             (col_x - head_w // 2 + SS * 2, sh_y - SS // 2),
+                             max(2, SS // 2))
         else:
-            head_top  = bot_y - head_h
-            head_bot  = bot_y
-            shaft_top = top_y
-            shaft_bot = head_top + SS
-
-        ow = SS  # outline thickness in big-surface units
-
-        # Dark outline silhouette, drawn larger.
-        if point_up:
-            head_out = [
-                (col_x - head_w // 2 - ow, head_bot + ow),
-                (col_x + head_w // 2 + ow, head_bot + ow),
-                (col_x, head_top - ow),
-            ]
-        else:
-            head_out = [
-                (col_x - head_w // 2 - ow, head_top - ow),
-                (col_x + head_w // 2 + ow, head_top - ow),
-                (col_x, head_bot + ow),
-            ]
-        pygame.draw.polygon(surf, purple_outline, head_out)
-        pygame.draw.rect(surf, purple_outline,
-                         (col_x - shaft_w // 2 - ow, shaft_top - ow,
-                          shaft_w + ow * 2,
-                          shaft_bot - shaft_top + ow * 2),
-                         border_radius=shaft_w // 3)
-
-        # Purple fill.
-        if point_up:
-            head_pts = [
-                (col_x - head_w // 2, head_bot),
-                (col_x + head_w // 2, head_bot),
-                (col_x, head_top),
-            ]
-        else:
-            head_pts = [
-                (col_x - head_w // 2, head_top),
-                (col_x + head_w // 2, head_top),
-                (col_x, head_bot),
-            ]
-        pygame.draw.polygon(surf, purple_core, head_pts)
-        pygame.draw.rect(surf, purple_core,
-                         (col_x - shaft_w // 2, shaft_top,
-                          shaft_w, shaft_bot - shaft_top),
-                         border_radius=shaft_w // 3)
-
-        # Subtle highlight stripe on the left edge of the shaft so the arrow
-        # has a hint of dimension without a full background.
-        pygame.draw.rect(surf, purple_hl,
-                         (col_x - shaft_w // 3, shaft_top + ow,
-                          max(2, shaft_w // 5), shaft_bot - shaft_top - ow * 2),
-                         border_radius=shaft_w // 5)
+            sh_y = bot_y - head_h
+            pygame.draw.line(surf, sheen,
+                             (col_x - shaft_w // 2 + SS, top_y + SS),
+                             (col_x - shaft_w // 2 + SS, sh_y - SS),
+                             max(2, SS // 2))
+            pygame.draw.line(surf, sheen,
+                             (col_x - SS, bot_y - SS * 2),
+                             (col_x - head_w // 2 + SS * 2, sh_y + SS // 2),
+                             max(2, SS // 2))
 
     _arrow(lx, point_up=True)
     _arrow(rx, point_up=False)
