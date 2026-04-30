@@ -142,7 +142,10 @@ def _build_parcel() -> pygame.Surface:
     pygame.draw.line(surf, BOW_FILL,   (bx - 2, by + 4), (bx - 6, by + 10), 2)
     pygame.draw.line(surf, BOW_FILL,   (bx + 2, by + 4), (bx + 6, by + 10), 2)
 
-    return surf
+    # Render at full detail above, then downscale once so the parcel reads
+    # tiny enough to fit under Pip while keeping a single shared size at every
+    # use site (ledge / hand-off / journey carry / mailbox).
+    return pygame.transform.smoothscale(surf, (22, 22))
 
 
 def _build_mailbag() -> pygame.Surface:
@@ -581,13 +584,12 @@ def _beat_journey(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
     pip_x = W * 0.48 + math.sin(scene.t * 0.8) * 18
     pip_y = H * 0.45 + math.sin(scene.t * 1.5) * 14
     tilt = math.sin(scene.t * 1.5) * -6.0
-    # Carried parcel — tiny, with just a hint of glow so it never overwhelms
-    # Pip's silhouette mid-flight.
+    # Carried parcel — tucked beneath Pip with a faint glow.
     par = _get_sprite("parcel")
-    par_s = pygame.transform.smoothscale(par, (16, 16))
     blit_glow(surf, int(pip_x) + 4, int(pip_y) + 18, 10,
               (255, 215, 110), 55)
-    surf.blit(par_s, (int(pip_x) - 4, int(pip_y) + 12))
+    surf.blit(par, (int(pip_x) - par.get_width() // 2,
+                    int(pip_y) + 10))
     _draw_pip(surf, pip_x, pip_y, frame_t=scene.t * 5.0, tilt_deg=tilt,
               scale=1.0)
 
@@ -626,23 +628,21 @@ def _beat_arrival(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
     _draw_pip(surf, pip_x, pip_y, frame_t=scene.t * 4.0, tilt_deg=tilt)
 
     # Parcel transitions from "in talons" to "delivered". After u≈0.55 the
-    # parcel sits inside the mailbox slot and glows.
+    # parcel sits on top of the mailbox and glows.
     par = _get_sprite("parcel")
-    par_s = pygame.transform.smoothscale(par, (20, 20))
     if u < 0.55:
-        # Carried beneath Pip
-        carry_x = int(pip_x) - 6
-        carry_y = int(pip_y) + 12
-        surf.blit(par_s, (carry_x, carry_y))
+        carry_x = int(pip_x) - par.get_width() // 2
+        carry_y = int(pip_y) + 10
+        surf.blit(par, (carry_x, carry_y))
     else:
         deliv_t = (u - 0.55) / 0.45
-        # Sits on top of the mailbox; glow swells then settles.
-        rest_x = mb_x + 8
-        rest_y = mb_y + 4
+        rest_x = mb_x + (mb.get_width() - par.get_width()) // 2
+        rest_y = mb_y - par.get_height() + 6
         glow_a = int(180 * deliv_t)
-        blit_glow(surf, rest_x + 10, rest_y + 10, 30,
+        blit_glow(surf, rest_x + par.get_width() // 2,
+                  rest_y + par.get_height() // 2, 26,
                   (255, 215, 110), glow_a)
-        surf.blit(par_s, (rest_x, rest_y))
+        surf.blit(par, (rest_x, rest_y))
 
 
 # ── beat 5: Title (11.0 – 12.0) ──────────────────────────────────────────────
