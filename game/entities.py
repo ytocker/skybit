@@ -54,6 +54,70 @@ def _get_grow_parrot() -> "pygame.Surface":
     return _grow_parrot
 
 
+# ── Coin face (rendered at 4× then smoothscaled to native, cached) ──────────
+# Per-spin-angle squeezes are also cached so a rotating coin only pays for
+# smoothscale once per unique rx value.
+_COIN_HIGHRES_SCALE = 4
+_coin_master: "pygame.Surface | None" = None
+_coin_face_cache: dict = {}
+
+
+def _build_coin_master() -> "pygame.Surface":
+    """High-res coin face: dark rim, gold body, warm inner ring, specular
+    highlight, embossed parrot silhouette. Drawn at 4× then downscaled so
+    every edge is anti-aliased."""
+    s = _COIN_HIGHRES_SCALE
+    r = COIN_R
+    pad = 2                        # native px of breathing room around the rim
+    native = (r + pad) * 2
+    big = native * s
+    scratch = pygame.Surface((big, big), pygame.SRCALPHA)
+    cx = cy = big // 2
+    R = r * s
+
+    # Disc layers
+    pygame.draw.circle(scratch, COIN_DARK, (cx, cy), R + s)
+    pygame.draw.circle(scratch, COIN_GOLD, (cx, cy), R)
+    pygame.draw.circle(scratch, (255, 235, 110), (cx, cy), R - 3 * s, s)
+    pygame.draw.circle(scratch, WHITE,
+                       (cx - r * s // 2, cy - r * s // 2), 2 * s)
+
+    # Embossed parrot silhouette (matches the HUD coin pip pattern, scaled up)
+    emboss = (140, 85, 0)
+    pygame.draw.ellipse(scratch, emboss,
+                        (cx - 2 * s, cy - 1 * s, 7 * s, 5 * s))
+    pygame.draw.circle(scratch, emboss,
+                       (cx - 1 * s, cy - 3 * s), 3 * s)
+    pygame.draw.polygon(scratch, emboss, [
+        (cx - 3 * s, cy - 3 * s),
+        (cx - 6 * s, cy - 2 * s),
+        (cx - 3 * s, cy - 1 * s),
+    ])
+    pygame.draw.circle(scratch, COIN_GOLD, (cx, cy - 4 * s), 1 * s)
+
+    return pygame.transform.smoothscale(scratch, (native, native))
+
+
+def _get_coin_master() -> "pygame.Surface":
+    global _coin_master
+    if _coin_master is None:
+        _coin_master = _build_coin_master()
+    return _coin_master
+
+
+def _get_coin_face(rx: int) -> "pygame.Surface":
+    """Master face squeezed horizontally to 2*rx wide. Cached by rx."""
+    cached = _coin_face_cache.get(rx)
+    if cached is not None:
+        return cached
+    master = _get_coin_master()
+    mw, mh = master.get_size()
+    target_w = max(2, rx * 2 + (mw - COIN_R * 2))
+    scaled = pygame.transform.smoothscale(master, (target_w, mh))
+    _coin_face_cache[rx] = scaled
+    return scaled
+
+
 # ── KFC logo sprite (lazy-loaded once at first draw) ─────────────────────────
 _kfc_sprite: "pygame.Surface | None" = None
 
@@ -207,13 +271,9 @@ class Pipe:
 # ── Coin ─────────────────────────────────────────────────────────────────────
 
 class Coin:
-    """Slow-rotating gold parrot medallion, drawn with no halo or glow.
-
-    Every frame the coin is drawn directly onto the target surface as an
-    ellipse squeezed horizontally by |cos(spin)|. No cached face, no
-    smoothscale blur, no radial aura — the silhouette you see is the
-    silhouette you collect (COIN_R governs both).
-    """
+    """Slow-rotating gold parrot medallion. The face is rendered once at 4×
+    resolution and smoothscaled to native, then squeezed horizontally per
+    spin angle from a per-rx cache — every edge stays anti-aliased."""
 
     SPIN_RATE = 1.1  # ≈ 5.7 seconds per full rotation
 
@@ -253,23 +313,9 @@ class Coin:
                                 (cx - rx, cy - r, rx * 2, r * 2))
             return
 
-        # Face-on: dark rim → gold body. Both are ellipses that share the
-        # same horizontal squeeze, so the coin shape IS its silhouette.
-        pygame.draw.ellipse(surf, COIN_DARK,
-                            (cx - rx - 1, cy - r - 1,
-                             (rx + 1) * 2, (r + 1) * 2))
-        pygame.draw.ellipse(surf, COIN_GOLD,
-                            (cx - rx, cy - r, rx * 2, r * 2))
-
-        # Embossed parrot silhouette — only when mostly face-on so it
-        # doesn't smear across a squeezed ellipse.
-        if abs(cos_s) > 0.75:
-            emboss = (140, 85, 0)
-            pygame.draw.ellipse(surf, emboss, (cx - 2, cy - 1, 7, 5))     # body
-            pygame.draw.circle(surf, emboss, (cx - 1, cy - 3), 3)         # head
-            pygame.draw.polygon(surf, emboss,                              # hooked beak
-                                [(cx - 3, cy - 3), (cx - 6, cy - 2), (cx - 3, cy - 1)])
-            pygame.draw.circle(surf, COIN_GOLD, (cx, cy - 4), 1)          # eye
+        face = _get_coin_face(rx)
+        fw, fh = face.get_size()
+        surf.blit(face, (cx - fw // 2, cy - fh // 2))
 
 
 # ── PowerUp ──────────────────────────────────────────────────────────────────
