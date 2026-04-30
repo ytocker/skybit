@@ -301,10 +301,13 @@ def draw_cloud(surf, x, y, scale=1.0, variant: int = 0):
         pygame.draw.circle(s, (255, 255, 255, a), (rr + 1, rr + 1), rr)
         surf.blit(s, (int(x + ox * scale) - rr - 1,
                       int(y + oy * scale) - rr - 1))
-    # Soft shadow underside stretched to the variant's footprint
+    # Soft shadow underside stretched to the variant's footprint. Drawn as
+    # an ellipse so it doesn't read as a hard-edged rectangle under each
+    # cloud (the older fill produced visible right-angle corners).
     sh_w = max(40, int((max_ox + 24) * scale))
-    shadow = pygame.Surface((sh_w, int(14 * scale)), pygame.SRCALPHA)
-    shadow.fill((130, 170, 220, 55))
+    sh_h = max(6, int(14 * scale))
+    shadow = pygame.Surface((sh_w, sh_h), pygame.SRCALPHA)
+    pygame.draw.ellipse(shadow, (130, 170, 220, 55), shadow.get_rect())
     surf.blit(shadow, (int(x - 4 * scale), int(y + 14 * scale)))
 
 

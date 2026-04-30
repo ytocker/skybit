@@ -9,11 +9,11 @@ Everything is drawn procedurally with the same primitives the game uses, so
 the cut into the menu is seamless. No new asset files. No new dependencies.
 
 Composition is structured as five gentle beats dispatched by elapsed-time:
-  0.0–2.5  "Dawn"        – mist + pillar + parcel + mailbag, light grows
-  2.5–4.5  "The hand-off" – Mr. Garrick on a neighbour pillar, parcel appears
-  4.5–10.0 "The journey"  – flight through golden hour → night → sunrise
-  10.0–11.0 "Arrival"     – Pip alights at a sunlit pillar with a mailbox
-  11.0–12.0 "Title"       – Skybit logotype + "TAP TO FLY"
+  0.0–1.0   "Dawn"       – clear-day post-house with parcel waiting
+  1.0–4.0   "Hand-off"   – Pip glides in, takes parcel from doorstep
+  4.0–9.0   "Journey"    – flight through golden hour → sunset → night
+  9.0–11.0  "Arrival"    – Pip glides in to a starlit home, delivers
+  11.0–12.0 "Title"      – Skybit logotype + "TAP TO FLY"
 
 The brief asks for an MP4 deliverable; this codebase has no video pipeline,
 so we ship the in-engine cinematic and let downstream marketing record it
@@ -676,8 +676,8 @@ class IntroScene:
             except Exception:
                 pass
             self._pad_started = True
-        # One earpiece crackle during beat 2 (the hand-off).
-        if 3.0 <= self.t < 3.05 and self._crackle_t < 0:
+        # One earpiece crackle during beat 2 (the hand-off, t=1.0–4.0).
+        if 2.4 <= self.t < 2.45 and self._crackle_t < 0:
             try:
                 _audio.play_intro_crackle()
             except Exception:
@@ -893,8 +893,10 @@ def _beat_handoff(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
     pip_start = (W + 50, 60)
     pip_dock  = (doorstep_x, doorstep_y - 28)
     pip_exit  = (porch_top_x_right + 30, porch_top_y_world - 50)
-    if u < 0.60:
-        ease = _ease_out_cubic(_clamp01(u / 0.55))
+    # Pip's approach occupies most of the beat (u 0.0–0.75) so the swoop
+    # never feels rushed; departure is the last quarter.
+    if u < 0.78:
+        ease = _smoothstep(_clamp01(u / 0.75))
         pip_x = pip_start[0] + (pip_dock[0] - pip_start[0]) * ease
         pip_y = pip_start[1] + (pip_dock[1] - pip_start[1]) * ease
         tilt = -10.0 * (1.0 - ease)
@@ -902,7 +904,7 @@ def _beat_handoff(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
         surf.blit(par, (doorstep_x - par.get_width() // 2,
                         doorstep_y - par.get_height() + 1))
     else:
-        ease = _ease_out_cubic(_clamp01((u - 0.60) / 0.40))
+        ease = _smoothstep(_clamp01((u - 0.78) / 0.22))
         pip_x = pip_dock[0] + (pip_exit[0] - pip_dock[0]) * ease
         pip_y = pip_dock[1] + (pip_exit[1] - pip_dock[1]) * ease
         tilt = 2.0 * ease
@@ -1015,8 +1017,10 @@ def _beat_arrival(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
     start_x, start_y = W + 60, 60
     drop_x, drop_y = doorstep_x + 38, doorstep_y - 30
     exit_x, exit_y = doorstep_x + 80, doorstep_y - 70
-    if u < 0.55:
-        ease = _ease_out_cubic(u / 0.55)
+    # Same pacing as beat 2: arrival uses most of the beat, drop + exit
+    # is the final stretch.
+    if u < 0.75:
+        ease = _smoothstep(u / 0.72)
         pip_x = start_x + (drop_x - start_x) * ease
         pip_y = start_y + (drop_y - start_y) * ease
         tilt = -10.0 * (1.0 - ease)
@@ -1028,7 +1032,7 @@ def _beat_arrival(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
         rest_x = doorstep_x - par.get_width() // 2
         rest_y = doorstep_y - par.get_height()
         surf.blit(par, (rest_x, rest_y))
-        ease = _ease_out_cubic((u - 0.55) / 0.45)
+        ease = _smoothstep((u - 0.75) / 0.25)
         pip_x = drop_x + (exit_x - drop_x) * ease
         pip_y = drop_y + (exit_y - drop_y) * ease
         tilt = 6.0 * ease  # banks up as he flies off
@@ -1087,14 +1091,21 @@ def _beat_title(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
 
 def _dispatch_beat(scene: "IntroScene", surf: pygame.Surface) -> None:
     t = scene.t
-    if t < 2.5:
-        _beat_dawn(scene, surf, t / 2.5)
-    elif t < 4.5:
-        _beat_handoff(scene, surf, (t - 2.5) / 2.0)
-    elif t < 10.0:
-        _beat_journey(scene, surf, (t - 4.5) / 5.5)
+    # Beat windows (rebalanced so dawn doesn't stall and Pip's arrivals
+    # in the hand-off + delivery have time to glide in gracefully):
+    #   dawn      0.0–1.0 (1.0s)
+    #   handoff   1.0–4.0 (3.0s) — Pip's pickup arrival uses most of this
+    #   journey   4.0–9.0 (5.0s)
+    #   arrival   9.0–11.0 (2.0s) — Pip's delivery arrival is unhurried
+    #   title    11.0–12.0 (1.0s)
+    if t < 1.0:
+        _beat_dawn(scene, surf, t / 1.0)
+    elif t < 4.0:
+        _beat_handoff(scene, surf, (t - 1.0) / 3.0)
+    elif t < 9.0:
+        _beat_journey(scene, surf, (t - 4.0) / 5.0)
     elif t < 11.0:
-        _beat_arrival(scene, surf, (t - 10.0) / 1.0)
+        _beat_arrival(scene, surf, (t - 9.0) / 2.0)
     elif t < DURATION:
         _beat_title(scene, surf, (t - 11.0) / 1.0)
     else:
