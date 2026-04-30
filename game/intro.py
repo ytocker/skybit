@@ -34,7 +34,7 @@ from game.draw import (
 from game import biome as _biome
 from game import parrot as _parrot
 from game.pillar_variants import draw_pillar_pair
-from game.hud import draw_skybit_wordmark, _font
+from game.hud import draw_skybit_wordmark, draw_title_overlay, _font
 from game import audio as _audio
 
 
@@ -658,12 +658,26 @@ class IntroScene:
 
     DURATION = DURATION
 
+    # The point in beat 5 at which the prompt has fully faded in and a
+    # tap should start the game directly (skip the menu hop).
+    TITLE_HOLD_FROM = 11.6  # 0.6s into the title beat
+
     def __init__(self):
         self.t = 0.0
         self.done = False
         self._pad_started = False
         self._crackle_t = -1.0  # earpiece crackle scheduled inside beat 2
         self._title_t = 0.0
+        # Best score is injected by the App so the title overlay can show
+        # the BEST pill identical to the menu's. Defaults to 0 (no pill).
+        self.best_score = 0
+
+    @property
+    def in_title_hold(self) -> bool:
+        """True once the title overlay has fully faded in. The App routes
+        a tap in this state directly to STATE_PLAY (bypasses the menu
+        hop)."""
+        return self.t >= self.TITLE_HOLD_FROM
 
     def update(self, dt: float) -> None:
         self.t += dt
@@ -683,8 +697,9 @@ class IntroScene:
             except Exception:
                 pass
             self._crackle_t = self.t
-        if self.t >= self.DURATION:
-            self.done = True
+        # Beat 5 holds indefinitely once the title is up — `done` is now
+        # only set when the user taps. The intro therefore never
+        # auto-completes; tap-to-start is the contract.
 
     def skip(self) -> None:
         self.done = True
@@ -1058,43 +1073,33 @@ def _beat_arrival(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
 # ── beat 5: Title (11.0 – 12.0) ──────────────────────────────────────────────
 
 def _beat_title(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
-    """Skybit logotype + subtitle + pulsing 'TAP TO FLY'. Pip drifts quietly
-    across the lower frame. The pulse formula matches the menu so the cut is
-    rhythm-continuous."""
+    """Skybit logotype + subtitle + 'TAP · SPACE · CLICK' tap-to-start
+    overlay. Holds indefinitely after the fade-in — IntroScene's tap
+    handler is what ends the intro. Uses the same `draw_title_overlay`
+    helper as the menu so the visual is identical between the two."""
     # Title freezes on the same starlit night the parcel was delivered under.
     phase = 0.62
     _draw_world(surf, phase, scroll=440.0 + scene.t * 12.0,
                 cloud_phase=scene.t, ground=False)
 
-    # Soft warm overlay behind the logo so the text reads on any sky tint.
-    overlay = pygame.Surface((W, H), pygame.SRCALPHA)
-    overlay.fill((0, 0, 20, int(80 * _smoothstep(u))))
-    surf.blit(overlay, (0, 0))
+    # Soft dim layer matches HUD.draw_menu's dim, so the menu and the title
+    # hold are visually continuous.
+    dim_a = int(70 * _smoothstep(_clamp01(u)))
+    dim = pygame.Surface((W, H), pygame.SRCALPHA)
+    dim.fill((0, 0, 10, dim_a))
+    surf.blit(dim, (0, 0))
 
-    # Logo fade-in over the first 0.5 s of the beat.
-    logo_a = int(255 * _smoothstep(_clamp01(u / 0.5)))
-    pulse = 1.0 + math.sin(scene._title_t * 2.4) * 0.04
-    draw_skybit_wordmark(surf, W // 2, 200, scale=pulse, alpha=logo_a)
-
-    # Subtitle.
-    if u > 0.20:
-        sub_a = int(255 * _smoothstep((u - 0.20) / 0.30))
-        f = _font(18, True)
-        sub = f.render("A Pip the Punctual Adventure", True, UI_CREAM)
-        sub.set_alpha(sub_a)
-        sr = sub.get_rect(center=(W // 2, 250))
-        surf.blit(sub, sr.topleft)
-
-    # "TAP TO FLY" pulse — uses the menu's exact cadence (hud.py:323).
-    if u > 0.40:
-        prompt_fade = _smoothstep((u - 0.40) / 0.40)
-        alpha = int((160 + math.sin(scene._title_t * 3.6) * 90) * prompt_fade)
-        alpha = max(0, min(255, alpha))
-        f2 = _font(24, True)
-        prompt = f2.render("TAP TO FLY", True, WHITE)
-        prompt.set_alpha(alpha)
-        pr = prompt.get_rect(center=(W // 2, H - 170))
-        surf.blit(prompt, pr.topleft)
+    # Per-element fade-ins driven by u; clamped so they hold at full alpha
+    # for any u beyond their fade window. `u` can exceed 1.0 once the beat
+    # is in its hold-for-tap state.
+    logo_a     = int(255 * _smoothstep(_clamp01(u / 0.5)))
+    subtitle_a = int(255 * _smoothstep(_clamp01((u - 0.20) / 0.30)))
+    prompt_a   = int(255 * _smoothstep(_clamp01((u - 0.40) / 0.40)))
+    best = scene.best_score
+    draw_title_overlay(surf, scene._title_t, best=best,
+                       logo_alpha=logo_a,
+                       subtitle_alpha=subtitle_a,
+                       prompt_alpha=prompt_a)
 
     # Pip drifts quietly across the lower third — a small recurring presence.
     pip_x = (scene.t * 22.0) % (W + 80) - 40

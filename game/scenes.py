@@ -44,6 +44,7 @@ class App:
         if not self.save.get("intro_seen"):
             from game.intro import IntroScene
             self.intro: object | None = IntroScene()
+            self.intro.best_score = self.best
             self.state = STATE_INTRO
         else:
             self.intro = None
@@ -72,7 +73,13 @@ class App:
 
     def _flap_input(self, pos=None):
         if self.state == STATE_INTRO:
-            self._finish_intro()
+            # Once the title overlay is fully up, a tap starts the game
+            # directly (the title beat IS the click-to-start screen). A
+            # tap before then skips the cinematic to the menu instead.
+            if self.intro is not None and self.intro.in_title_hold:
+                self._finish_intro_and_play()
+            else:
+                self._finish_intro()
             return
         if self.state == STATE_MENU:
             self._start_play()
@@ -104,15 +111,24 @@ class App:
         self.state = STATE_PLAY
         self.highlight_rank = -1
 
-    def _finish_intro(self):
-        """Mark the intro as seen (so it never plays again) and transition to
-        the menu. Called both on natural completion and on skip."""
+    def _mark_intro_seen(self):
         if self.intro is not None:
             self.intro.skip()
         self.intro = None
         self.save["intro_seen"] = True
         save_save(self.save)
+
+    def _finish_intro(self):
+        """Mark the intro as seen (so it never plays again) and transition to
+        the menu. Called when the user skips during the cinematic."""
+        self._mark_intro_seen()
         self.state = STATE_MENU
+
+    def _finish_intro_and_play(self):
+        """Tap on the held title overlay — start the game directly without
+        a menu hop. The intro is recorded as seen so it doesn't replay."""
+        self._mark_intro_seen()
+        self._start_play()
 
     def _restart(self):
         self.world = World()
