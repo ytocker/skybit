@@ -301,11 +301,9 @@ def draw_cloud(surf, x, y, scale=1.0, variant: int = 0):
         pygame.draw.circle(s, (255, 255, 255, a), (rr + 1, rr + 1), rr)
         surf.blit(s, (int(x + ox * scale) - rr - 1,
                       int(y + oy * scale) - rr - 1))
-    # Soft shadow underside stretched to the variant's footprint
-    sh_w = max(40, int((max_ox + 24) * scale))
-    shadow = pygame.Surface((sh_w, int(14 * scale)), pygame.SRCALPHA)
-    shadow.fill((130, 170, 220, 55))
-    surf.blit(shadow, (int(x - 4 * scale), int(y + 14 * scale)))
+    # No underside shadow — the previous solid-fill rectangle read as a
+    # blue bar pinned to the cloud's bottom rather than as soft shading.
+    # The cloud puffs read cleanly against any sky tint without it.
 
 
 # ── ground drawing ───────────────────────────────────────────────────────────
