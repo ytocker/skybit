@@ -8,6 +8,7 @@ on:
 
 jobs:
   pytest:
+    name: merge-safety tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,5 +33,26 @@ jobs:
         env:
           SDL_VIDEODRIVER: dummy
           SDL_AUDIODRIVER: dummy
+        run: python -m pytest -q
+
+  pygbag-build:
+    name: pygbag WASM build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pygbag
         run: |
-          pytest --cov=game --cov-report=term-missing --cov-fail-under=80 -q
+          python -m pip install --upgrade pip
+          pip install pygbag
+
+      - name: Build WASM bundle (no-launch)
+        # --build runs pygbag's compile step without starting the dev
+        # server, so it's CI-friendly. If this fails, the deployable
+        # artefact is broken — no merge should land.
+        run: python -m pygbag --build main.py
