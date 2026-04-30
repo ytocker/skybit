@@ -45,10 +45,11 @@ KFC_DURATION       = 8.0
 GHOST_DURATION     = 8.0
 GROW_DURATION      = 8.0
 GROW_SCALE         = 1.5
+REVERSE_DURATION   = 8.0
 
 # Spawn weights for power-up kinds. Must sum to anything — they're
 # normalized at pick time. `surprise` resolves at pickup-time to one of
-# the six "real" kinds chosen at random (see World._activate_surprise).
+# the seven "real" kinds chosen at random (see World._activate_surprise).
 POWERUP_WEIGHTS    = (
     ("triple",   1),
     ("slowmo",   1),
@@ -56,6 +57,7 @@ POWERUP_WEIGHTS    = (
     ("kfc",      1),
     ("ghost",    1),
     ("grow",     1),
+    ("reverse",  1),
     ("surprise", 1),
 )
 

@@ -4,7 +4,7 @@ import os
 import random
 import pygame
 
-from game.config import W, H, TRIPLE_DURATION, MAGNET_DURATION, SLOWMO_DURATION, KFC_DURATION, GHOST_DURATION, GROW_DURATION
+from game.config import W, H, TRIPLE_DURATION, MAGNET_DURATION, SLOWMO_DURATION, KFC_DURATION, GHOST_DURATION, GROW_DURATION, REVERSE_DURATION
 from game.draw import (
     rounded_rect, rounded_rect_grad, lerp_color,
     UI_SCORE, UI_GOLD, UI_ORANGE, UI_SHADOW, UI_CREAM, UI_RED,
@@ -397,6 +397,16 @@ def _draw_buff_icon(surf, rect, kind):
         _draw_dollar_coin_hud(icon, native // 2, native // 2, pulse=0.0)
         scaled = pygame.transform.smoothscale(icon, (20, 20))
         surf.blit(scaled, (cx - 10, cy - 10))
+    elif kind == "reverse":
+        col = (120, 230, 240)
+        # Up arrow (top half)
+        pygame.draw.rect(surf, col, (cx - 1, cy - 8, 2, 7))
+        pygame.draw.polygon(surf, col,
+                            [(cx - 4, cy - 4), (cx + 4, cy - 4), (cx, cy - 9)])
+        # Down arrow (bottom half) — mirror
+        pygame.draw.rect(surf, col, (cx - 1, cy + 1, 2, 7))
+        pygame.draw.polygon(surf, col,
+                            [(cx - 4, cy + 4), (cx + 4, cy + 4), (cx, cy + 9)])
 
 
 class PauseButton:
@@ -602,6 +612,8 @@ class HUD:
             active.append(("ghost", world.ghost_timer, GHOST_DURATION))
         if world.grow_timer > 0:
             active.append(("grow", world.grow_timer, GROW_DURATION))
+        if world.reverse_timer > 0:
+            active.append(("reverse", world.reverse_timer, REVERSE_DURATION))
 
         if active:
             icon_size = 24
