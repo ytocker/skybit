@@ -185,6 +185,112 @@ def _build_mailbox() -> pygame.Surface:
     return surf
 
 
+def _build_skyhouse() -> pygame.Surface:
+    """A tiny cottage perched on a fluffy cloud — Pip's delivery destination.
+    Cream walls, red shingled roof, a chimney with a smoke puff, a window,
+    and a wooden door for the parcel to be left at."""
+    SIZE = 96
+    surf = pygame.Surface((SIZE, SIZE), pygame.SRCALPHA)
+    cx = SIZE // 2
+
+    OUTLINE   = ( 60,  38,  24)
+    WALL      = (232, 208, 168)
+    WALL_SHA  = (190, 160, 118)
+    ROOF      = (180,  62,  52)
+    ROOF_SHA  = (120,  32,  28)
+    ROOF_HI   = (220, 100,  88)
+    DOOR      = ( 90,  55,  30)
+    DOOR_HI   = (135,  85,  52)
+    WIN_FRAME = ( 72,  44,  24)
+    WIN_GLASS = (170, 215, 240)
+    CLOUD     = (252, 252, 255)
+    CLOUD_SHA = (215, 220, 240)
+    CHIM      = (110,  72,  52)
+
+    # Cloud base — three stacked ellipses for a fluffy silhouette.
+    cl_y = 70
+    pygame.draw.ellipse(surf, CLOUD_SHA, (4,  cl_y + 4, 88, 18))
+    pygame.draw.ellipse(surf, CLOUD,     (8,  cl_y,     78, 18))
+    pygame.draw.ellipse(surf, CLOUD,     (0,  cl_y + 6, 32, 14))
+    pygame.draw.ellipse(surf, CLOUD,     (60, cl_y + 6, 36, 14))
+
+    # House body
+    house_w, house_h = 46, 28
+    house_x = cx - house_w // 2
+    house_y = cl_y - house_h + 6
+    pygame.draw.rect(surf, OUTLINE,
+                     (house_x - 1, house_y, house_w + 2, house_h + 1))
+    pygame.draw.rect(surf, WALL,
+                     (house_x, house_y + 1, house_w, house_h - 1))
+    # Plank lines for texture
+    for i in range(3):
+        sy = house_y + 7 + i * 7
+        pygame.draw.line(surf, WALL_SHA,
+                         (house_x + 2, sy), (house_x + house_w - 3, sy), 1)
+
+    # Roof — pitched triangular peak, dark outline behind a red fill.
+    roof_eave_l = (house_x - 5, house_y + 2)
+    roof_eave_r = (house_x + house_w + 5, house_y + 2)
+    roof_peak   = (cx, house_y - 16)
+    pygame.draw.polygon(surf, OUTLINE, [
+        (roof_eave_l[0] - 1, roof_eave_l[1] + 1),
+        (roof_peak[0],       roof_peak[1] - 1),
+        (roof_eave_r[0] + 1, roof_eave_r[1] + 1),
+    ])
+    pygame.draw.polygon(surf, ROOF, [roof_eave_l, roof_peak, roof_eave_r])
+    # A few shingle rows for texture (lines that shrink toward the peak).
+    for i in range(4):
+        sy = house_y - 1 - i * 3
+        delta = 5 + i * 5
+        pygame.draw.line(surf, ROOF_SHA,
+                         (house_x - 5 + delta, sy),
+                         (house_x + house_w + 5 - delta, sy), 1)
+    # Sun-side highlight along the left slope.
+    pygame.draw.line(surf, ROOF_HI,
+                     (roof_eave_l[0] + 2, roof_eave_l[1] + 1),
+                     (roof_peak[0] - 1,   roof_peak[1] + 2), 1)
+
+    # Chimney with a small smoke puff.
+    chim_x, chim_y = cx + 8, roof_peak[1] + 2
+    pygame.draw.rect(surf, OUTLINE,  (chim_x - 1, chim_y - 1, 8, 10))
+    pygame.draw.rect(surf, CHIM,     (chim_x,     chim_y,     6,  9))
+    pygame.draw.rect(surf, OUTLINE,  (chim_x - 2, chim_y - 2, 10, 3))
+    pygame.draw.circle(surf, CLOUD, (chim_x + 3, chim_y - 6), 3)
+    pygame.draw.circle(surf, CLOUD, (chim_x + 6, chim_y - 11), 2)
+
+    # Window with a cross frame.
+    win_w, win_h = 10, 10
+    win_x = house_x + 5
+    win_y = house_y + 7
+    pygame.draw.rect(surf, OUTLINE,
+                     (win_x - 1, win_y - 1, win_w + 2, win_h + 2))
+    pygame.draw.rect(surf, WIN_GLASS, (win_x, win_y, win_w, win_h))
+    pygame.draw.line(surf, WIN_FRAME,
+                     (win_x + win_w // 2, win_y),
+                     (win_x + win_w // 2, win_y + win_h - 1), 1)
+    pygame.draw.line(surf, WIN_FRAME,
+                     (win_x, win_y + win_h // 2),
+                     (win_x + win_w - 1, win_y + win_h // 2), 1)
+
+    # Door, slightly right of centre so the doorstep isn't blocked by the
+    # parcel arriving on Pip's left talons.
+    door_w, door_h = 12, 18
+    door_x = house_x + house_w - door_w - 6
+    door_y = house_y + house_h - door_h
+    pygame.draw.rect(surf, OUTLINE,
+                     (door_x - 1, door_y, door_w + 2, door_h + 1))
+    pygame.draw.rect(surf, DOOR, (door_x, door_y + 1, door_w, door_h - 1))
+    pygame.draw.rect(surf, DOOR_HI, (door_x + 1, door_y + 2, 2, door_h - 4))
+    pygame.draw.line(surf, DOOR_HI,
+                     (door_x + 1, door_y + 1),
+                     (door_x + door_w - 2, door_y + 1), 1)
+    # Brass doorknob
+    pygame.draw.circle(surf, (240, 200, 100),
+                       (door_x + door_w - 2, door_y + door_h // 2), 1)
+
+    return surf
+
+
 def _build_garrick() -> pygame.Surface:
     """Mr. Garrick: a calm pelican silhouette in pale-pink with a white shirt
     collar and a perpetual frown beak. Simple — he's a quiet supporting role
@@ -231,6 +337,7 @@ def _get_sprite(name: str) -> pygame.Surface:
         if name == "parcel":   s = _build_parcel()
         elif name == "mailbag": s = _build_mailbag()
         elif name == "mailbox": s = _build_mailbox()
+        elif name == "skyhouse": s = _build_skyhouse()
         elif name == "garrick": s = _build_garrick()
         else: raise KeyError(name)
         _SPRITES[name] = s
@@ -428,11 +535,6 @@ def _beat_dawn(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
     surf.blit(bag, (pillar_x - 4, ledge_y - bag.get_height() + 8))
     par_x = pillar_x + pillar_w - par.get_width() + 6
     par_y = ledge_y - par.get_height() + 8
-    # Parcel glow — small and warm, just kissing the parcel edges so the
-    # paper-and-ribbon detail still reads.
-    glow_a = 50 + int(20 * math.sin(scene.t * 2.4))
-    blit_glow(surf, par_x + par.get_width() // 2,
-              par_y + par.get_height() // 2, 14, (255, 215, 110), glow_a)
     surf.blit(par, (par_x, par_y))
 
 
@@ -516,10 +618,6 @@ def _beat_handoff(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
         cy = sy + (target_y - sy) * ea - int(math.sin(a * math.pi) * 22)
         surf.blit(par, (int(cx), int(cy)))
     else:
-        glow_a = int(80 * (u - 0.95) / 0.05)
-        blit_glow(surf, target_x + par.get_width() // 2,
-                  target_y + par.get_height() // 2,
-                  22, (255, 215, 110), glow_a)
         surf.blit(par, (target_x, target_y))
 
 
@@ -584,10 +682,9 @@ def _beat_journey(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
     pip_x = W * 0.48 + math.sin(scene.t * 0.8) * 18
     pip_y = H * 0.45 + math.sin(scene.t * 1.5) * 14
     tilt = math.sin(scene.t * 1.5) * -6.0
-    # Carried parcel — tucked beneath Pip with a faint glow.
+    # Carried parcel — tucked beneath Pip. He partially obscures it; that's
+    # the only overlap the parcel ever has with anything.
     par = _get_sprite("parcel")
-    blit_glow(surf, int(pip_x) + 4, int(pip_y) + 18, 10,
-              (255, 215, 110), 55)
     surf.blit(par, (int(pip_x) - par.get_width() // 2,
                     int(pip_y) + 10))
     _draw_pip(surf, pip_x, pip_y, frame_t=scene.t * 5.0, tilt_deg=tilt,
@@ -597,47 +694,53 @@ def _beat_journey(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
 # ── beat 4: Arrival (10.0 – 11.0) ────────────────────────────────────────────
 
 def _beat_arrival(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
-    """Pip alights at a sunlit pillar. The mailbox waits. He sets the parcel
-    down and a soft gold glow spreads. No slam, no fanfare."""
+    """Pip glides up to a tiny cottage floating on a cloud and leaves the
+    parcel on its doorstep. No pillar, no mailbox — the destination is a
+    house in the sky."""
     phase = 0.92 + u * 0.06  # locked into morning sunrise
     _draw_world(surf, phase, scroll=400.0 + u * 30.0,
                 cloud_phase=scene.t, ground=False)
-    pal = _biome.palette_for_phase(phase)
 
-    # The destination pillar sits centre frame.
-    pillar_w, pillar_h = 70, 230
-    pillar_x = W // 2 - pillar_w // 2
-    pillar_y = GROUND_Y - pillar_h
-    draw_pillar_pair(surf, pygame.Rect(0, 0, 0, 0),
-                     pygame.Rect(pillar_x, pillar_y, pillar_w, pillar_h),
-                     pal, seed=0)  # variant 0 — basic undecorated pillar
+    # Floating sky-house, anchored mid-frame with a slow bob so it reads as
+    # weightless rather than pinned.
+    house = _get_sprite("skyhouse")
+    house_cx = W // 2
+    house_cy = int(H * 0.55) + int(math.sin(scene.t * 0.9) * 3)
+    house_x = house_cx - house.get_width() // 2
+    house_y = house_cy - house.get_height() // 2
+    surf.blit(house, (house_x, house_y))
 
-    # Mailbox on the ledge.
-    mb = _get_sprite("mailbox")
-    mb_x = pillar_x + pillar_w // 2 - mb.get_width() // 2
-    mb_y = pillar_y - mb.get_height() + 6
-    surf.blit(mb, (mb_x, mb_y))
+    # Doorstep position in surface space, derived from _build_skyhouse:
+    #   sprite is 96px, house body is 46px wide centred → starts at sprite x=25
+    #   door is 12px wide, anchored 6px from the right interior wall →
+    #   sprite x=53; door bottom == house bottom == sprite y=76.
+    doorstep_x = house_x + 25 + 46 - 12 - 6 + 12 // 2
+    doorstep_y = house_y + 76
 
-    # Pip glides in from upper-right and slows to a hover by the mailbox.
-    pip_t = _ease_out_cubic(u)
-    start_x, start_y = W + 60, 120
-    end_x, end_y = pillar_x + pillar_w + 22, mb_y - 4
-    pip_x = start_x + (end_x - start_x) * pip_t
-    pip_y = start_y + (end_y - start_y) * pip_t
-    tilt = -10.0 * (1.0 - pip_t)
-    _draw_pip(surf, pip_x, pip_y, frame_t=scene.t * 4.0, tilt_deg=tilt)
-
-    # Parcel transitions from "in talons" to "delivered". After u≈0.55 the
-    # parcel sits on top of the mailbox.
+    # Pip glides in from the upper-right, drops the parcel at the doorstep,
+    # then continues onward and upward so he's clearly clear of the parcel.
     par = _get_sprite("parcel")
+    start_x, start_y = W + 60, 60
+    drop_x, drop_y = doorstep_x + 38, doorstep_y - 30
+    exit_x, exit_y = doorstep_x + 80, doorstep_y - 70
     if u < 0.55:
+        ease = _ease_out_cubic(u / 0.55)
+        pip_x = start_x + (drop_x - start_x) * ease
+        pip_y = start_y + (drop_y - start_y) * ease
+        tilt = -10.0 * (1.0 - ease)
         carry_x = int(pip_x) - par.get_width() // 2
         carry_y = int(pip_y) + 10
         surf.blit(par, (carry_x, carry_y))
+        _draw_pip(surf, pip_x, pip_y, frame_t=scene.t * 4.0, tilt_deg=tilt)
     else:
-        rest_x = mb_x + (mb.get_width() - par.get_width()) // 2
-        rest_y = mb_y - par.get_height() + 6
+        rest_x = doorstep_x - par.get_width() // 2
+        rest_y = doorstep_y - par.get_height()
         surf.blit(par, (rest_x, rest_y))
+        ease = _ease_out_cubic((u - 0.55) / 0.45)
+        pip_x = drop_x + (exit_x - drop_x) * ease
+        pip_y = drop_y + (exit_y - drop_y) * ease
+        tilt = 6.0 * ease  # banks up as he flies off
+        _draw_pip(surf, pip_x, pip_y, frame_t=scene.t * 4.0, tilt_deg=tilt)
 
 
 # ── beat 5: Title (11.0 – 12.0) ──────────────────────────────────────────────
