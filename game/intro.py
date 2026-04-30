@@ -706,9 +706,8 @@ def _draw_sky(surf: pygame.Surface, phase: float) -> None:
 
 def _draw_world(surf: pygame.Surface, phase: float, scroll: float,
                 cloud_phase: float, ground: bool = True) -> None:
-    """Sky + mountains + ground for the given phase. The journey beat keeps
-    `ground=False` and lets the ground slip below frame so the camera reads
-    as floating high in the sky."""
+    """Sky + mountains + (optional) ground for the given phase. Intro beats
+    pass ``ground=True`` so the green grass band matches gameplay."""
     palette = _biome.palette_for_phase(phase)
     _draw_sky(surf, phase)
     # Three drifting clouds for ambient depth
@@ -792,7 +791,7 @@ def _beat_dawn(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
     # the journey beat cycles through the day/night arc.
     phase = 0.0
     _draw_world(surf, phase, scroll=u * 4.0, cloud_phase=scene.t,
-                ground=False)
+                ground=True)
 
     # Pickup post-house — anchored on the LEFT, slightly above centre,
     # with a slow weightless bob.
@@ -831,7 +830,7 @@ def _beat_handoff(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
     # Same locked clear-day biome as beat 1 — pickup never shifts colours.
     sky_phase = 0.0
     _draw_world(surf, sky_phase, scroll=10.0 + u * 6.0,
-                cloud_phase=scene.t, ground=False)
+                cloud_phase=scene.t, ground=True)
 
     # Reuse the EXACT post-house from beat 1.
     house = _get_sprite("skyhouse_post")
@@ -920,7 +919,7 @@ def _beat_journey(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
     # Scroll continues from beat 2's end value (16) so the cloud parallax
     # doesn't pop at the cut — it then accelerates across the beat.
     scroll = 16.0 + u * 280.0
-    _draw_world(surf, phase, scroll=scroll, cloud_phase=scene.t, ground=False)
+    _draw_world(surf, phase, scroll=scroll, cloud_phase=scene.t, ground=True)
 
     # First slice of the beat: the pickup post-house is still drifting off
     # the left edge as Pip "flies past" it, bridging the cut from beat 2.
@@ -968,7 +967,7 @@ def _beat_arrival(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
     # beat 3's end value (296) so the cloud parallax doesn't pop.
     phase = 0.62
     _draw_world(surf, phase, scroll=296.0 + u * 30.0,
-                cloud_phase=scene.t, ground=False)
+                cloud_phase=scene.t, ground=True)
 
     # Floating sky-house, centred. During the first 18% of the beat the
     # cottage rises into frame from below (it was off-screen during the
@@ -1034,7 +1033,7 @@ def _beat_title(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
     title screen showing SKYBIT + the subtitle + the tap prompt)."""
     phase = 0.62
     _draw_world(surf, phase, scroll=440.0 + scene.t * 12.0,
-                cloud_phase=scene.t, ground=False)
+                cloud_phase=scene.t, ground=True)
 
     # Gentle dim toward the menu's tint so the cut into STATE_MENU isn't
     # a jarring brightness pop.
