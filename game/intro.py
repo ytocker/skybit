@@ -892,9 +892,11 @@ def _beat_handoff(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
     par = _get_sprite("parcel")
     pip_start = (W + 50, 60)
     pip_dock  = (doorstep_x, doorstep_y - 28)
-    # Exit endpoint matches the journey's centre pose (H*0.42, ~W*0.48 with
-    # the sin-bob neutral) so the cut into beat 3 is positionally seamless.
-    pip_exit  = (int(W * 0.48), int(H * 0.42))
+    # Exit endpoint tracks the journey's live sin-bob position so the cut
+    # into beat 3 is positionally seamless even mid-bob.
+    journey_x = W * 0.48 + math.sin(scene.t * 0.8) * 18
+    journey_y = H * 0.42 + math.sin(scene.t * 1.5) * 14
+    pip_exit  = (journey_x, journey_y)
     # Pip's approach occupies most of the beat (u 0.0–0.75) so the swoop
     # never feels rushed; departure is the last quarter.
     if u < 0.78:
@@ -992,29 +994,43 @@ def _beat_arrival(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
     parcel on its doorstep. No pillar, no mailbox — the destination is a
     house in the sky."""
     # Delivery happens at night — the journey ended there, so beat 4 holds
-    # the same starlit phase Pip arrived under.
+    # the same starlit phase Pip arrived under. Scroll continues from
+    # beat 3's end value (296) so the cloud parallax doesn't pop.
     phase = 0.62
-    _draw_world(surf, phase, scroll=400.0 + u * 30.0,
+    _draw_world(surf, phase, scroll=296.0 + u * 30.0,
                 cloud_phase=scene.t, ground=False)
 
-    # Floating sky-house, anchored mid-frame with a slow bob so it reads as
-    # weightless rather than pinned. Centred so it visually sits to the
-    # right of the pickup house's left-side anchor in beats 1-2.
+    # Floating sky-house, centred. During the first 18% of the beat the
+    # cottage rises into frame from below (it was off-screen during the
+    # journey), then settles into its weightless bob. Doorstep coords
+    # below use the SETTLED position so Pip's drop target doesn't shift
+    # while the cottage is animating in.
     house = _get_sprite("skyhouse_home")
     anc = _get_house_anchors("home")
     house_cx = W // 2
-    house_cy = int(H * 0.55) + int(math.sin(scene.t * 0.9) * 3)
+    house_cy_settled = int(H * 0.55)
+    if u < 0.18:
+        bridge_t = u / 0.18
+        rise = (1.0 - _smoothstep(bridge_t)) * 100  # 100 px below at u=0
+        house_cy_now = house_cy_settled + int(rise)
+    else:
+        house_cy_now = house_cy_settled + int(math.sin(scene.t * 0.9) * 3)
     house_x = house_cx - house.get_width() // 2
-    house_y = house_cy - house.get_height() // 2
-    surf.blit(house, (house_x, house_y))
+    house_y_now = house_cy_now - house.get_height() // 2
+    surf.blit(house, (house_x, house_y_now))
 
+    # Settled doorstep — Pip's flight target is fixed regardless of the
+    # cottage's bridge-in animation.
+    house_y_settled = house_cy_settled - house.get_height() // 2
     doorstep_x = house_x + anc["doorstep"][0]
-    doorstep_y = house_y + anc["doorstep"][1]
+    doorstep_y = house_y_settled + anc["doorstep"][1]
 
-    # Pip glides in from the upper-right, drops the parcel at the doorstep,
-    # then continues onward and upward so he's clearly clear of the parcel.
+    # Pip's start pose tracks the journey's live sin-bob so the cut from
+    # beat 3 is seamless even mid-bob. Pip glides from there down to the
+    # doorstep, drops the parcel, and continues onward.
     par = _get_sprite("parcel")
-    start_x, start_y = W + 60, 60
+    start_x = W * 0.48 + math.sin(scene.t * 0.8) * 18
+    start_y = H * 0.42 + math.sin(scene.t * 1.5) * 14
     drop_x, drop_y = doorstep_x + 38, doorstep_y - 30
     exit_x, exit_y = doorstep_x + 80, doorstep_y - 70
     # Same pacing as beat 2: arrival uses most of the beat, drop + exit
