@@ -103,6 +103,8 @@ if _IS_BROWSER:
     def play_thunder() -> None:       _play("thunder", 0.85)
     def play_death() -> None:         _play("death", 0.75)
     def play_gameover() -> None:      _play("gameover", 0.70)
+    def play_intro_pad() -> None:     _play("intro_pad", 0.40)
+    def play_intro_crackle() -> None: _play("intro_crackle", 0.35)
 
 
 # ── Native backend (pygame.mixer + synthesized WAV) ──────────────────────────
@@ -237,6 +239,24 @@ else:
                     (0.14, 349, 349, "triangle", 0.38),
                     (0.18, 262, 262, "triangle", 0.42),
                 ]))
+            # Intro: a long quiet pad — slow major-key drift (C → E → G → C),
+            # very low volume so it sits under the visuals like wind. About
+            # 11.5 s total so it tucks in just before the title card.
+            _sounds["intro_pad"] = pygame.mixer.Sound(
+                buffer=_synth_sequence([
+                    (3.0, 130.8, 164.8, "triangle", 0.16),  # C3 → E3
+                    (3.0, 164.8, 196.0, "triangle", 0.16),  # E3 → G3
+                    (3.0, 196.0, 261.6, "triangle", 0.18),  # G3 → C4
+                    (2.5, 261.6, 196.0, "triangle", 0.14),  # gentle return
+                ]))
+            # Earpiece radio crackle — short, breathy, comedic-but-soft so
+            # Mr. Garrick can speak without speaking.
+            _sounds["intro_crackle"] = pygame.mixer.Sound(
+                buffer=_synth_sequence([
+                    (0.06, 1700, 1700, "square", 0.20),
+                    (0.04, 60,   60,   "triangle", 0.18),
+                    (0.05, 1900, 1900, "square", 0.22),
+                ]))
         except pygame.error:
             _sounds.clear()
             _mixer_ok = False
@@ -267,3 +287,5 @@ else:
     def play_thunder() -> None:       _play("thunder", 0.85)
     def play_death() -> None:         _play("death", 0.75)
     def play_gameover() -> None:      _play("gameover", 0.70)
+    def play_intro_pad() -> None:     _play("intro_pad", 0.40)
+    def play_intro_crackle() -> None: _play("intro_crackle", 0.35)

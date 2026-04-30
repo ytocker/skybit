@@ -15,6 +15,7 @@ from game.world import World
 from game.hud import HUD, _font
 from game.storage import (
     load_scores, save_scores, qualifies_for_top, insert_score, best_score,
+    load_save, save_save,
 )
 from game.nameentry import NameEntry
 from game import audio
@@ -26,6 +27,7 @@ STATE_NAMEENTRY = 2
 STATE_GAMEOVER = 3
 STATE_PAUSE = 4
 STATE_STATS = 5
+STATE_INTRO = 6
 
 
 class App:
@@ -38,7 +40,14 @@ class App:
         self.world = World()
         self.hud = HUD()
         self.scores: list[dict] = load_scores()
-        self.state = STATE_MENU
+        self.save: dict = load_save()
+        if not self.save.get("intro_seen"):
+            from game.intro import IntroScene
+            self.intro: object | None = IntroScene()
+            self.state = STATE_INTRO
+        else:
+            self.intro = None
+            self.state = STATE_MENU
         self.name_entry: NameEntry | None = None
         self.highlight_rank = -1
         self.prev_best_at_death = 0
@@ -62,6 +71,9 @@ class App:
     # ── input ────────────────────────────────────────────────────────────────
 
     def _flap_input(self, pos=None):
+        if self.state == STATE_INTRO:
+            self._finish_intro()
+            return
         if self.state == STATE_MENU:
             self._start_play()
         elif self.state == STATE_PLAY:
@@ -91,6 +103,16 @@ class App:
         self.world = World()
         self.state = STATE_PLAY
         self.highlight_rank = -1
+
+    def _finish_intro(self):
+        """Mark the intro as seen (so it never plays again) and transition to
+        the menu. Called both on natural completion and on skip."""
+        if self.intro is not None:
+            self.intro.skip()
+        self.intro = None
+        self.save["intro_seen"] = True
+        save_save(self.save)
+        self.state = STATE_MENU
 
     def _restart(self):
         self.world = World()
@@ -150,7 +172,9 @@ class App:
                 self._toggle_pause()
                 return
             if e.key == pygame.K_ESCAPE:
-                if self.state in (STATE_PLAY, STATE_PAUSE):
+                if self.state == STATE_INTRO:
+                    self._finish_intro()
+                elif self.state in (STATE_PLAY, STATE_PAUSE):
                     self._toggle_pause()
                 else:
                     self._running = False
@@ -166,6 +190,15 @@ class App:
 
     def _update(self, dt):
         self._cloud_phase += dt
+        if self.state == STATE_INTRO:
+            if self.intro is None:
+                # Defensive: should never happen, but recover gracefully.
+                self._finish_intro()
+                return
+            self.intro.update(dt)
+            if self.intro.done:
+                self._finish_intro()
+            return
         if self.state == STATE_MENU:
             self.world.world_idle_tick(dt)
         elif self.state == STATE_PLAY:
@@ -268,6 +301,9 @@ class App:
                     palette['ground_top'], palette['ground_mid'], (60, 40, 25))
 
     def _render(self):
+        if self.state == STATE_INTRO and self.intro is not None:
+            self.intro.render(self.screen)
+            return
         sx, sy = self.world.shake_offset() if self.state == STATE_PLAY else (0, 0)
         sx, sy = int(sx), int(sy)
         self._draw_background(self.screen)

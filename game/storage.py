@@ -75,6 +75,24 @@ def best_score(scores: list[dict]) -> int:
     return scores[0]["score"] if scores else 0
 
 
+# ── tiny key/value save (used by the intro's first-launch flag) ───────────
+
+def load_save() -> dict:
+    try:
+        with open(_cfg.SAVE_FILE, "r") as f:
+            return json.load(f) or {}
+    except Exception:
+        return {}
+
+
+def save_save(d: dict) -> None:
+    try:
+        with open(_cfg.SAVE_FILE, "w") as f:
+            json.dump(d, f)
+    except Exception:
+        pass
+
+
 # ── back-compat single-int API (older callers) ────────────────────────────
 
 def load_highscore() -> int:

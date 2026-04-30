@@ -44,6 +44,29 @@ def _text(surf, txt, center, size=36, color=WHITE, shadow=True):
     return r
 
 
+def draw_skybit_wordmark(surf, cx, cy, scale: float = 1.0, alpha: int = 255):
+    """Render the 'Skybit' logotype centered at (cx, cy).
+
+    Used by both the menu and the intro's title card so the glyph is identical
+    across the cut. `scale` lets callers add a gentle pulse; `alpha` lets the
+    intro fade the wordmark in.
+    """
+    f = _font(max(8, int(68 * scale)), True)
+    title = "Skybit"
+    img = f.render(title, True, UI_GOLD)
+    shadow = f.render(title, True, NEAR_BLACK)
+    outline = f.render(title, True, UI_RED)
+    if alpha < 255:
+        img = img.copy(); img.set_alpha(alpha)
+        shadow = shadow.copy(); shadow.set_alpha(alpha)
+        outline = outline.copy(); outline.set_alpha(alpha)
+    r = img.get_rect(center=(cx, cy))
+    for ox, oy in ((-3, 0), (3, 0), (0, -3), (0, 3), (2, 2), (-2, 2)):
+        surf.blit(outline, (r.x + ox, r.y + oy))
+    surf.blit(shadow, (r.x + 3, r.y + 5))
+    surf.blit(img, r.topleft)
+
+
 def _coin_icon(surf, cx, cy, r=10):
     # Match in-world Coin.draw: dark rim + gold body + embossed parrot.
     # No halo, no pale highlight.
@@ -305,18 +328,10 @@ class HUD:
         dim = pygame.Surface((W, H), pygame.SRCALPHA)
         dim.fill((0, 0, 10, 70))
         surf.blit(dim, (0, 0))
-        # Title pulsing
+        # Title pulsing — shared with the intro's title card so the cut into
+        # the menu is rhythm-continuous.
         pulse = 1.0 + math.sin(self.title_t * 2.4) * 0.04
-        f = _font(int(68 * pulse), True)
-        title = "Skybit"
-        img = f.render(title, True, UI_GOLD)
-        shadow = f.render(title, True, NEAR_BLACK)
-        outline = f.render(title, True, UI_RED)
-        r = img.get_rect(center=(W // 2, 180))
-        for ox, oy in ((-3, 0), (3, 0), (0, -3), (0, 3), (2, 2), (-2, 2)):
-            surf.blit(outline, (r.x + ox, r.y + oy))
-        surf.blit(shadow, (r.x + 3, r.y + 5))
-        surf.blit(img, r.topleft)
+        draw_skybit_wordmark(surf, W // 2, 180, scale=pulse, alpha=255)
         # Subtitle
         _text(surf, "Pocket Sky Flyer", (W // 2, 228), size=18, color=UI_CREAM)
         # Tap to start
