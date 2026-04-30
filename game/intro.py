@@ -1043,12 +1043,6 @@ def _beat_title(scene: "IntroScene", surf: pygame.Surface, u: float) -> None:
     dim.fill((6, 1, 21, dim_a))
     surf.blit(dim, (0, 0))
 
-    # Pip drifts quietly across the lower third while the scene fades.
-    pip_x = (scene.t * 22.0) % (W + 80) - 40
-    pip_y = H - 120 + math.sin(scene.t * 1.6) * 8
-    _draw_pip(surf, pip_x, pip_y,
-              frame_t=scene.t * 5.0, tilt_deg=-3.0, scale=0.7)
-
 
 # ── final beat dispatcher ────────────────────────────────────────────────────
 
