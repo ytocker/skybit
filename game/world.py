@@ -290,9 +290,9 @@ class World:
         self.weather.update(sdt, self.biome_phase)
 
         # While the "get ready" prompt is up, hold everything still except
-        # a tiny idle animation on the bird.
+        # a tiny idle animation on the bird. The freeze waits indefinitely
+        # for the player's first flap (no auto-expiring countdown).
         if self.ready_t > 0 and not self.game_over:
-            self.ready_t = max(0.0, self.ready_t - dt)
             # Gentle bob without physics integration.
             self.bird.vy = 0
             self.bird.y = H * 0.42 + math.sin(self.biome_time * 4.0) * 6
