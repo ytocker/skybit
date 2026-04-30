@@ -471,21 +471,23 @@ class HUD:
 
         _draw_overlay_stars(surf, self._stars, self.title_t)
 
-        # Floating title
+        # Floating title — sits above the gameplay-opener post-house +
+        # Pip composition (cottage top is at y≈208) so the text never
+        # crosses the parrot.
         pulse = 1.0 + math.sin(self.title_t * 2.4) * 0.04
         float_y = int(7 * math.sin(self.title_t * 1.8))
-        _outlined_text(surf, "SKYBIT", (W // 2, 176 + float_y),
+        _outlined_text(surf, "SKYBIT", (W // 2, 126 + float_y),
                         size=int(72 * pulse), px=3)
 
         # Subtitle
         sub_f = _font(14, False)
         sub = sub_f.render("P O C K E T   S K Y   F L Y E R", True, _GOLD_MUTED)
         sub.set_alpha(200)
-        surf.blit(sub, sub.get_rect(center=(W // 2, 228)))
+        surf.blit(sub, sub.get_rect(center=(W // 2, 178)))
 
         # Divider
         pygame.draw.line(surf, (*_ORANGE_BORDER, 120),
-                         (W // 2 - 70, 248), (W // 2 + 70, 248), 1)
+                         (W // 2 - 70, 198), (W // 2 + 70, 198), 1)
 
         # Tap-to-play pill (pulsing)
         btn_alpha = int(180 + math.sin(self.title_t * 3.6) * 70)
