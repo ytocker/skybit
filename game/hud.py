@@ -851,7 +851,7 @@ class HUD:
             size=18, alpha=255, min_width=200)
 
     def draw_leaderboard(self, surf, dt, scores: list, player_rank: int,
-                         loading: bool, cooldown: float):
+                         cooldown: float):
         self.title_t += dt
         dim = pygame.Surface((W, H), pygame.SRCALPHA)
         dim.fill((0, 0, 20, 200))
@@ -871,98 +871,86 @@ class HUD:
         e = slide_t * slide_t * (3 - 2 * slide_t)
         card_y = int(88 + (1.0 - e) * 80)
 
-        if loading:
-            _text(surf, "Fetching scores", (W // 2, card_y + 40), size=16,
-                  color=UI_CREAM, shadow=True)
-            dot_r = 6
-            dot_gap = 22
-            cx0 = W // 2 - dot_gap
-            for i in range(3):
-                a = int(80 + 160 * (0.5 + 0.5 * math.sin(self.title_t * 5 + i * math.pi / 1.5)))
-                ds = pygame.Surface((dot_r * 2 + 2, dot_r * 2 + 2), pygame.SRCALPHA)
-                pygame.draw.circle(ds, (*UI_GOLD, a), (dot_r + 1, dot_r + 1), dot_r)
-                surf.blit(ds, (cx0 + i * dot_gap - dot_r - 1, card_y + 70 - dot_r - 1))
+        n = len(scores)
+        if n == 0:
+            _text(surf, "No scores yet!", (W // 2, card_y + 60),
+                  size=18, color=UI_CREAM, shadow=True)
+            _text(surf, "Be the first.", (W // 2, card_y + 94),
+                  size=14, color=UI_CREAM, shadow=False)
         else:
-            n = len(scores)
-            if n == 0:
-                _text(surf, "No scores yet!", (W // 2, card_y + 60),
-                      size=18, color=UI_CREAM, shadow=True)
-                _text(surf, "Be the first.", (W // 2, card_y + 94),
-                      size=14, color=UI_CREAM, shadow=False)
-            else:
-                row_h = 46
-                card_h = n * row_h + 14
-                card_rect = pygame.Rect(card_x, card_y, card_w, card_h)
-                rounded_rect(surf, card_rect, 16, (10, 18, 48), 230)
+            row_h = 46
+            card_h = n * row_h + 14
+            card_rect = pygame.Rect(card_x, card_y, card_w, card_h)
+            rounded_rect(surf, card_rect, 16, (10, 18, 48), 230)
 
-                SILVER    = (185, 195, 205)
-                BRONZE    = (185, 125,  55)
-                BADGE_NAV = ( 25,  35,  70)
+            SILVER    = (185, 195, 205)
+            BRONZE    = (185, 125,  55)
+            BADGE_NAV = ( 25,  35,  70)
 
-                f_badge = _font(13, True)
-                f_name  = _font(16, False)
-                f_you   = _font(10, True)
-                f_score = _font(17, True)
+            f_badge = _font(13, True)
+            f_name  = _font(16, False)
+            f_you   = _font(10, True)
+            f_score = _font(17, True)
 
-                ry = card_y + 7
-                for i, entry in enumerate(scores):
-                    rank = i + 1
-                    if rank == 1:
-                        badge_col = UI_GOLD
-                    elif rank == 2:
-                        badge_col = SILVER
-                    elif rank == 3:
-                        badge_col = BRONZE
-                    else:
-                        badge_col = BADGE_NAV
+            ry = card_y + 7
+            for i, entry in enumerate(scores):
+                rank = i + 1
+                if rank == 1:
+                    badge_col = UI_GOLD
+                elif rank == 2:
+                    badge_col = SILVER
+                elif rank == 3:
+                    badge_col = BRONZE
+                else:
+                    badge_col = BADGE_NAV
 
-                    is_player = (i == player_rank)
-                    row_cy = ry + row_h // 2
+                is_player = (i == player_rank)
+                row_cy = ry + row_h // 2
 
-                    if is_player:
-                        hl = pygame.Surface((card_w - 8, row_h - 4), pygame.SRCALPHA)
-                        hl.fill((15, 70, 20, 180))
-                        surf.blit(hl, (card_x + 4, ry))
-                        name_col  = UI_GOLD
-                        score_col = UI_GOLD
-                    else:
-                        name_col  = WHITE
-                        score_col = badge_col if rank <= 3 else UI_CREAM
+                if is_player:
+                    hl = pygame.Surface((card_w - 8, row_h - 4), pygame.SRCALPHA)
+                    hl.fill((15, 70, 20, 180))
+                    surf.blit(hl, (card_x + 4, ry))
+                    name_col  = UI_GOLD
+                    score_col = UI_GOLD
+                else:
+                    name_col  = WHITE
+                    score_col = badge_col if rank <= 3 else UI_CREAM
 
-                    badge_cx = card_x + 22
-                    pygame.draw.circle(surf, badge_col, (badge_cx, row_cy), 14)
-                    if rank <= 3:
-                        pygame.draw.circle(surf, (0, 0, 0), (badge_cx, row_cy), 14, 1)
-                    num_img = f_badge.render(str(rank), True,
-                                             (25, 15, 0) if rank <= 3 else WHITE)
-                    surf.blit(num_img, num_img.get_rect(center=(badge_cx, row_cy)))
+                badge_cx = card_x + 22
+                pygame.draw.circle(surf, badge_col, (badge_cx, row_cy), 14)
+                if rank <= 3:
+                    pygame.draw.circle(surf, (0, 0, 0), (badge_cx, row_cy), 14, 1)
+                num_img = f_badge.render(str(rank), True,
+                                         (25, 15, 0) if rank <= 3 else WHITE)
+                surf.blit(num_img, num_img.get_rect(center=(badge_cx, row_cy)))
 
-                    nm = entry["name"][:10]
-                    nm_img = f_name.render(nm, True, name_col)
-                    nm_x = card_x + 44
-                    surf.blit(nm_img, (nm_x, row_cy - nm_img.get_height() // 2))
+                nm = entry["name"][:10]
+                nm_img = f_name.render(nm, True, name_col)
+                nm_x = card_x + 44
+                surf.blit(nm_img, (nm_x, row_cy - nm_img.get_height() // 2))
 
-                    if is_player:
-                        you_img = f_you.render("YOU", True, WHITE)
-                        pw = you_img.get_width() + 10
-                        ph = you_img.get_height() + 6
-                        px = nm_x + nm_img.get_width() + 7
-                        py = row_cy - ph // 2
-                        you_pill = pygame.Surface((pw, ph), pygame.SRCALPHA)
-                        rounded_rect(you_pill, you_pill.get_rect(), 4, (15, 100, 35), 220)
-                        surf.blit(you_pill, (px, py))
-                        surf.blit(you_img, (px + 5, py + 3))
+                if is_player:
+                    you_img = f_you.render("YOU", True, WHITE)
+                    pw = you_img.get_width() + 10
+                    ph = you_img.get_height() + 6
+                    px = nm_x + nm_img.get_width() + 7
+                    py = row_cy - ph // 2
+                    you_pill = pygame.Surface((pw, ph), pygame.SRCALPHA)
+                    rounded_rect(you_pill, you_pill.get_rect(), 4, (15, 100, 35), 220)
+                    surf.blit(you_pill, (px, py))
+                    surf.blit(you_img, (px + 5, py + 3))
 
-                    sc_img = f_score.render(str(entry["score"]), True, score_col)
-                    surf.blit(sc_img,
-                              (card_x + card_w - 12 - sc_img.get_width(),
-                               row_cy - sc_img.get_height() // 2))
+                sc_img = f_score.render(str(entry["score"]), True, score_col)
+                surf.blit(sc_img,
+                          (card_x + card_w - 12 - sc_img.get_width(),
+                           row_cy - sc_img.get_height() // 2))
 
-                    if i < n - 1:
-                        pygame.draw.line(surf, (25, 38, 75),
-                                         (card_x + 8, ry + row_h - 1),
-                                         (card_x + card_w - 8, ry + row_h - 1))
-                    ry += row_h
+                if i < n - 1:
+                    pygame.draw.line(surf, (25, 38, 75),
+                                     (card_x + 8, ry + row_h - 1),
+                                     (card_x + card_w - 8, ry + row_h - 1))
+                ry += row_h
 
         if cooldown <= 0:
             alpha = int(150 + math.sin(self.title_t * 4) * 90)
