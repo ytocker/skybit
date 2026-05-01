@@ -951,9 +951,11 @@ def _get_float_font(size, bold=True):
 
 
 class FloatText:
-    __slots__ = ("text", "x", "y", "vy", "life", "life_max", "color", "size")
+    __slots__ = ("text", "x", "y", "vy", "life", "life_max", "color",
+                 "size", "style", "_sparkles")
 
-    def __init__(self, text, x, y, color, size=22, life=1.0, vy=-60):
+    def __init__(self, text, x, y, color, size=22, life=1.0, vy=-60,
+                 style="plain"):
         self.text = text
         self.x = x
         self.y = y
@@ -962,6 +964,18 @@ class FloatText:
         self.life_max = life
         self.color = color
         self.size = size
+        self.style = style
+        # Pre-computed sparkle offsets (relative to the text center) so
+        # they stay stable across frames as the text floats up.
+        if style == "powerup":
+            rng = random.Random(hash((text, int(x), int(y))) & 0xFFFFFFFF)
+            self._sparkles = [
+                (rng.randint(-int(size * 1.6), int(size * 1.6)),
+                 rng.randint(-int(size * 0.7), int(size * 0.7)))
+                for _ in range(8)
+            ]
+        else:
+            self._sparkles = ()
 
     def update(self, dt):
         self.y += self.vy * dt
@@ -972,6 +986,12 @@ class FloatText:
         return self.life > 0
 
     def draw(self, surf):
+        if self.style == "powerup":
+            self._draw_powerup(surf)
+        else:
+            self._draw_plain(surf)
+
+    def _draw_plain(self, surf):
         t = max(0.0, self.life / self.life_max)
         a = int(255 * min(1.0, t * 2))
         font = _get_float_font(self.size)
@@ -982,3 +1002,59 @@ class FloatText:
         r = text.get_rect(center=(int(self.x), int(self.y)))
         surf.blit(shadow, (r.x + 2, r.y + 2))
         surf.blit(text, r.topleft)
+
+    def _draw_powerup(self, surf):
+        """Bold gradient fill + thick dark outline + sparkle dots, with the
+        gradient derived from `self.color` so each power-up keeps its own
+        identity color."""
+        life_t = max(0.0, self.life / self.life_max)
+        alpha = int(255 * min(1.0, life_t * 2))
+        font = _get_float_font(self.size)
+        text_surf = font.render(self.text, True, (255, 255, 255))
+        bw, bh = text_surf.get_size()
+        pad = max(8, self.size // 3)
+        comp = pygame.Surface((bw + pad * 2, bh + pad * 2), pygame.SRCALPHA)
+        cx = comp.get_width() // 2
+        cy = comp.get_height() // 2
+
+        # Drop shadow.
+        shadow = font.render(self.text, True, NEAR_BLACK)
+        shadow.set_alpha(150)
+        comp.blit(shadow, (cx - bw // 2 + 3, cy - bh // 2 + 4))
+
+        # Thick dark outline derived from the base color (lerped toward black).
+        col = self.color
+        outline_col = (col[0] // 4, col[1] // 4, col[2] // 4)
+        outline = font.render(self.text, True, outline_col)
+        for ox, oy in ((-3, 0), (3, 0), (0, -3), (0, 3),
+                       (-2, -2), (2, -2), (-2, 2), (2, 2)):
+            comp.blit(outline, (cx - bw // 2 + ox, cy - bh // 2 + oy))
+
+        # Vertical gradient fill (lighter top → base color bottom),
+        # masked to the text shape.
+        top_col = (
+            int(col[0] + (255 - col[0]) * 0.4),
+            int(col[1] + (255 - col[1]) * 0.4),
+            int(col[2] + (255 - col[2]) * 0.4),
+        )
+        grad = pygame.Surface((bw, bh), pygame.SRCALPHA)
+        for yy in range(bh):
+            t = yy / max(1, bh - 1)
+            cc = (
+                int(top_col[0] + (col[0] - top_col[0]) * t),
+                int(top_col[1] + (col[1] - top_col[1]) * t),
+                int(top_col[2] + (col[2] - top_col[2]) * t),
+            )
+            pygame.draw.line(grad, cc, (0, yy), (bw, yy))
+        mask = font.render(self.text, True, (255, 255, 255))
+        grad.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        comp.blit(grad, (cx - bw // 2, cy - bh // 2))
+
+        # Sparkle dots.
+        for sx, sy in self._sparkles:
+            pygame.draw.circle(comp, (255, 240, 200), (cx + sx, cy + sy), 2)
+            pygame.draw.circle(comp, (255, 255, 255), (cx + sx, cy + sy), 1)
+
+        comp.set_alpha(alpha)
+        rect = comp.get_rect(center=(int(self.x), int(self.y)))
+        surf.blit(comp, rect.topleft)
