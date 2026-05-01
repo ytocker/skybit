@@ -98,7 +98,8 @@ def _get_ghost_sprite() -> "pygame.Surface":
     if _ghost_sprite is not None:
         return _ghost_sprite
 
-    SS = 4
+    SS = 8                                    # was 4 — denser super-sample
+                                              # for cleaner anti-aliased edges
     PAD = 2
     GW, GH = (28 + PAD * 2), (36 + PAD * 2)   # 32 × 40 final-px
     sw, sh = GW * SS, GH * SS
@@ -113,14 +114,12 @@ def _get_ghost_sprite() -> "pygame.Surface":
                             (28 - 2) * SS, body_y2 - gcy)
     # Symmetric 3-bump / 2-indent scallop with uniform-width waves. The
     # 7 control points are mirror-symmetric about the body's vertical
-    # centreline and evenly spaced (each segment span_x // 6 wide), so
-    # every "wave" along the bottom has the same width — no more
-    # lopsided original where the centre bump was off-axis.
-    bump_y   = (GH - 4) * SS           # bumps hang to (canvas) y=36
-    indent_y = body_y2 + 4 * SS        # indents stop at body_y2 + 4
-    x_left   = (1 + PAD) * SS          # = body_rect.left
-    x_right  = (28 - 2 + PAD) * SS     # = body_rect.right - SS (same column
-                                       # the original right endpoint used)
+    # centreline and evenly spaced (each segment span/6 wide), so every
+    # "wave" along the bottom has the same width.
+    bump_y   = (GH - 4) * SS
+    indent_y = body_y2 + 4 * SS
+    x_left   = (1 + PAD) * SS
+    x_right  = (28 - 2 + PAD) * SS
     span_x   = x_right - x_left
     scallop = [
         (x_left + i * span_x // 6,
@@ -132,26 +131,31 @@ def _get_ghost_sprite() -> "pygame.Surface":
     THICKNESS_PX  = 2
 
     # 1) Outline ring — stack the silhouette in OUTLINE_COLOR at every
-    #    offset within a circle of radius `THICKNESS_PX*SS` so the ring
-    #    is uniformly thick around the entire silhouette.
+    #    integer offset within a circle of radius `THICKNESS_PX*SS`. The
+    #    dense step (1, was SS//2 = 4) keeps the ring perfectly uniform
+    #    around the full perimeter — no thin spots at the bump corners.
     sil = pygame.Surface((sw, sh), pygame.SRCALPHA)
     pygame.draw.circle(sil, OUTLINE_COLOR, (gcx, gcy), hr)
     pygame.draw.rect(sil, OUTLINE_COLOR, body_rect)
     pygame.draw.polygon(sil, OUTLINE_COLOR, scallop)
     t_big = THICKNESS_PX * SS
-    step = max(1, SS // 2)
-    for dx in range(-t_big, t_big + 1, step):
-        for dy in range(-t_big, t_big + 1, step):
+    for dx in range(-t_big, t_big + 1):
+        for dy in range(-t_big, t_big + 1):
             if dx * dx + dy * dy <= t_big * t_big:
                 big.blit(sil, (dx, dy))
 
-    # 2) Silhouette mask (used to clip both the body gradient and the sheen).
+    # 2) Silhouette mask (used to clip the body gradient and the sheen).
     mask = pygame.Surface((sw, sh), pygame.SRCALPHA)
     pygame.draw.circle(mask, (255, 255, 255, 255), (gcx, gcy), hr)
     pygame.draw.rect(mask, (255, 255, 255, 255), body_rect)
     pygame.draw.polygon(mask, (255, 255, 255, 255), scallop)
 
-    # 3) Holographic foil body — diagonal multi-stop gradient.
+    # 3) Holographic foil body — diagonal multi-stop gradient. Build a
+    #    1-D gradient strip of length sw+sh once (per-pixel set_at on a
+    #    single row, so cheap), then per row blit a sw-wide slice of it
+    #    starting at offset y. This produces the 45° diagonal gradient
+    #    without per-pixel work over the full sw×sh canvas — important
+    #    now that SS=8 means a 256×320 supersampled surface.
     stops = [
         (0.00, (240, 215, 255)),  # pale lavender
         (0.30, (255, 220, 240)),  # pearl pink
@@ -159,29 +163,33 @@ def _get_ghost_sprite() -> "pygame.Surface":
         (0.80, (215, 255, 235)),  # mint
         (1.00, (245, 245, 220)),  # warm ivory
     ]
+    diag_len = sw + sh
+    strip = pygame.Surface((diag_len, 1), pygame.SRCALPHA)
+    for xx in range(diag_len):
+        t = xx / max(1, diag_len - 1)
+        if t <= stops[0][0]:
+            col = stops[0][1]
+        elif t >= stops[-1][0]:
+            col = stops[-1][1]
+        else:
+            col = stops[-1][1]
+            for i in range(len(stops) - 1):
+                a_pos, a_col = stops[i]
+                b_pos, b_col = stops[i + 1]
+                if a_pos <= t <= b_pos:
+                    u = (t - a_pos) / max(1e-6, b_pos - a_pos)
+                    col = (
+                        int(a_col[0] + (b_col[0] - a_col[0]) * u),
+                        int(a_col[1] + (b_col[1] - a_col[1]) * u),
+                        int(a_col[2] + (b_col[2] - a_col[2]) * u),
+                    )
+                    break
+        strip.set_at((xx, 0), col + (245,))
     grad = pygame.Surface((sw, sh), pygame.SRCALPHA)
-    diag = sw + sh
     for yy in range(sh):
-        for xx in range(sw):
-            t = (xx + yy) / max(1, diag)
-            if t <= stops[0][0]:
-                col = stops[0][1]
-            elif t >= stops[-1][0]:
-                col = stops[-1][1]
-            else:
-                col = stops[-1][1]
-                for i in range(len(stops) - 1):
-                    a_pos, a_col = stops[i]
-                    b_pos, b_col = stops[i + 1]
-                    if a_pos <= t <= b_pos:
-                        u = (t - a_pos) / max(1e-6, b_pos - a_pos)
-                        col = (
-                            int(a_col[0] + (b_col[0] - a_col[0]) * u),
-                            int(a_col[1] + (b_col[1] - a_col[1]) * u),
-                            int(a_col[2] + (b_col[2] - a_col[2]) * u),
-                        )
-                        break
-            grad.set_at((xx, yy), col + (245,))
+        # Slice (yy, 0, sw, 1) of the strip lands on row yy of the gradient.
+        slice_rect = pygame.Rect(yy, 0, sw, 1)
+        grad.blit(strip, (0, yy), area=slice_rect)
     grad.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
     big.blit(grad, (0, 0))
 
