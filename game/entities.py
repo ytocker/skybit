@@ -324,133 +324,153 @@ _REVERSE_ICON_CACHE: "dict[int, pygame.Surface]" = {}
 
 
 def _build_reverse_icon(out_diameter: int) -> pygame.Surface:
+    """Slick glossy purple chevron arrows on a transparent background.
+    Built at 4x super-sampling, smoothscaled down for crisp edges."""
     SS = 4
     size = out_diameter * SS
     surf = pygame.Surface((size, size), pygame.SRCALPHA)
     cx = cy = size // 2
     R = size // 2 - SS
 
-    # Geometry — slim, elegant arrows.
-    top_y  = cy - R + SS
-    bot_y  = cy + R - SS
-    span   = bot_y - top_y
-    head_h = span * 42 // 100
-    shaft_w = R * 9 // 28
-    head_w  = shaft_w * 26 // 10
+    # Geometry — bold aggressive heads, thicker shafts so the silhouette
+    # reads even at small sizes.
+    top_y   = cy - R + SS
+    bot_y   = cy + R - SS
+    span    = bot_y - top_y
+    head_h  = span * 50 // 100
+    shaft_w = R * 13 // 28
+    head_w  = shaft_w * 22 // 10
 
-    lx = cx - R // 2 - R // 14   # left (up-arrow) column
-    rx = cx + R // 2 + R // 14   # right (down-arrow) column
+    lx = cx - R // 2 - R // 18
+    rx = cx + R // 2 + R // 18
 
-    # Palette — vivid purple with a magenta-ward gradient.
-    grad_top    = (215, 165, 252)   # bright lavender (highlight end)
-    grad_mid    = (175, 95, 235)
-    grad_bot    = (110, 45, 180)    # deep violet (shaded end)
-    outline_dk  = (45, 12, 80)
-    sheen       = (245, 220, 255)
+    # Palette — vibrant glossy purple, top-lit.
+    HL_BRIGHT = (250, 235, 255)   # specular ribbon
+    HL        = (225, 180, 252)   # upper sheen
+    BODY_HI   = (190, 120, 245)   # upper body
+    BODY_MID  = (160, 75, 225)
+    BODY_LO   = (105, 35, 175)    # lower shaded body
+    OUTLINE   = (35, 8, 70)       # dark violet outer
+    OUTLINE_2 = (15, 0, 35)       # near-black inner edge
 
     def _silhouette(col_x: int, *, point_up: bool, expand: int = 0):
-        """Return the polygon points for the unified arrow silhouette,
-        optionally expanded by `expand` pixels (used to draw the outline)."""
         e = expand
         sw = shaft_w + e * 2
         hw = head_w + e * 2
         if point_up:
-            tip   = (col_x, top_y - e)
-            base  = bot_y + e
-            sh_l  = col_x - sw // 2
-            sh_r  = col_x + sw // 2
-            hd_l  = col_x - hw // 2
-            hd_r  = col_x + hw // 2
-            sh_y  = top_y + head_h - e // 2
+            tip  = (col_x, top_y - e)
+            base = bot_y + e
+            sh_y = top_y + head_h - e // 3
             return [
                 tip,
-                (hd_r, sh_y),
-                (sh_r, sh_y),
-                (sh_r, base),
-                (sh_l, base),
-                (sh_l, sh_y),
-                (hd_l, sh_y),
+                (col_x + hw // 2, sh_y),
+                (col_x + sw // 2, sh_y),
+                (col_x + sw // 2 - max(0, e // 2), base),
+                (col_x - sw // 2 + max(0, e // 2), base),
+                (col_x - sw // 2, sh_y),
+                (col_x - hw // 2, sh_y),
             ]
         else:
-            tip   = (col_x, bot_y + e)
-            base  = top_y - e
-            sh_l  = col_x - sw // 2
-            sh_r  = col_x + sw // 2
-            hd_l  = col_x - hw // 2
-            hd_r  = col_x + hw // 2
-            sh_y  = bot_y - head_h + e // 2
+            tip  = (col_x, bot_y + e)
+            base = top_y - e
+            sh_y = bot_y - head_h + e // 3
             return [
                 tip,
-                (hd_l, sh_y),
-                (sh_l, sh_y),
-                (sh_l, base),
-                (sh_r, base),
-                (sh_r, sh_y),
-                (hd_r, sh_y),
+                (col_x - hw // 2, sh_y),
+                (col_x - sw // 2, sh_y),
+                (col_x - sw // 2 + max(0, e // 2), base),
+                (col_x + sw // 2 - max(0, e // 2), base),
+                (col_x + sw // 2, sh_y),
+                (col_x + hw // 2, sh_y),
             ]
 
     def _arrow(col_x: int, *, point_up: bool):
-        # 1) Outline silhouette (slightly expanded, dark violet).
-        pygame.draw.polygon(surf, outline_dk,
-                            _silhouette(col_x, point_up=point_up, expand=SS))
+        # ── Outline: dark violet halo + near-black inner edge ────────────
+        pygame.draw.polygon(
+            surf, OUTLINE,
+            _silhouette(col_x, point_up=point_up, expand=SS * 2))
+        pygame.draw.polygon(
+            surf, OUTLINE_2,
+            _silhouette(col_x, point_up=point_up, expand=SS))
 
-        # 2) Vertical gradient fill — light at the head, dark at the tail
-        #    when the arrow points up; reversed for the down arrow so the
-        #    "leading" tip always reads brightest.
+        # ── Vertical body gradient (scanline-masked) ─────────────────────
         body = _silhouette(col_x, point_up=point_up, expand=0)
         body_surf = pygame.Surface((size, size), pygame.SRCALPHA)
-        # Scanline gradient: lerp grad_top → grad_mid → grad_bot from top to bottom
-        # of the arrow's vertical extent. Reverse order for down-arrows.
         ys = [p[1] for p in body]
         y0, y1 = min(ys), max(ys)
+        # Sharp glossy split: top 35% is BODY_HI → BODY_MID, then a quick
+        # transition into BODY_LO for the lower 65%. Reverse for down-arrow
+        # so the leading tip always reads brightest.
         for y in range(y0, y1 + 1):
             t = (y - y0) / max(1, (y1 - y0))
             if not point_up:
                 t = 1.0 - t
-            if t < 0.5:
-                u = t * 2
+            if t < 0.35:
+                u = t / 0.35
                 col = (
-                    int(grad_top[0] + (grad_mid[0] - grad_top[0]) * u),
-                    int(grad_top[1] + (grad_mid[1] - grad_top[1]) * u),
-                    int(grad_top[2] + (grad_mid[2] - grad_top[2]) * u),
+                    int(BODY_HI[0]  + (BODY_MID[0] - BODY_HI[0])  * u),
+                    int(BODY_HI[1]  + (BODY_MID[1] - BODY_HI[1])  * u),
+                    int(BODY_HI[2]  + (BODY_MID[2] - BODY_HI[2])  * u),
                 )
             else:
-                u = (t - 0.5) * 2
+                u = (t - 0.35) / 0.65
                 col = (
-                    int(grad_mid[0] + (grad_bot[0] - grad_mid[0]) * u),
-                    int(grad_mid[1] + (grad_bot[1] - grad_mid[1]) * u),
-                    int(grad_mid[2] + (grad_bot[2] - grad_mid[2]) * u),
+                    int(BODY_MID[0] + (BODY_LO[0]  - BODY_MID[0]) * u),
+                    int(BODY_MID[1] + (BODY_LO[1]  - BODY_MID[1]) * u),
+                    int(BODY_MID[2] + (BODY_LO[2]  - BODY_MID[2]) * u),
                 )
             pygame.draw.line(body_surf, col, (0, y), (size, y))
-        # Mask the gradient strip to the arrow polygon.
         mask = pygame.Surface((size, size), pygame.SRCALPHA)
         pygame.draw.polygon(mask, (255, 255, 255, 255), body)
         body_surf.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
         surf.blit(body_surf, (0, 0))
 
-        # 3) Specular sheen on the leading edge — a thin lighter ribbon
-        #    along the left side of the shaft + along the inner edge of one
-        #    head wing, giving the arrow a 3-D feel without a background.
+        # ── Glossy upper sheen — soft band on the top of the arrow ──────
+        sheen_surf = pygame.Surface((size, size), pygame.SRCALPHA)
         if point_up:
-            sh_y = top_y + head_h
-            pygame.draw.line(surf, sheen,
-                             (col_x - shaft_w // 2 + SS, sh_y + SS),
-                             (col_x - shaft_w // 2 + SS, bot_y - SS),
-                             max(2, SS // 2))
-            pygame.draw.line(surf, sheen,
-                             (col_x - SS, top_y + SS * 2),
-                             (col_x - head_w // 2 + SS * 2, sh_y - SS // 2),
-                             max(2, SS // 2))
+            sheen_y0 = top_y
+            sheen_y1 = top_y + (head_h * 8 // 10)
         else:
-            sh_y = bot_y - head_h
-            pygame.draw.line(surf, sheen,
-                             (col_x - shaft_w // 2 + SS, top_y + SS),
-                             (col_x - shaft_w // 2 + SS, sh_y - SS),
-                             max(2, SS // 2))
-            pygame.draw.line(surf, sheen,
-                             (col_x - SS, bot_y - SS * 2),
-                             (col_x - head_w // 2 + SS * 2, sh_y + SS // 2),
-                             max(2, SS // 2))
+            sheen_y0 = bot_y - (head_h * 8 // 10)
+            sheen_y1 = bot_y
+        for y in range(min(sheen_y0, sheen_y1), max(sheen_y0, sheen_y1) + 1):
+            t = (y - sheen_y0) / max(1, (sheen_y1 - sheen_y0))
+            if not point_up:
+                t = 1.0 - t
+            a = int(170 * (1.0 - t) ** 1.4)
+            if a > 0:
+                pygame.draw.line(sheen_surf, (*HL, a), (0, y), (size, y))
+        sheen_surf.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        surf.blit(sheen_surf, (0, 0))
+
+        # ── Crisp specular ribbon along the leading edge ────────────────
+        if point_up:
+            pygame.draw.line(
+                surf, HL_BRIGHT,
+                (col_x - SS, top_y + SS * 2),
+                (col_x - head_w // 2 + SS * 2, top_y + head_h - SS),
+                max(2, SS // 2))
+            pygame.draw.line(
+                surf, HL_BRIGHT,
+                (col_x - shaft_w // 2 + SS, top_y + head_h + SS // 2),
+                (col_x - shaft_w // 2 + SS, bot_y - SS * 2),
+                max(2, SS // 2))
+        else:
+            pygame.draw.line(
+                surf, HL_BRIGHT,
+                (col_x - SS, bot_y - SS * 2),
+                (col_x - head_w // 2 + SS * 2, bot_y - head_h + SS),
+                max(2, SS // 2))
+            pygame.draw.line(
+                surf, HL_BRIGHT,
+                (col_x - shaft_w // 2 + SS, top_y + SS * 2),
+                (col_x - shaft_w // 2 + SS, bot_y - head_h - SS // 2),
+                max(2, SS // 2))
+
+        # ── Sparkle dot on the tip ──────────────────────────────────────
+        tip_y = top_y + SS if point_up else bot_y - SS
+        pygame.draw.circle(surf, HL_BRIGHT, (col_x, tip_y), SS)
+        pygame.draw.circle(surf, (255, 255, 255), (col_x, tip_y), SS // 2)
 
     _arrow(lx, point_up=True)
     _arrow(rx, point_up=False)
@@ -458,7 +478,7 @@ def _build_reverse_icon(out_diameter: int) -> pygame.Surface:
     return pygame.transform.smoothscale(surf, (out_diameter, out_diameter))
 
 
-def _get_reverse_icon(diameter: int = (MUSHROOM_R + 2) * 2) -> pygame.Surface:
+def _get_reverse_icon(diameter: int = (MUSHROOM_R + 8) * 2) -> pygame.Surface:
     cached = _REVERSE_ICON_CACHE.get(diameter)
     if cached is None:
         cached = _build_reverse_icon(diameter)
@@ -809,8 +829,16 @@ class PowerUp:
     def _draw_reverse(self, surf):
         cx = int(self.x)
         cy = int(self.y)
+        # Breathing scale gives the pickup life without any background.
+        breath = 0.5 + 0.5 * math.sin(self.pulse)
+        scale = 1.0 + 0.06 * breath
         icon = _get_reverse_icon()
-        surf.blit(icon, (cx - icon.get_width() // 2, cy - icon.get_height() // 2))
+        if scale != 1.0:
+            iw, ih = icon.get_size()
+            icon = pygame.transform.smoothscale(
+                icon, (int(iw * scale), int(ih * scale)))
+        surf.blit(icon, (cx - icon.get_width() // 2,
+                         cy - icon.get_height() // 2))
 
 
 # Back-compat alias — some callers (e.g. snapshot/playtest scripts) still say Mushroom.
