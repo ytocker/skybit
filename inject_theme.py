@@ -512,6 +512,16 @@ body   { background: #0d0820 !important; }
     window._pendingName = "__pending__";
     var _nameStarsAdded = false;
 
+    /* Scene flag set by Python so the JS layer knows when a tap on the
+       canvas is the stats-screen "continue" tap. We need this because
+       iOS Safari only honours focus() (i.e. shows the soft keyboard)
+       inside a real user gesture, and Python's async pipeline (advance
+       past stats → await Supabase fetch → call openNameEntry) breaks
+       the gesture chain before the focus call ever runs. By
+       intercepting the tap synchronously here, we get to call focus()
+       while the gesture is still live. */
+    window.__sk_state = '';
+
     /* Desktop keyboard fix:
        SDL/pygame attaches a keydown listener at the window level and calls
        preventDefault on every key. That swallows the browser's default
@@ -539,27 +549,63 @@ body   { background: #0d0820 !important; }
         // Escape skip removed — there's a clickable SKIP button now.
     }, true);
 
-    /* iOS Safari fix: the soft keyboard only appears if focus() runs
-       inside a real user gesture. ``openNameEntry``'s setTimeout(focus)
-       fires after the gesture has ended, so iOS players see the overlay
-       but no keyboard, and tapping the input may not focus it either —
-       pygbag's SDL canvas listeners can swallow the synthesised click
-       before it reaches the field.
+    /* iOS Safari user-gesture handler — does two jobs in one place:
 
-       Capture-phase pointerdown at the document runs before any SDL
-       listener and before any preventDefault, so we can re-focus the
-       input synchronously inside the player's tap. Gated on overlay
-       visibility so it never fires during gameplay. */
-    document.addEventListener('pointerdown', function (e) {
+       (1) STATS-TAP INTERCEPT. When Python signals __sk_state='stats',
+           the next user tap is the "continue" tap that would normally
+           cause the async fetch → openNameEntry chain. We pre-open
+           the overlay AND focus the input synchronously here, BEFORE
+           Python sees the event. Because we're still inside the
+           original user gesture, iOS Safari surfaces the soft
+           keyboard — the whole point of this fix. Python's pipeline
+           runs in parallel and either keeps the overlay (qualifier)
+           or closes it via closeNameEntry (non-qualifier).
+
+       (2) IN-OVERLAY RE-FOCUS. If the overlay is already open and the
+           player taps anywhere inside it (other than SUBMIT/SKIP),
+           re-focus the input. Mirrors (1) for the case where the
+           gesture chain was lost (e.g. Python opened the overlay
+           directly and the soft keyboard never came up).
+
+       We listen for BOTH 'touchend' and 'click' because iOS Safari's
+       documented user-activation events are click / touchend / keydown
+       — pointerdown (the previous listener) is NOT a user-activation
+       event there, which is why the prior fix silently no-op'd on
+       iPhone. Capture phase ensures we run before any SDL canvas
+       listener that might preventDefault the click. */
+    function _skUserTap(e) {
         var ov = document.getElementById('name-overlay');
-        if (!ov || ov.style.display !== 'flex') return;
-        var t = e.target;
-        // Don't steal focus from the SUBMIT / SKIP buttons — they need
-        // their own click handler to fire normally.
-        if (t && (t.id === 'name-submit' || t.id === 'name-skip')) return;
         var inp = document.getElementById('name-input');
-        if (inp) try { inp.focus(); } catch (_) {}
-    }, true);
+        if (!ov || !inp) return;
+
+        // (1) Stats-screen tap → open the overlay synchronously.
+        if (window.__sk_state === 'stats') {
+            window.__sk_state = 'opening';  // one-shot guard
+            ov.style.display = 'flex';
+            inp.value = '';
+            var ctr = document.getElementById('name-counter');
+            if (ctr) ctr.textContent = '0 / 10';
+            try { inp.focus(); } catch (_) {}
+            return;
+        }
+
+        // (2) In-overlay tap → re-focus the input.
+        if (ov.style.display !== 'flex') return;
+        var t = e.target;
+        if (t && (t.id === 'name-submit' || t.id === 'name-skip')) return;
+        try { inp.focus(); } catch (_) {}
+    }
+    document.addEventListener('touchend', _skUserTap, true);
+    document.addEventListener('click',    _skUserTap, true);
+
+    /* Python calls this when the player did NOT qualify for the top
+       10, to dismiss the overlay we pre-opened during the stats tap
+       so the leaderboard transition is clean. Idempotent. */
+    window.closeNameEntry = function () {
+        var ov = document.getElementById('name-overlay');
+        if (ov) ov.style.display = 'none';
+        window._pendingName = '__skip__';
+    };
 
     window.openNameEntry = function () {
         var ov  = document.getElementById('name-overlay');
@@ -583,18 +629,26 @@ body   { background: #0d0820 !important; }
             }
         }
 
+        /* Idempotent: the stats-tap intercept may have already opened
+           the overlay, cleared the input, and focused it inside the
+           player's gesture. Don't wipe what they typed in the meantime. */
+        var alreadyOpen = (ov.style.display === 'flex');
         ov.style.display = 'flex';
-        inp.value = '';
-        if (ctr) ctr.textContent = '0 / 10';
+        if (!alreadyOpen) {
+            inp.value = '';
+        }
+        if (ctr) ctr.textContent = inp.value.length + ' / 10';
         window._pendingName = '__pending__';
+        window.__sk_state = 'opening';  // belt-and-suspenders
 
-        /* Desktop / Android: programmatic focus brings up the keyboard
-           (or readies the cursor) without further user action. iOS
-           Safari blocks focus() outside a real user gesture, so this
-           call is a no-op there — the document-level pointerdown
-           listener installed below handles iOS by re-focusing the
-           input synchronously inside the player's tap. */
-        setTimeout(function () { try { inp.focus(); } catch (_) {} }, 80);
+        /* Desktop / Android only: programmatic focus brings up the
+           keyboard (or readies the cursor). iOS Safari blocks focus()
+           outside a real user gesture, so this call is a no-op there —
+           the touchend/click capture listener above handles iOS by
+           focusing the input synchronously during the player's tap. */
+        if (!alreadyOpen) {
+            setTimeout(function () { try { inp.focus(); } catch (_) {} }, 80);
+        }
 
         inp.oninput = function () {
             if (ctr) ctr.textContent = inp.value.length + ' / 10';

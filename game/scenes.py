@@ -300,6 +300,35 @@ class App:
             self.world.update(dt)
             self._cooldown_t = max(0.0, self._cooldown_t - dt)
 
+    def _js_set_state(self, name: str) -> None:
+        """Tell the JS layer what scene we're in. The browser bridge
+        uses this to pre-emit user-gesture-locked actions (specifically
+        opening the name-entry overlay + focus()ing the input
+        synchronously inside the player's stats-screen tap, before
+        Python's async pipeline gets a chance to break the gesture
+        chain on iOS Safari). Native and headless paths are no-ops."""
+        import sys
+        if sys.platform != "emscripten":
+            return
+        try:
+            import platform as _p  # type: ignore
+            _p.window.__sk_state = name
+        except Exception:
+            pass
+
+    def _js_close_name_entry(self) -> None:
+        """Dismiss the name-entry overlay if the JS layer pre-opened it
+        during the stats tap but the player did not qualify for the
+        top 10. No-op natively / on errors."""
+        import sys
+        if sys.platform != "emscripten":
+            return
+        try:
+            import platform as _p  # type: ignore
+            _p.window.closeNameEntry()
+        except Exception:
+            pass
+
     def _on_death(self):
         score = self.world.score
         self._new_best = score > self.session_best
@@ -318,6 +347,13 @@ class App:
         # at the moment of impact carries the whole "run ended" cue.
         self.state = STATE_STATS
         self._stats_t = 0.0
+        # Arm the JS-side stats-tap intercept. The next user tap on the
+        # canvas will be the "continue" tap; the JS handler opens the
+        # name-entry overlay and focuses the input synchronously inside
+        # that gesture, so iOS Safari surfaces the soft keyboard. If
+        # the player turns out not to qualify, _on_name_submitted
+        # closes the overlay before the leaderboard transition.
+        self._js_set_state("stats")
 
     def _advance_past_stats(self):
         import sys
@@ -375,10 +411,11 @@ class App:
             from game import leaderboard
             scores = await leaderboard.fetch_top10()
             if self._qualifies_for_top10(scores, self._final_score):
-                # Now we know they qualify — flip to NAMEENTRY so the
-                # Python-side render and the JS overlay both come up
-                # together. Not before; otherwise non-qualifiers see a
-                # name-entry screen flash for the duration of the fetch.
+                # The JS-side stats-tap intercept already opened the
+                # overlay synchronously (so iOS could pop the keyboard
+                # inside the gesture). Flip Python state to match — the
+                # Python render path for STATE_NAMEENTRY is a no-op on
+                # browser, so this is purely a state machine update.
                 self.state = STATE_NAMEENTRY
                 name = await leaderboard.open_name_entry()
                 if name:
@@ -391,10 +428,25 @@ class App:
                 else:
                     self._lb_player_rank = -1
             else:
+                # Player didn't make the top 10 — dismiss the overlay
+                # the JS pre-opened during their stats tap, so the
+                # leaderboard transition is clean.
+                self._js_close_name_entry()
                 self._lb_player_rank = -1
             self._lb_scores = scores
-        except Exception:
-            pass
+        except Exception as exc:
+            # The browser path is async + cross-language; silent
+            # exceptions here used to mean iPhone players just sat on a
+            # frozen stats screen with no clue why. Surface to the JS
+            # console so it's at least visible in remote diagnostics.
+            self._js_close_name_entry()
+            try:
+                import sys
+                if sys.platform == "emscripten":
+                    import js  # type: ignore
+                    js.console.warn("skybit: _on_name_submitted failed: " + repr(exc))
+            except Exception:
+                pass
         self._fetch_pending = False
         self.hud.title_t = 0.0
         self.state = STATE_LEADERBOARD
