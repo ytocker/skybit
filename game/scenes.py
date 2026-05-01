@@ -114,7 +114,8 @@ class App:
             self._finish_intro()
             return
         if self.state == STATE_MENU:
-            self._start_play()
+            if self._cooldown_t <= 0:
+                self._start_play()
         elif self.state == STATE_PLAY:
             if pos and self.hud.pause_btn.contains(pos):
                 self.state = STATE_PAUSE
@@ -130,6 +131,10 @@ class App:
         elif self.state == STATE_LEADERBOARD:
             if self._cooldown_t <= 0:
                 self.state = STATE_MENU
+                # Keep the menu visible for a beat instead of letting the
+                # next event in the same tap (FINGERDOWN / MOUSEBUTTONDOWN
+                # echoes, or a fast double-click) skip straight into play.
+                self._cooldown_t = 0.4
         elif self.state == STATE_GAMEOVER:
             if self._cooldown_t <= 0:
                 self._restart()
@@ -274,6 +279,7 @@ class App:
             return
         if self.state == STATE_MENU:
             self.world.world_idle_tick(dt)
+            self._cooldown_t = max(0.0, self._cooldown_t - dt)
         elif self.state == STATE_PLAY:
             self.world.update(dt)
             if self.world.game_over:
