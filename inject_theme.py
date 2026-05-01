@@ -42,7 +42,8 @@ OVERLAY = """
 <div id="skybit-loading">
   <p class="skybit-title">SKYBIT</p>
   <p class="skybit-sub">Pocket Sky Flyer</p>
-  <div class="tap-btn">TAP &nbsp;&middot;&nbsp; CLICK &nbsp;&middot;&nbsp; SPACE</div>
+  <div id="skybit-btn" class="tap-btn">TAP &nbsp;&middot;&nbsp; CLICK &nbsp;&middot;&nbsp; SPACE</div>
+  <p id="skybit-status" class="skybit-status"></p>
   <svg class="mountains" viewBox="0 0 1440 200" preserveAspectRatio="none"
        xmlns="http://www.w3.org/2000/svg">
     <path d="M0,200 L0,130 L60,70 L120,110 L200,40 L280,90 L360,20
@@ -188,6 +189,21 @@ body   { background: #0d0820 !important; }
 @keyframes pulse-btn {
     0%, 100% { opacity: 0.70; transform: scale(1.00); }
     50%       { opacity: 1.00; transform: scale(1.07); }
+}
+
+/* Loading watchdog status line (filled in by JS once stalled) */
+.skybit-status {
+    font-family: Arial, sans-serif;
+    font-size: clamp(11px, 2.6vw, 13px);
+    font-weight: 600;
+    letter-spacing: 2px;
+    color: #d8b855;
+    opacity: 0.7;
+    margin: 18px 0 0;
+    min-height: 1em;
+    pointer-events: none;
+    text-transform: uppercase;
+    text-align: center;
 }
 
 /* SVG mountain silhouette */
@@ -651,28 +667,114 @@ body   { background: #0d0820 !important; }
         }
     }
 
-    /* ── Overlay dismiss (tap/click → audio + UME + fade) ────────────── */
+    /* ── Loading overlay state machine ────────────────────────────────────
+       In production, pygbag's WASM/asset bundle download sometimes stalls
+       (stale browser cache, CDN hiccup, slow mobile connection). The user
+       only sees Skybit's overlay over pygbag's own progress bar, so they
+       can't tell anything is wrong. The original dismiss handler also
+       removed its listeners on the very first tap, so a tap fired before
+       window.MM existed silently no-op'd UME and left the user staring
+       at a frozen canvas with no recovery.
+
+       This state machine fixes both:
+         1. Polls window.MM every 250 ms; only marks the overlay as ready
+            once pygbag has actually booted.
+         2. After 8 s without boot, shows a "Loading… Ns" status line so
+            the user knows it's still trying.
+         3. After 25 s, swaps the button to "TAP TO RELOAD" with a
+            cache-busting hard reload (?_skb=<ts>) — the most common
+            fix for users wedged on a stale-cache state.
+         4. A tap before pygbag boots is harmless (button pulses, listeners
+            stay attached), so the user can retry instead of losing the
+            overlay.
+         5. Resumes the SHARED AudioContext (the same one skyPlay uses)
+            on every gesture, so the user's real touch unlocks audio for
+            the actual game session — the throw-away `new A()` of the
+            previous version wasted the gesture on an unused context. */
     if (ov) {
-        function dismiss() {
-            /* Start / resume Web Audio context */
+        var btn    = document.getElementById('skybit-btn');
+        var status = document.getElementById('skybit-status');
+        var BTN_READY  = 'TAP  ·  CLICK  ·  SPACE';
+        var BTN_LOAD   = 'LOADING…';
+        var BTN_RELOAD = 'TAP TO RELOAD';
+        var STALL_MS   = 25000;
+        var INFO_MS    =  8000;
+        var t0 = Date.now();
+        var pygbagReady = false;
+        var stalled = false;
+
+        if (btn) btn.textContent = BTN_LOAD;
+
+        function isReady() {
+            try { return typeof window.MM !== 'undefined' && window.MM !== null; }
+            catch (_) { return false; }
+        }
+
+        var pollId = setInterval(function () {
+            if (isReady() && !pygbagReady) {
+                pygbagReady = true;
+                stalled = false;
+                if (btn) btn.textContent = BTN_READY;
+                if (status) status.textContent = '';
+                return;
+            }
+            if (pygbagReady) return;
+            var elapsed = Date.now() - t0;
+            if (elapsed >= STALL_MS && !stalled) {
+                stalled = true;
+                if (btn) btn.textContent = BTN_RELOAD;
+                if (status) status.textContent = 'Loading is stuck. Tap to reload.';
+            } else if (elapsed >= INFO_MS && status && !stalled) {
+                status.textContent = 'Loading… ' + Math.floor(elapsed / 1000) + 's';
+            }
+        }, 250);
+
+        function reloadBust() {
+            clearInterval(pollId);
             try {
-                var A = window.AudioContext || window.webkitAudioContext;
-                if (A) { var tmp = new A(); tmp.resume(); }
-            } catch (_) {}
-            /* Signal pygbag media manager */
-            if (window.MM) window.MM.UME = true;
-            /* Forward gesture to canvas so pygbag event handlers fire */
+                var u = new URL(window.location.href);
+                u.searchParams.set('_skb', String(Date.now()));
+                window.location.replace(u.toString());
+            } catch (_) {
+                window.location.reload();
+            }
+        }
+
+        function pulseBtn() {
+            if (!btn) return;
+            btn.style.transition = 'transform 120ms ease';
+            btn.style.transform  = 'scale(0.93)';
+            setTimeout(function () { btn.style.transform = ''; }, 130);
+        }
+
+        function dismiss() {
+            /* Always unlock the shared audio context on any user gesture --
+               this is the same _ctx that skyPlay() uses later. */
+            try { getCtx(); } catch (_) {}
+
+            if (stalled) { reloadBust(); return; }
+            if (!pygbagReady) { pulseBtn(); return; }
+
+            clearInterval(pollId);
+            try { if (window.MM) window.MM.UME = true; } catch (_) {}
             var cv = document.getElementById('canvas');
-            if (cv) cv.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));
-            /* Fade out */
+            if (cv) {
+                try { cv.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true})); } catch (_) {}
+            }
+            /* Make overlay click-through during the fade so subsequent taps
+               reach <canvas> directly (iOS Safari rejects synthetic gestures
+               for audio unlock; the canvas tap path remains the safety net). */
+            ov.style.pointerEvents = 'none';
             ov.style.transition = 'opacity 0.45s ease';
             ov.style.opacity = '0';
             setTimeout(function () { ov.style.display = 'none'; }, 480);
-            ov.removeEventListener('click',    dismiss);
-            ov.removeEventListener('touchend', dismiss);
+            ov.removeEventListener('click',      dismiss);
+            ov.removeEventListener('touchstart', dismiss);
+            ov.removeEventListener('touchend',   dismiss);
         }
-        ov.addEventListener('click',    dismiss);
-        ov.addEventListener('touchend', dismiss);
+        ov.addEventListener('click',      dismiss);
+        ov.addEventListener('touchstart', dismiss);
+        ov.addEventListener('touchend',   dismiss);
     }
 }());
 </script>
