@@ -20,7 +20,13 @@ GAP_MIN       = 115
 BIRD_X = 90
 BIRD_R = 14
 
-COIN_R             = 11
+# Pip carries the parcel for the entire run. The parcel's collision
+# footprint is a second circle below the bird; pillars touching that
+# circle are also lethal.
+PARCEL_R          = 9    # forgiving (parcel sprite is 22 px so r=11 would catch its corners)
+PARCEL_Y_OFFSET   = 12   # px below bird-centre to parcel-centre (matches intro composition)
+
+COIN_R             = 13
 
 # Coin-rush: every Nth pipe gets a wider gap filled with a dense coin arc.
 COIN_RUSH_INTERVAL = 15
@@ -39,10 +45,15 @@ KFC_DURATION       = 8.0
 GHOST_DURATION     = 8.0
 GROW_DURATION      = 8.0
 GROW_SCALE         = 1.5
+REVERSE_DURATION   = 8.0
 
 # Spawn weights for power-up kinds. Must sum to anything — they're
 # normalized at pick time. `surprise` resolves at pickup-time to one of
-# the six "real" kinds chosen at random (see World._activate_surprise).
+# the six "real" kinds chosen at random (see World._on_powerup).
+# `reverse` is intentionally excluded — the implementation is kept in
+# place but the power-up doesn't spawn or resolve from a surprise box.
+# To re-enable: add ("reverse", 1) below AND restore "reverse" in the
+# random.choice() inside World._on_powerup.
 POWERUP_WEIGHTS    = (
     ("triple",   1),
     ("slowmo",   1),

@@ -8,11 +8,20 @@
 # WASM requires cross-origin isolation for SharedArrayBuffer (pygbag audio).
 # "credentialless" (not "require-corp") is needed so pygbag's CDN resources
 # (pygame-web.github.io) can load without a Cross-Origin-Resource-Policy header.
+#
+# Content-Security-Policy: scoped narrowly so a future XSS or attacker-
+# injected helper script can't exfiltrate to a third-party origin or
+# fetch helpers from one. We deliberately keep `script-src` permissive
+# (pygame-web.github.io + 'unsafe-inline' + 'unsafe-eval' for the Pyodide
+# CDN bootstrap and inline bridge IIFE) — tightening it requires adding
+# nonces to the inline blocks pygbag generates, which is outside this
+# patch's scope.
 [[headers]]
   for = "/*"
   [headers.values]
     Cross-Origin-Embedder-Policy = "credentialless"
     Cross-Origin-Opener-Policy   = "same-origin"
+    Content-Security-Policy      = "default-src 'self'; connect-src 'self' https://*.supabase.co https://pygame-web.github.io; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://pygame-web.github.io; worker-src 'self' blob:; img-src 'self' data: blob:; media-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 
 [[headers]]
   for = "/*.wasm"

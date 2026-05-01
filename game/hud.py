@@ -4,7 +4,7 @@ import os
 import random
 import pygame
 
-from game.config import W, H, TRIPLE_DURATION, MAGNET_DURATION, SLOWMO_DURATION, KFC_DURATION, GHOST_DURATION, GROW_DURATION
+from game.config import W, H, TRIPLE_DURATION, MAGNET_DURATION, SLOWMO_DURATION, KFC_DURATION, GHOST_DURATION, GROW_DURATION, REVERSE_DURATION
 from game.draw import (
     rounded_rect, rounded_rect_grad, lerp_color,
     UI_SCORE, UI_GOLD, UI_ORANGE, UI_SHADOW, UI_CREAM, UI_RED,
@@ -247,16 +247,14 @@ def _text(surf, txt, center, size=36, color=WHITE, shadow=True):
 
 
 def _coin_icon(surf, cx, cy, r=10):
-    # Match in-world Coin.draw: dark rim + gold body + embossed parrot.
-    # No halo, no pale highlight.
-    pygame.draw.circle(surf, COIN_DARK, (cx, cy), r + 1)
-    pygame.draw.circle(surf, COIN_GOLD, (cx, cy), r)
-    emboss = (140, 85, 0)
-    pygame.draw.ellipse(surf, emboss, (cx - 2, cy - 1, 7, 5))
-    pygame.draw.circle(surf, emboss, (cx - 1, cy - 3), 3)
-    pygame.draw.polygon(surf, emboss,
-                        [(cx - 3, cy - 3), (cx - 6, cy - 2), (cx - 3, cy - 1)])
-    pygame.draw.circle(surf, COIN_GOLD, (cx, cy - 4), 1)
+    # Reuse the cached high-quality coin face from entities so the HUD pill
+    # carries the same gradient + bold outline + embossed parrot + specular
+    # highlight as the in-world coin.
+    from game.entities import _get_coin_face
+    face = _get_coin_face()
+    target = pygame.transform.smoothscale(face, (r * 2 + 2, r * 2 + 2))
+    rect = target.get_rect(center=(cx, cy))
+    surf.blit(target, rect.topleft)
 
 
 def _draw_buff_icon(surf, rect, kind):
@@ -272,14 +270,62 @@ def _draw_buff_icon(surf, rect, kind):
         pygame.draw.circle(surf, WHITE, (cx - 3, cy - 3), 1)
         pygame.draw.circle(surf, WHITE, (cx + 3, cy - 2), 1)
     elif kind == "magnet":
-        # Horseshoe U
-        pygame.draw.arc(surf, (220, 30, 40),
-                        (cx - 8, cy - 7, 16, 14),
-                        math.pi, 2 * math.pi, 4)
-        pygame.draw.rect(surf, (220, 30, 40), (cx - 8, cy, 3, 7))
-        pygame.draw.rect(surf, (220, 30, 40), (cx + 5, cy, 3, 7))
-        pygame.draw.rect(surf, (220, 220, 235), (cx - 8, cy + 4, 3, 3))
-        pygame.draw.rect(surf, (220, 220, 235), (cx + 5, cy + 4, 3, 3))
+        # Polished horseshoe magnet — rendered at 2× on a scratch surface
+        # so the arc smooths under `smoothscale`. Has a dark silhouette
+        # outline, a vertical red gradient flesh, and steel-tipped poles
+        # at the bottom with tiny field-line sparks above the prongs.
+        OUTLINE = ( 38,   8,  16)
+        RED_TOP = (245,  78,  64)   # sunlit upper arc
+        RED_MID = (215,  38,  46)
+        RED_BOT = (150,  16,  26)   # deep base of the legs
+        STEEL_LT = (220, 226, 240)
+        STEEL_DK = (108, 116, 138)
+        FIELD    = (255, 230, 130)  # warm spark colour for the field hint
+
+        SX = SY = 40                # 2× scratch
+        m = pygame.Surface((SX, SY), pygame.SRCALPHA)
+
+        # Outer silhouette in OUTLINE: top arc (filled circle) + leg slab.
+        pygame.draw.circle(m, OUTLINE, (20, 18), 14)
+        pygame.draw.rect(m, OUTLINE, (6, 18, 28, 18))
+
+        # Red flesh — vertical gradient column-by-column under a circle mask.
+        red_layer = pygame.Surface((SX, SY), pygame.SRCALPHA)
+        for y in range(40):
+            if y <= 18:
+                col = lerp_color(RED_TOP, RED_MID, max(0.0, y / 18.0))
+            else:
+                col = lerp_color(RED_MID, RED_BOT, (y - 18) / 18.0)
+            pygame.draw.line(red_layer, col, (0, y), (SX - 1, y))
+        # Mask the gradient to the inset silhouette.
+        mask = pygame.Surface((SX, SY), pygame.SRCALPHA)
+        pygame.draw.circle(mask, (255, 255, 255, 255), (20, 18), 12)
+        pygame.draw.rect(mask, (255, 255, 255, 255), (8, 18, 24, 16))
+        red_layer.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+        m.blit(red_layer, (0, 0))
+
+        # Carve the U cavity through OUTLINE + RED in one pass (alpha=0
+        # writes "fully transparent" on SRCALPHA surfaces).
+        pygame.draw.circle(m, (0, 0, 0, 0), (20, 18), 8)
+        pygame.draw.rect(m, (0, 0, 0, 0), (12, 18, 16, 18))
+
+        # Steel pole tips at the bottom of each leg.
+        for lx in (6, 22):
+            pygame.draw.rect(m, OUTLINE,  (lx, 30, 12, 6))
+            pygame.draw.rect(m, STEEL_DK, (lx + 1, 31, 10, 4))
+            pygame.draw.rect(m, STEEL_LT, (lx + 1, 31, 10, 1))
+
+        # Sun glint along the upper-outer arc and a tiny highlight on the
+        # left pole face — sells the metallic feel after smoothscale.
+        pygame.draw.line(m, RED_TOP, (10, 12), (15,  6), 2)
+        pygame.draw.line(m, STEEL_LT, (8, 32), (8, 35), 1)
+
+        # Two faint magnetic-pull sparks above the poles.
+        pygame.draw.line(m, FIELD, ( 8, 36), ( 6, 38), 1)
+        pygame.draw.line(m, FIELD, (32, 36), (34, 38), 1)
+
+        icon = pygame.transform.smoothscale(m, (rect.w, rect.h))
+        surf.blit(icon, rect.topleft)
     elif kind == "slowmo":
         # Tiny clock face on SRCALPHA scratch
         r = 7
@@ -349,6 +395,14 @@ def _draw_buff_icon(surf, rect, kind):
         _draw_dollar_coin_hud(icon, native // 2, native // 2, pulse=0.0)
         scaled = pygame.transform.smoothscale(icon, (20, 20))
         surf.blit(scaled, (cx - 10, cy - 10))
+    elif kind == "reverse":
+        # Reuse the cached high-resolution disc + arrows from the world
+        # pickup, scaled to fit the badge slot.
+        from game.entities import _get_reverse_icon
+        diameter = min(rect.width, rect.height) - 2
+        icon = _get_reverse_icon(diameter)
+        surf.blit(icon, (cx - icon.get_width() // 2,
+                         cy - icon.get_height() // 2))
 
 
 class PauseButton:
@@ -423,21 +477,22 @@ class HUD:
 
         _draw_overlay_stars(surf, self._stars, self.title_t)
 
-        # Floating title
+        # Floating title — sits above the gameplay-opener post-house +
+        # Pip composition (cottage top is at y≈208) so the text never
+        # crosses the parrot.
         pulse = 1.0 + math.sin(self.title_t * 2.4) * 0.04
         float_y = int(7 * math.sin(self.title_t * 1.8))
-        _outlined_text(surf, "SKYBIT", (W // 2, 176 + float_y),
+        _outlined_text(surf, "SKYBIT", (W // 2, 126 + float_y),
                         size=int(72 * pulse), px=3)
 
-        # Subtitle
-        sub_f = _font(14, False)
-        sub = sub_f.render("P O C K E T   S K Y   F L Y E R", True, _GOLD_MUTED)
-        sub.set_alpha(200)
-        surf.blit(sub, sub.get_rect(center=(W // 2, 228)))
+        # Subtitle — same gold-on-red outline as SKYBIT, just smaller and
+        # with a tighter pixel outline so it reads as a partner line.
+        _outlined_text(surf, "POCKET SKY FLYER", (W // 2, 184),
+                        size=22, px=2, shadow_offset=(2, 3))
 
         # Divider
         pygame.draw.line(surf, (*_ORANGE_BORDER, 120),
-                         (W // 2 - 70, 248), (W // 2 + 70, 248), 1)
+                         (W // 2 - 70, 208), (W // 2 + 70, 208), 1)
 
         # Tap-to-play pill (pulsing)
         btn_alpha = int(180 + math.sin(self.title_t * 3.6) * 70)
@@ -553,6 +608,8 @@ class HUD:
             active.append(("ghost", world.ghost_timer, GHOST_DURATION))
         if world.grow_timer > 0:
             active.append(("grow", world.grow_timer, GROW_DURATION))
+        if world.reverse_timer > 0:
+            active.append(("reverse", world.reverse_timer, REVERSE_DURATION))
 
         if active:
             icon_size = 24

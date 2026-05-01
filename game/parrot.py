@@ -10,6 +10,7 @@ import pygame
 from game.draw import (
     BIRD_RED, BIRD_RED_D, BIRD_WING, BIRD_WING_D, BIRD_TIP,
     BIRD_BELLY, BIRD_BEAK, BIRD_BEAK_D, WHITE, BLACK, NEAR_BLACK,
+    lerp_color as _lerp_color,
 )
 
 SPRITE_W, SPRITE_H = 64, 60
@@ -194,6 +195,132 @@ def _add_outline(src: pygame.Surface, outline_color=(20, 12, 18, 220)) -> pygame
 # Four wing angles — up, mid-up, level, down
 _WING_ANGLES = (50, 20, -10, -40)
 FRAMES: list[pygame.Surface] = [_add_outline(_build_frame(a)) for a in _WING_ANGLES]
+
+
+# ── parcel sprite (Pip's permanent companion in gameplay) ────────────────────
+# Pip carries the parcel through every run. Each visual mode (KFC, ghost,
+# triple-buff hat, normal) uses a hand-tuned palette so the parcel reads as
+# part of Pip's silhouette in that mode rather than as a colour-tinted overlay.
+
+PARCEL_SIZE = 22
+
+_PARCEL_PALETTES = {
+    "normal": dict(
+        BOX_BASE=(180, 130,  80), BOX_SHADE=(110,  75,  40), BOX_HI=(220, 175, 120),
+        RIBBON  =(200,  50,  60), RIBBON_HI=(255, 110, 100),
+        BOW_FILL=(200,  50,  60), BOW_HI   =(255, 130, 120),
+        OUTLINE =( 26,  10,  12),
+    ),
+    "kfc": dict(  # warm fried-chicken amber to match KFC_FRAMES
+        BOX_BASE=(210, 138,  42), BOX_SHADE=(148,  82,  18), BOX_HI=(238, 178,  72),
+        RIBBON  =(110,  46,  22), RIBBON_HI=(180, 100,  52),
+        BOW_FILL=(110,  46,  22), BOW_HI   =(180, 100,  52),
+        OUTLINE =( 60,  32,  16),
+    ),
+    "ghost": dict(  # cool spectral cyan; alpha breath applied at draw-time
+        BOX_BASE=(140, 200, 230), BOX_SHADE=( 88, 150, 190), BOX_HI=(200, 235, 250),
+        RIBBON  =(110, 170, 210), RIBBON_HI=(180, 225, 250),
+        BOW_FILL=(110, 170, 210), BOW_HI   =(180, 225, 250),
+        OUTLINE =( 40,  90, 140),
+    ),
+    "triple": dict(  # kraft box, gold ribbon to harmonise with the stovepipe hat
+        BOX_BASE=(180, 130,  80), BOX_SHADE=(110,  75,  40), BOX_HI=(220, 175, 120),
+        RIBBON  =(210, 170,  60), RIBBON_HI=(255, 225, 140),
+        BOW_FILL=(210, 170,  60), BOW_HI   =(255, 225, 140),
+        OUTLINE =( 50,  32,  12),
+    ),
+}
+
+
+def _build_parcel_variant(palette: dict) -> pygame.Surface:
+    """Render a 22×22 parcel sprite using the supplied palette. Geometry
+    ported from `game.intro._build_parcel` so the silhouette matches the
+    intro exactly. Render at 2× detail then smoothscale-down once for crisp
+    outlines + tiny pixel reads."""
+    BOX_BASE = palette["BOX_BASE"]
+    BOX_SHADE = palette["BOX_SHADE"]
+    BOX_HI = palette["BOX_HI"]
+    RIBBON = palette["RIBBON"]
+    RIBBON_HI = palette["RIBBON_HI"]
+    BOW_FILL = palette["BOW_FILL"]
+    BOW_HI = palette["BOW_HI"]
+    OUTLINE = palette["OUTLINE"]
+
+    SIZE = 56
+    surf = pygame.Surface((SIZE, SIZE), pygame.SRCALPHA)
+    BOX_W, BOX_H = 40, 34
+    cx, cy = SIZE // 2, SIZE // 2 + 2
+    rect = pygame.Rect(cx - BOX_W // 2, cy - BOX_H // 2 + 2, BOX_W, BOX_H)
+
+    # Drop shadow
+    sh = pygame.Surface((BOX_W + 8, 10), pygame.SRCALPHA)
+    pygame.draw.ellipse(sh, (8, 4, 22, 130), sh.get_rect())
+    surf.blit(sh, (cx - (BOX_W + 8) // 2, rect.bottom - 4))
+
+    # Box body — outline frame + vertical-gradient fill + top sheen line
+    pygame.draw.rect(surf, OUTLINE, rect.inflate(4, 4), border_radius=8)
+    body = pygame.Surface((rect.w, rect.h), pygame.SRCALPHA)
+    for y in range(rect.h):
+        t = y / max(1, rect.h - 1)
+        col = _lerp_color(BOX_BASE, BOX_SHADE, t) + (255,)
+        body.fill(col, pygame.Rect(0, y, rect.w, 1))
+    mask = pygame.Surface((rect.w, rect.h), pygame.SRCALPHA)
+    pygame.draw.rect(mask, (255, 255, 255, 255), mask.get_rect(),
+                     border_radius=6)
+    body.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+    surf.blit(body, rect.topleft)
+    pygame.draw.line(surf, BOX_HI,
+                     (rect.x + 4, rect.y + 3),
+                     (rect.right - 5, rect.y + 3), 2)
+
+    # Vertical ribbon
+    rv_w = 6
+    rvx = rect.centerx - rv_w // 2
+    pygame.draw.rect(surf, RIBBON, (rvx, rect.y, rv_w, rect.h))
+    pygame.draw.line(surf, RIBBON_HI,
+                     (rvx + 1, rect.y), (rvx + 1, rect.bottom - 1), 1)
+
+    # Horizontal ribbon
+    rh_w = 6
+    rhy = rect.y + rect.h // 2 - rh_w // 2
+    pygame.draw.rect(surf, RIBBON, (rect.x, rhy, rect.w, rh_w))
+    pygame.draw.line(surf, RIBBON_HI, (rect.x, rhy + 1),
+                     (rect.right - 1, rhy + 1), 1)
+
+    # Bow on top — two puffy loops + knot + trailing tails
+    bx, by = cx, rect.y - 6
+    pygame.draw.ellipse(surf, OUTLINE,
+                        pygame.Rect(bx - 13, by - 6, 13, 12))
+    pygame.draw.ellipse(surf, BOW_FILL,
+                        pygame.Rect(bx - 12, by - 5, 11, 10))
+    pygame.draw.ellipse(surf, OUTLINE,
+                        pygame.Rect(bx,       by - 6, 13, 12))
+    pygame.draw.ellipse(surf, BOW_FILL,
+                        pygame.Rect(bx + 1,   by - 5, 11, 10))
+    pygame.draw.ellipse(surf, BOW_HI, pygame.Rect(bx - 10, by - 4, 4, 3))
+    pygame.draw.ellipse(surf, BOW_HI, pygame.Rect(bx + 6,  by - 4, 4, 3))
+    pygame.draw.rect(surf, OUTLINE, pygame.Rect(bx - 4, by - 6, 9, 12),
+                     border_radius=2)
+    pygame.draw.rect(surf, BOW_FILL,  pygame.Rect(bx - 3, by - 5, 7, 10),
+                     border_radius=2)
+    pygame.draw.line(surf, BOW_HI, (bx - 1, by - 4), (bx - 1, by + 3), 1)
+    pygame.draw.line(surf, OUTLINE, (bx - 2, by + 4), (bx - 7, by + 11), 4)
+    pygame.draw.line(surf, OUTLINE, (bx + 2, by + 4), (bx + 7, by + 11), 4)
+    pygame.draw.line(surf, BOW_FILL, (bx - 2, by + 4), (bx - 6, by + 10), 2)
+    pygame.draw.line(surf, BOW_FILL, (bx + 2, by + 4), (bx + 6, by + 10), 2)
+
+    return pygame.transform.smoothscale(surf, (PARCEL_SIZE, PARCEL_SIZE))
+
+
+_PARCELS: dict[str, pygame.Surface] = {
+    name: _build_parcel_variant(pal) for name, pal in _PARCEL_PALETTES.items()
+}
+
+
+def get_parcel(mode: str = "normal") -> pygame.Surface:
+    """Return the parcel sprite for a visual mode. Falls back to 'normal'
+    on unknown keys so the parcel never disappears."""
+    return _PARCELS.get(mode, _PARCELS["normal"])
 
 
 _rot_cache: dict = {}

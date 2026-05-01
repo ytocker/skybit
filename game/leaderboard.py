@@ -4,35 +4,40 @@ Global leaderboard bridge.
 Native play:  reads/writes a local JSON file (SCORES_FILE from config).
               No network required — scores persist across sessions on-device.
 
-Browser (emscripten): delegates to window.lbSubmitStart / window.lbFetchStart
-              fire-and-poll JS functions injected by inject_theme.py which
-              talk to Supabase.
+Browser (emscripten): delegates to the closure-private ``window.__sk``
+              dispatcher injected by inject_theme.py. The submit path
+              ships a tamper-evident proof bundle (events + chain hash
+              + run UUID) and runs a deterministic plausibility check
+              before the network call.
 """
 import os
 import sys
 import json
 
 from game.config import SCORES_FILE
+from game import _plausibility
 
 _IS_BROWSER = sys.platform == "emscripten"
 
-# ── Browser-side JS handle (resolved lazily) ─────────────────────────────────
+# ── Browser-side bridge ──────────────────────────────────────────────────────
+#
+# We resolve a single handle: ``js.window.openNameEntry`` (kept on window
+# because the name-entry overlay is not security-sensitive). Once we see
+# it, we know the JS bridge has booted and ``window.__sk`` is wired up.
 
-_lbSubmit = None
-_lbFetch = None
+_dispatcherReady = False
 _openNameEntry = None
 
 
 def _resolve() -> None:
-    global _lbSubmit, _lbFetch, _openNameEntry
-    if _lbSubmit is not None:
+    global _dispatcherReady, _openNameEntry
+    if _dispatcherReady:
         return
     try:
         import js  # type: ignore
         if hasattr(js, "openNameEntry"):
             _openNameEntry = js.openNameEntry
-            _lbSubmit = True
-            _lbFetch = True
+            _dispatcherReady = True
             return
     except Exception:
         pass
@@ -40,10 +45,20 @@ def _resolve() -> None:
         import platform as _pgb  # type: ignore
         if hasattr(_pgb, "window") and hasattr(_pgb.window, "openNameEntry"):
             _openNameEntry = _pgb.window.openNameEntry
-            _lbSubmit = True
-            _lbFetch = True
+            _dispatcherReady = True
     except Exception:
         pass
+
+
+def _to_json(payload: dict) -> str:
+    """Pre-serialise to a JSON string. Matches the proven handoff
+    pattern in the legacy bridge — Pyodide-to-JS dict conversion
+    behaves differently across pygbag versions, but a string is just
+    a string."""
+    out = dict(payload)
+    if "events" in out:
+        out["events"] = [list(e) for e in out["events"]]
+    return json.dumps(out, separators=(",", ":"))
 
 
 # ── Native local-JSON helpers ─────────────────────────────────────────────────
@@ -109,40 +124,81 @@ async def open_name_entry() -> "str | None":
         return None
 
 
-async def submit(name: str, score: int) -> bool:
-    """Save score. Browser: POST to Supabase via JS bridge. Native: local JSON."""
+def _build_submit_payload(name: str, world) -> "dict | None":
+    """Assemble the submission bundle from the world's ProofState. Returns
+    ``None`` if the local plausibility check rejects the run — the bridge
+    is never called in that case, so the network sees no submission for
+    a tampered score."""
+    proof = getattr(world, "_proof", None)
+    if proof is None:
+        return None
+    score = proof.score()
+    events = proof.events_tuple()
+    try:
+        _plausibility.check(
+            score=int(score),
+            pillars_passed=int(world.pillars_passed),
+            coin_count=int(world.coin_count),
+            time_alive=float(world.time_alive),
+            events=events,
+            chain_hex=proof.chain_hex(),
+        )
+    except _plausibility.PlausibilityError:
+        return None
+    return {
+        "name": str(name)[:10],
+        "score": int(score),
+        "run_id": proof.run_id(),
+        "chain_hex": proof.chain_hex(),
+        "events": list(events),
+    }
+
+
+async def submit(name: str, world) -> bool:
+    """Save score for the run captured in ``world``. Browser: assembles a
+    proof bundle, runs the plausibility check, ships through ``__sk``.
+    Native: writes the visible ``world.score`` to the local JSON.
+
+    Note: signature changed from ``submit(name, score)`` — the proof
+    state lives on ``world``, so passing the int alone would lose it."""
     if _IS_BROWSER:
         _resolve()
-        if _lbSubmit is None:
+        if not _dispatcherReady:
+            return False
+        payload = _build_submit_payload(name, world)
+        if payload is None:
             return False
         try:
             import asyncio
             import platform as _p  # type: ignore
-            _p.window.lbSubmitStart(name, score)
+            _p.window.__sk("submit", _to_json(payload))
             while True:
-                v = _p.window._lbSubmitDone
+                v = _p.window.__sk("submit_done")
                 if v is not None:
                     return bool(v)
                 await asyncio.sleep(0.05)
         except Exception:
             return False
     else:
-        return _native_submit(name, score)
+        # Native: dev-only path, unsigned. The on-disk JSON is a debug
+        # convenience, not a competitive surface.
+        return _native_submit(name, int(getattr(world, "score", 0)))
 
 
 async def fetch_top10() -> list:
-    """GET top-10 scores. Browser: Supabase via JS bridge. Native: local JSON."""
+    """GET top-10 scores. Browser: ``__sk('fetch')`` → Supabase fetch +
+    client-side plausibility filter. Native: local JSON."""
     if _IS_BROWSER:
         _resolve()
-        if _lbFetch is None:
+        if not _dispatcherReady:
             return []
         try:
             import asyncio, json as _json
             import js as _js  # type: ignore
             import platform as _p  # type: ignore
-            _p.window.lbFetchStart()
+            _p.window.__sk("fetch")
             while True:
-                v = _p.window._lbFetchResult
+                v = _p.window.__sk("fetch_done")
                 if v is not None:
                     data = _json.loads(_js.JSON.stringify(v))
                     return [{"name": str(e["name"]), "score": int(e["score"])} for e in data]

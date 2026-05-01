@@ -308,28 +308,37 @@ body   { background: #0d0820 !important; }
 </style>
 
 <script>
-/* ── Supabase leaderboard bridge ───────────────────────────────────────── */
+/* ── Skybit bridge (closure-private; no global submit API) ──────────────
+   Everything score-related funnels through window.__sk(action, ...args).
+   The previous build exposed window.lbSubmitStart / lbFetchStart /
+   skyLogPlayStart directly on window, which made the casual cheat
+   "open the console and type lbSubmitStart('X', 999999)" a one-liner.
+   The dispatcher below requires a structured payload (with a SHA-256
+   chain hash that the JS side recomputes from the events list) and
+   tracks consumed run UUIDs to block trivial replay. None of this
+   stops a determined reader of the source — it raises the bar from
+   "60-second one-liner" to "construct a self-consistent proof." */
 (function () {
-    var _SB_URL = "__SB_URL__";
-    var _SB_KEY = "__SB_KEY__";
+    var a = "__SB_URL__";
+    var b = "__SB_KEY__";
 
-    /* Fire-and-poll pattern: Python polls window._lbSubmitDone / window._lbFetchResult
-       instead of awaiting a JS Promise directly (which freezes Python's asyncio loop). */
-    window._lbSubmitDone = null;
-    window._lbFetchResult = null;
-    window._skyLogPlayDone = null;
+    /* Internal result slots — never on window. Polled via __sk('*_done'). */
+    var rSubmit = null;
+    var rFetch  = null;
+    var rLog    = null;
 
-    /* Anonymous device UUID — stable across reloads on the same browser via
-       localStorage, regenerated on a fresh device or after the user clears
-       site data. No PII, no IP. */
-    function _skybitDeviceId() {
+    /* Replay defense: each run_id can submit exactly once per page load.
+       Combined with the per-page-load handshake this means a captured
+       fetch can't be re-fired ten times from the console. */
+    var usedIds = (typeof Set === 'function') ? new Set() : {has:function(k){return !!this[k];}, add:function(k){this[k]=1;}};
+
+    function deviceId() {
         try {
             var id = window.localStorage.getItem('skybit_device_id');
             if (id) return id;
             if (window.crypto && window.crypto.randomUUID) {
                 id = window.crypto.randomUUID();
             } else {
-                /* RFC4122 v4 fallback for older browsers */
                 id = ('xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx').replace(/[xy]/g, function (c) {
                     var r = Math.random() * 16 | 0;
                     return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
@@ -338,68 +347,165 @@ body   { background: #0d0820 !important; }
             window.localStorage.setItem('skybit_device_id', id);
             return id;
         } catch (e) {
-            /* Private mode / disabled storage: still return a per-tab id */
             return '00000000-0000-4000-8000-000000000000';
         }
     }
 
-    window.lbSubmitStart = function (name, score) {
-        window._lbSubmitDone = null;
-        (async function () {
-            if (!_SB_URL || !_SB_KEY) { window._lbSubmitDone = false; return; }
-            try {
-                var r = await fetch(_SB_URL + '/rest/v1/scores', {
-                    method: 'POST',
-                    headers: {
-                        'apikey': _SB_KEY,
-                        'Authorization': 'Bearer ' + _SB_KEY,
-                        'Content-Type': 'application/json',
-                        'Prefer': 'return=minimal'
-                    },
-                    body: JSON.stringify({name: String(name), score: Number(score)})
-                });
-                window._lbSubmitDone = r.ok;
-            } catch (e) { console.warn('lbSubmitStart:', e); window._lbSubmitDone = false; }
-        })();
-    };
+    /* Recompute the same chain hash that game/_proof.py builds. The
+       struct format is ">qIB" + 8-byte ASCII kind, identical to the
+       Python writer. Any drift here desynchronises legitimate runs. */
+    function packEvent(t, ds, kind) {
+        var ms = Math.round(Number(t) * 1000);
+        var buf = new ArrayBuffer(21);
+        var dv  = new DataView(buf);
+        var hi = Math.floor(ms / 0x100000000);
+        var lo = ms >>> 0;
+        if (ms < 0) {
+            /* Two's complement for negative ms; not expected in legit runs. */
+            hi = (hi >>> 0); lo = (lo >>> 0);
+        }
+        dv.setUint32(0, hi, false);
+        dv.setUint32(4, lo, false);
+        dv.setUint32(8, (Number(ds) >>> 0), false);
+        var k = String(kind);
+        var kl = k.length;
+        dv.setUint8(12, kl & 0xff);
+        var bytes = new Uint8Array(buf, 13, 8);
+        for (var i = 0; i < 8; i++) bytes[i] = (i < k.length) ? (k.charCodeAt(i) & 0x7f) : 0;
+        return new Uint8Array(buf);
+    }
+    function concatU8(a8, b8) {
+        var out = new Uint8Array(a8.length + b8.length);
+        out.set(a8, 0); out.set(b8, a8.length);
+        return out;
+    }
+    function toHex(u8) {
+        var s = '';
+        for (var i = 0; i < u8.length; i++) {
+            var h = u8[i].toString(16);
+            s += (h.length < 2 ? '0' : '') + h;
+        }
+        return s;
+    }
+    async function chainHex(events) {
+        var c = new Uint8Array(32);  /* zero-seed, matches Python */
+        for (var i = 0; i < events.length; i++) {
+            var ev = events[i];
+            var packed = packEvent(ev[0], ev[1], ev[2]);
+            var input = concatU8(c, packed);
+            var digest = await window.crypto.subtle.digest('SHA-256', input);
+            c = new Uint8Array(digest);
+        }
+        return toHex(c);
+    }
 
-    window.lbFetchStart = function () {
-        window._lbFetchResult = null;
-        (async function () {
-            if (!_SB_URL || !_SB_KEY) { window._lbFetchResult = []; return; }
-            try {
-                var r = await fetch(
-                    _SB_URL + '/rest/v1/scores?select=name,score&order=score.desc&limit=10',
-                    { headers: {'apikey': _SB_KEY, 'Authorization': 'Bearer ' + _SB_KEY} }
-                );
-                window._lbFetchResult = r.ok ? await r.json() : [];
-            } catch (e) { console.warn('lbFetchStart:', e); window._lbFetchResult = []; }
-        })();
-    };
+    async function doSubmit(rawPayload) {
+        rSubmit = null;
+        try {
+            if (!a || !b) { rSubmit = false; return; }
+            var payload;
+            try { payload = (typeof rawPayload === 'string') ? JSON.parse(rawPayload) : rawPayload; }
+            catch (e) { rSubmit = false; return; }
+            if (!payload || typeof payload !== 'object') { rSubmit = false; return; }
+            var rid = String(payload.run_id || '');
+            if (!rid || usedIds.has(rid)) { rSubmit = false; return; }
+            var events = payload.events;
+            if (!events || !events.length) { rSubmit = false; return; }
+            /* Recompute chain hash on the JS side. A casual paster who
+               supplies a fake events list with a guessed hash fails here. */
+            var localHex = await chainHex(events);
+            if (localHex !== String(payload.chain_hex || '')) { rSubmit = false; return; }
+            usedIds.add(rid);
+            var r = await fetch(a + '/rest/v1/scores', {
+                method: 'POST',
+                headers: {
+                    'apikey': b,
+                    'Authorization': 'Bearer ' + b,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=minimal'
+                },
+                body: JSON.stringify({name: String(payload.name), score: Number(payload.score)})
+            });
+            rSubmit = r.ok;
+        } catch (e) { rSubmit = false; }
+    }
 
-    /* Per-run telemetry. Python passes a JSON string; we parse it,
-       merge in the device UUID, and POST to public.plays. */
-    window.skyLogPlayStart = function (payloadJson) {
-        window._skyLogPlayDone = null;
-        (async function () {
-            if (!_SB_URL || !_SB_KEY) { window._skyLogPlayDone = false; return; }
-            try {
-                var body = JSON.parse(String(payloadJson));
-                body.device_id = _skybitDeviceId();
-                var r = await fetch(_SB_URL + '/rest/v1/plays', {
-                    method: 'POST',
-                    headers: {
-                        'apikey': _SB_KEY,
-                        'Authorization': 'Bearer ' + _SB_KEY,
-                        'Content-Type': 'application/json',
-                        'Prefer': 'return=minimal'
-                    },
-                    body: JSON.stringify(body)
-                });
-                window._skyLogPlayDone = r.ok;
-            } catch (e) { console.warn('skyLogPlayStart:', e); window._skyLogPlayDone = false; }
-        })();
-    };
+    async function doFetch() {
+        rFetch = null;
+        try {
+            if (!a || !b) { rFetch = []; return; }
+            /* Pull a wider slice and apply the plausibility ceiling
+               client-side so a row injected by direct curl with score
+               999999 doesn't make it onto the visible top-10. */
+            var r = await fetch(
+                a + '/rest/v1/scores?select=name,score&order=score.desc&limit=200',
+                { headers: {'apikey': b, 'Authorization': 'Bearer ' + b} }
+            );
+            if (!r.ok) { rFetch = []; return; }
+            var rows = await r.json();
+            var filtered = [];
+            for (var i = 0; i < rows.length && filtered.length < 10; i++) {
+                var row = rows[i];
+                var nm = String(row && row.name || '').slice(0, 10);
+                var sc = Number(row && row.score);
+                if (!isFinite(sc)) continue;
+                if (sc < 0 || sc > 10000) continue;
+                filtered.push({name: nm, score: sc});
+            }
+            rFetch = filtered;
+        } catch (e) { rFetch = []; }
+    }
+
+    async function doLog(rawPayload) {
+        rLog = null;
+        try {
+            if (!a || !b) { rLog = false; return; }
+            var payload;
+            try { payload = (typeof rawPayload === 'string') ? JSON.parse(rawPayload) : rawPayload; }
+            catch (e) { rLog = false; return; }
+            if (!payload || typeof payload !== 'object') { rLog = false; return; }
+            var body = {
+                score:       Number(payload.score),
+                duration_s:  Number(payload.duration_s),
+                coins:       Number(payload.coins),
+                pillars:     Number(payload.pillars),
+                near_misses: Number(payload.near_misses),
+                powerups:    payload.powerups || {},
+                device_id:   deviceId()
+            };
+            var r = await fetch(a + '/rest/v1/plays', {
+                method: 'POST',
+                headers: {
+                    'apikey': b,
+                    'Authorization': 'Bearer ' + b,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=minimal'
+                },
+                body: JSON.stringify(body)
+            });
+            rLog = r.ok;
+        } catch (e) { rLog = false; }
+    }
+
+    /* Single dispatcher. Reject unknown actions silently — no help for
+       attackers grepping for action strings in console errors. */
+    function dispatch(action, payload) {
+        switch (String(action || '')) {
+            case 'submit':       doSubmit(payload); return null;
+            case 'submit_done':  return rSubmit;
+            case 'fetch':        doFetch(); return null;
+            case 'fetch_done':   return rFetch;
+            case 'log':          doLog(payload); return null;
+            case 'log_done':     return rLog;
+            default:             return null;
+        }
+    }
+
+    /* Lock the property so a console attacker can't replace the
+       dispatcher with their own and have us call into it later. */
+    Object.defineProperty(window, '__sk', {
+        value: dispatch, writable: false, configurable: false, enumerable: false
+    });
 
     window._pendingName = "__pending__";
     var _nameStarsAdded = false;

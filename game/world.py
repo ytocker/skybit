@@ -11,17 +11,18 @@ import pygame
 from game.config import (
     W, H, GROUND_Y, PIPE_W, PIPE_SPACING,
     GAP_START, GAP_MIN, SCROLL_BASE, SCROLL_MAX,
-    BIRD_X, BIRD_R, COIN_R, POWERUP_R,
+    BIRD_X, BIRD_R, COIN_R, POWERUP_R, PARCEL_R, PARCEL_Y_OFFSET,
     POWERUP_CHANCE, POWERUP_COOLDOWN,
     TRIPLE_DURATION, MAGNET_DURATION, MAGNET_RADIUS,
     SLOWMO_DURATION, SLOWMO_SCALE, KFC_DURATION, GHOST_DURATION,
-    GROW_DURATION, GROW_SCALE,
+    GROW_DURATION, GROW_SCALE, REVERSE_DURATION,
     POWERUP_WEIGHTS,
     COIN_RUSH_INTERVAL, COIN_RUSH_GAP_BOOST, COIN_RUSH_COINS,
 )
 from game.entities import (
     Bird, Pipe, Coin, PowerUp, Particle, CloudPuff, FloatText,
 )
+from game._proof import ProofState
 from game.draw import (
     COIN_GOLD, COIN_LIGHT,
     PARTICLE_GOLD, PARTICLE_ORNG, PARTICLE_WHT, PARTICLE_CRIM,
@@ -37,6 +38,12 @@ def _lerp(a, b, t):
 
 
 class World:
+    # Seconds AFTER the ready_t (1.0 s) freeze before the first pipe should
+    # enter the visible frame. The intro hands gameplay the cottage + parcel
+    # composition; this grace period gives the opener overlay time to scroll
+    # the cottage off-screen before pillars take over.
+    SPAWN_GRACE = 1.5
+
     def __init__(self):
         self.bird = Bird()
         self.pipes: list[Pipe] = []
@@ -57,6 +64,7 @@ class World:
         self.kfc_timer    = 0.0
         self.ghost_timer  = 0.0
         self.grow_timer   = 0.0
+        self.reverse_timer = 0.0
         self.powerup_cooldown = 0.0
 
         # Coin-rush counter: increments each spawn; every Nth pipe is a rush.
@@ -66,7 +74,7 @@ class World:
         self.pillars_passed = 0
         self.time_alive = 0.0
         self.near_misses = 0
-        self.powerups_picked = {"triple": 0, "magnet": 0, "slowmo": 0, "kfc": 0, "ghost": 0, "grow": 0, "surprise": 0}
+        self.powerups_picked = {"triple": 0, "magnet": 0, "slowmo": 0, "kfc": 0, "ghost": 0, "grow": 0, "reverse": 0, "surprise": 0}
         # Transient flag so near-miss detection fires once per pillar.
         self._near_miss_flags: dict[int, bool] = {}
 
@@ -75,7 +83,20 @@ class World:
         self.shake_t = 0.0
 
         # Real elapsed gameplay seconds — drives the day/night biome cycle.
+        # Held at 0 while ready_t > 0 so the sky doesn't tick over while
+        # the player is still on the start-of-run prompt.
         self.biome_time = 0.0
+
+        # Always-ticking clock used for purely-cosmetic idle animations
+        # (bird bob during the ready wait) so they keep moving even while
+        # biome_time is frozen.
+        self._idle_t = 0.0
+
+        # Tamper-evident parallel ledger of every scoring event in the
+        # run. The leaderboard submission carries the proof state, not
+        # ``self.score``, so a JS-side ``world.score = 99999`` does not
+        # change what gets submitted.
+        self._proof = ProofState()
 
         self.weather = Weather()
 
@@ -123,7 +144,11 @@ class World:
     # ── spawning ─────────────────────────────────────────────────────────────
 
     def _seed_first_pipes(self):
-        x = W + 60
+        # Push the seed pipes further off-screen by SPAWN_GRACE seconds of
+        # scroll so the gameplay opener (cottage + parcel) has clean air
+        # behind Pip before the first pillar arrives.
+        offset = int(self.SPAWN_GRACE * SCROLL_BASE)
+        x = W + 60 + offset
         for _ in range(3):
             self._spawn_pipe(x)
             x += PIPE_SPACING
@@ -264,13 +289,20 @@ class World:
             # kicks the world into motion immediately.
             if self.ready_t > 0:
                 self.ready_t = 0.0
-            self.bird.flap()
+            sign = -1 if self.reverse_timer > 0 else 1
+            self.bird.flap(gravity_sign=sign)
             audio.play_flap()
 
     # ── update ──────────────────────────────────────────────────────────────
 
     def update(self, dt):
-        self.biome_time += dt
+        self._idle_t += dt
+        # The biome cycle only advances once the run has actually started.
+        # While ready_t > 0 the sky stays frozen at the dawn palette — the
+        # day/night arc was rolling forward earlier even when Pip was
+        # still on the post-house porch waiting for input.
+        if self.ready_t <= 0:
+            self.biome_time += dt
         # Slowmo scales the *world* (scroll, entity velocity, entity spin,
         # pickup physics) — not the bird's input physics. Lets players
         # still flap responsively while everything else crawls.
@@ -280,12 +312,13 @@ class World:
         self.weather.update(sdt, self.biome_phase)
 
         # While the "get ready" prompt is up, hold everything still except
-        # a tiny idle animation on the bird.
+        # a tiny idle animation on the bird. The freeze waits indefinitely
+        # for the player's first flap (no auto-expiring countdown).
         if self.ready_t > 0 and not self.game_over:
-            self.ready_t = max(0.0, self.ready_t - dt)
-            # Gentle bob without physics integration.
+            # Gentle bob without physics integration. Driven by idle_t so it
+            # keeps moving even though biome_time is frozen.
             self.bird.vy = 0
-            self.bird.y = H * 0.42 + math.sin(self.biome_time * 4.0) * 6
+            self.bird.y = H * 0.42 + math.sin(self._idle_t * 4.0) * 6
             self.bird.frame_t += dt * 6.0
             # Keep particles / float-texts ticking so nothing freezes visually.
             for p in self.particles:
@@ -297,7 +330,8 @@ class World:
             return
 
         if not self.game_over:
-            self.bird.update(dt)  # bird physics at real time
+            sign = -1 if self.reverse_timer > 0 else 1
+            self.bird.update(dt, gravity_sign=sign)  # bird physics at real time
 
             speed = self._current_scroll() if not self.game_over else 0
             self.bg_scroll += speed * sdt
@@ -331,6 +365,7 @@ class World:
                     p.scored = True
                     self.score += 1
                     self.pillars_passed += 1
+                    self._proof.record(self.time_alive, 1, "pipe")
 
             # Near-miss detection: once per pipe, flag if the bird was within
             # a narrow band of either edge without hitting. Fires as the pipe
@@ -379,6 +414,8 @@ class World:
             if self.grow_timer > 0:
                 self.grow_timer = max(0.0, self.grow_timer - dt)
             self.bird.grow_active = self.grow_timer > 0
+            if self.reverse_timer > 0:
+                self.reverse_timer = max(0.0, self.reverse_timer - dt)
             if self.powerup_cooldown > 0:
                 self.powerup_cooldown -= dt
             if self.hit_flash > 0:
@@ -443,8 +480,23 @@ class World:
             return
         if self.ghost_timer > 0:
             return  # phase through pipes while ghost is active
+        # Pip's hitboxes: body (existing) + parcel below him. The parcel
+        # offset rotates with his tilt so when he dives the parcel swings
+        # forward/down with him.
+        scale = GROW_SCALE if self.grow_timer > 0 else 1.0
+        parcel_offset = pygame.math.Vector2(
+            0, PARCEL_Y_OFFSET * scale).rotate(-self.bird.tilt_deg)
+        px = bx + parcel_offset.x
+        py = by + parcel_offset.y
+        pr = PARCEL_R * scale
+        # Parcel shouldn't graze the ground unless the bird already would
+        # have died (the bird circle's r > parcel offset+r in normal flight).
+        # Skip ground/ceiling re-check; only pipes are added.
         for p in self.pipes:
             if p.collides_circle(bx, by, br - 2):
+                self._die()
+                return
+            if p.collides_circle(px, py, pr - 1):
                 self._die()
                 return
 
@@ -511,6 +563,7 @@ class World:
         value = 3 if self.triple_timer > 0 else 1
         self.score += value
         self.coin_count += 1
+        self._proof.record(self.time_alive, value, "coin")
 
         # *** GLITCH FIX ***
         # NO screen-wide flash. Only localized sparkle particles.
@@ -528,16 +581,20 @@ class World:
         if value == 3:
             label = "+3"
             color = UI_ORANGE
-            size = 30
+            size = 32
             text_y_offset = 18
         else:
             label = "+1"
             color = UI_GOLD
-            size = 22
+            size = 24
             text_y_offset = 8
+        # style="powerup" gives the +N a bold dark outline + vertical
+        # gradient + sparkle dots, matching the look of the power-up
+        # activation float-texts. Gradient/outline are auto-derived from
+        # `color`, so +1 reads gold and +3 reads orange.
         self.float_texts.append(
             FloatText(label, coin.x, coin.y - text_y_offset, color,
-                      size=size, life=0.9))
+                      size=size, life=0.9, style="powerup"))
 
         if value == 3:
             audio.play_coin_triple()
@@ -551,6 +608,9 @@ class World:
         kind = m.kind
         if kind == "surprise":
             self.powerups_picked["surprise"] = self.powerups_picked.get("surprise", 0) + 1
+            # "reverse" is intentionally excluded — feels too disorienting
+            # in stacks. The activation code is still wired up; add it back
+            # to this tuple (and to POWERUP_WEIGHTS in config.py) to enable.
             kind = random.choice(("triple", "magnet", "slowmo", "kfc", "ghost", "grow"))
             self._spawn_surprise_reveal(m)
         self.powerups_picked[kind] = self.powerups_picked.get(kind, 0) + 1
@@ -566,6 +626,8 @@ class World:
             self._activate_ghost(m)
         elif kind == "grow":
             self._activate_grow(m)
+        elif kind == "reverse":
+            self._activate_reverse(m)
 
     def _spawn_surprise_reveal(self, m):
         """Brief gold-burst + cloud puff so the player sees the box "open"
@@ -604,7 +666,8 @@ class World:
         self._spawn_poof(self.bird.x, self.bird.y)
         self._pickup_burst(m, (UI_ORANGE, UI_GOLD, BIRD_RED, UI_CREAM))
         self.float_texts.append(FloatText(
-            "3X POWER!", m.x, m.y - 22, UI_ORANGE, size=26, life=1.4, vy=-30,
+            "3X POWER!", m.x, m.y - 26, UI_ORANGE,
+            size=30, life=1.4, vy=-30, style="powerup",
         ))
 
     def _activate_magnet(self, m):
@@ -614,7 +677,8 @@ class World:
         audio.play_magnet()
         self._pickup_burst(m, (BIRD_RED, (220, 30, 40), UI_CREAM, WHITE))
         self.float_texts.append(FloatText(
-            "MAGNET!", m.x, m.y - 22, BIRD_RED, size=24, life=1.3, vy=-30,
+            "MAGNET!", m.x, m.y - 26, BIRD_RED,
+            size=28, life=1.3, vy=-30, style="powerup",
         ))
 
     def _activate_slowmo(self, m):
@@ -624,7 +688,8 @@ class World:
         audio.play_slowmo()
         self._pickup_burst(m, ((180, 100, 255), (120, 60, 200), WHITE, UI_CREAM))
         self.float_texts.append(FloatText(
-            "SLOW-MO!", m.x, m.y - 22, (200, 140, 255), size=24, life=1.3, vy=-30,
+            "SLOW-MO!", m.x, m.y - 26, (200, 140, 255),
+            size=28, life=1.3, vy=-30, style="powerup",
         ))
 
     def _activate_kfc(self, m):
@@ -636,7 +701,8 @@ class World:
         self._spawn_poof(self.bird.x, self.bird.y)
         self._pickup_burst(m, ((210, 138, 42), (238, 178, 72), (148, 82, 18), WHITE), n=28)
         self.float_texts.append(FloatText(
-            "FINGER LICKIN'!", m.x, m.y - 22, (230, 160, 40), size=22, life=1.6, vy=-28,
+            "DEEP FRIED!", m.x, m.y - 26, (230, 160, 40),
+            size=28, life=1.6, vy=-28, style="powerup",
         ))
 
     def _activate_ghost(self, m):
@@ -665,7 +731,8 @@ class World:
                 gravity=60,
             ))
         self.float_texts.append(FloatText(
-            "GHOST!", m.x, m.y - 22, (180, 210, 255), size=24, life=1.3, vy=-30,
+            "GHOST!", m.x, m.y - 26, (180, 210, 255),
+            size=28, life=1.3, vy=-30, style="powerup",
         ))
 
     def _activate_grow(self, m):
@@ -680,7 +747,8 @@ class World:
         self._spawn_poof(self.bird.x, self.bird.y)
         self._pickup_burst(m, (GROW_HI, GROW_OUT, WHITE, UI_CREAM), n=30, speed_hi=300)
         self.float_texts.append(FloatText(
-            "GROW!", m.x, m.y - 22, GROW_HI, size=26, life=1.3, vy=-30,
+            "GROW!", m.x, m.y - 26, GROW_HI,
+            size=30, life=1.3, vy=-30, style="powerup",
         ))
 
     def _spawn_poof(self, x, y):
@@ -699,6 +767,19 @@ class World:
             r1    = random.randint(13, 22)
             color = random.choice(puff_colors)
             self.particles.append(CloudPuff(x, y, vx, vy, life, r0, r1, color))
+
+    def _activate_reverse(self, m):
+        self.reverse_timer = REVERSE_DURATION
+        # Zero vy so the flip feels snappy instead of inheriting downward speed.
+        self.bird.vy = 0.0
+        self.shake_mag = max(self.shake_mag, 2.5)
+        self.shake_t = max(self.shake_t, 0.25)
+        audio.play_slowmo()
+        self._pickup_burst(m, ((170, 90, 230), (110, 50, 180), (215, 165, 250), WHITE))
+        self.float_texts.append(FloatText(
+            "FLIP!", m.x, m.y - 26, (190, 130, 245),
+            size=30, life=1.3, vy=-30, style="powerup",
+        ))
 
     # ── utility ──────────────────────────────────────────────────────────────
 
