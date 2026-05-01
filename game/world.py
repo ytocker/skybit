@@ -692,8 +692,8 @@ class World:
         self._spawn_poof(self.bird.x, self.bird.y)
         self._pickup_burst(m, ((210, 138, 42), (238, 178, 72), (148, 82, 18), WHITE), n=28)
         self.float_texts.append(FloatText(
-            "FINGER LICKIN'!", m.x, m.y - 26, (230, 160, 40),
-            size=26, life=1.6, vy=-28, style="powerup",
+            "DEEP FRIED!", m.x, m.y - 26, (230, 160, 40),
+            size=28, life=1.6, vy=-28, style="powerup",
         ))
 
     def _activate_ghost(self, m):
