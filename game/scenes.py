@@ -510,18 +510,60 @@ class App:
             tint.fill((140, 180, 255, 18))
             self.screen.blit(tint, (0, 0))
 
-        # Magnet radius — faint red ring around the bird so the pull zone is legible
+        # Magnet force-field — pulsing rings + soft inner radial glow,
+        # all driven by a coherent breathe so the whole field shrinks
+        # and grows as one volume. Three rings out of phase for visual
+        # life; outer breath 0.70× → 1.00× of MAGNET_RADIUS (matches
+        # the original implementation's amplitude); inner glow follows
+        # the outer ring's pulse factor.
         if self.world.magnet_timer > 0:
             from game.config import MAGNET_RADIUS
             import math as _math
-            pulse = 0.7 + 0.3 * _math.sin(self._cloud_phase * 6.0)
-            rad = int(MAGNET_RADIUS * pulse)
-            ring = pygame.Surface((rad * 2 + 4, rad * 2 + 4), pygame.SRCALPHA)
-            pygame.draw.circle(ring, (220, 30, 40, 55),
-                               (rad + 2, rad + 2), rad, 2)
-            self.screen.blit(ring,
-                             (self.world.bird.x + sx - rad - 2,
-                              self.world.bird.y + sy - rad - 2))
+            t_pulse = self._cloud_phase * 6.0
+            rad = MAGNET_RADIUS
+            field = pygame.Surface((rad * 2 + 8, rad * 2 + 8),
+                                   pygame.SRCALPHA)
+            lcx, lcy = rad + 4, rad + 4
+
+            # Outer-ring pulse factor (drives both rings AND the glow)
+            BREATH = 0.30
+            s_outer = _math.sin(t_pulse + 0.0)
+            u_outer = (s_outer + 1) / 2
+            outer_factor = 1.0 - BREATH * (1.0 - u_outer)
+            glow_rad = rad * outer_factor
+
+            # Inner radial glow — bell-curve falloff peaking near the
+            # outer edge, scaled by the same pulse.
+            for i in range(18, 0, -1):
+                r = int(glow_rad * i / 18)
+                inner_t = i / 18
+                bell = _math.exp(-((inner_t - 0.85) ** 2) / 0.15)
+                a = int(40 * bell)
+                if a > 0:
+                    pygame.draw.circle(field, (235, 45, 60, a),
+                                       (lcx, lcy), r)
+
+            # Three rings: outer + 0.78× + 0.55×, with progressively
+            # smaller breath and slight phase shifts.
+            for rfac, phase, alpha, width, breath_scale in (
+                    (1.00, 0.0,  140, 3, 1.00),
+                    (0.78, 0.6,  100, 2, 0.85),
+                    (0.55, 1.2,   75, 2, 0.70)):
+                amp = BREATH * breath_scale
+                s = _math.sin(t_pulse + phase)
+                u = (s + 1) / 2
+                rr = int(rad * rfac * (1.0 - amp * (1.0 - u)))
+                # Anti-alias ring with two ⅓-alpha satellites + main pass
+                pygame.draw.circle(field, (255, 80, 100, alpha // 3),
+                                   (lcx, lcy), rr + 1, width)
+                pygame.draw.circle(field, (255, 80, 100, alpha // 3),
+                                   (lcx, lcy), rr - 1, width)
+                pygame.draw.circle(field, (240, 50, 70, alpha),
+                                   (lcx, lcy), rr, width)
+
+            self.screen.blit(field,
+                             (int(self.world.bird.x) + sx - lcx,
+                              int(self.world.bird.y) + sy - lcy))
 
         if self.world.hit_flash > 0:
             t = self.world.hit_flash / 0.35

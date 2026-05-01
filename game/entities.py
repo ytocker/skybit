@@ -868,10 +868,7 @@ class PowerUp:
                          (scx - outer_r - 1, scy,
                           (outer_r + 1) * 2, leg_bot - arch_cy + 3))
 
-        # Specular sheen across arch top
-        sheen = pygame.Surface((outer_r * 2 - 2, outer_r - 1), pygame.SRCALPHA)
-        pygame.draw.ellipse(sheen, (255, 160, 165, 140), sheen.get_rect())
-        scratch.blit(sheen, (scx - outer_r + 1, 3))
+        # No upper specular sheen — the body keeps a clean uniform red.
 
         # Highlight rings
         pygame.draw.circle(scratch, (255, 95, 95), (scx, scy), inner_r + 1, 2)
@@ -914,6 +911,45 @@ class PowerUp:
         if len(shifted) >= 2:
             pygame.draw.lines(arc_surf, (100, 195, 255, 200), False, shifted, 2)
         surf.blit(arc_surf, (left_cx - 4, arc_y0 - 4))
+
+        # Extra lightning bolts radiating outward from each pole tip,
+        # crackling with self.pulse so the magnet feels actively powered.
+        YELLOW = (255, 220,  60)
+        WHITE  = (255, 250, 220)
+
+        def _bolt(target, pts, thick_outer, thick_inner):
+            if len(pts) < 2:
+                return
+            pygame.draw.lines(target, YELLOW, False, pts, thick_outer)
+            pygame.draw.lines(target, WHITE,  False, pts, max(1, thick_inner))
+
+        for sign, tip_cx in ((-1, left_cx), (+1, right_cx)):
+            tip_y = leg_bot + 1
+            jitter = math.sin(self.pulse * 9 + (0 if sign < 0 else math.pi / 3))
+
+            # Down-and-outward bolt
+            _bolt(surf,
+                  [
+                      (tip_cx,                 tip_y),
+                      (tip_cx + sign * 4,      tip_y + 2),
+                      (tip_cx + sign * 1,      tip_y + 4 + int(jitter)),
+                      (tip_cx + sign * 5,      tip_y + 6),
+                  ],
+                  thick_outer=2, thick_inner=1)
+
+            # Sideways crackle
+            _bolt(surf,
+                  [
+                      (tip_cx + sign * 1,      tip_y - 1),
+                      (tip_cx + sign * 4,      tip_y),
+                      (tip_cx + sign * 2,      tip_y + 2),
+                      (tip_cx + sign * 6,      tip_y + 1),
+                  ],
+                  thick_outer=2, thick_inner=1)
+
+            # Bright dot at the pole tip — discharge origin
+            pygame.draw.circle(surf, WHITE,  (tip_cx, tip_y), 2)
+            pygame.draw.circle(surf, YELLOW, (tip_cx, tip_y), 1)
 
     def _draw_slowmo(self, surf):
         cx = int(self.x)
