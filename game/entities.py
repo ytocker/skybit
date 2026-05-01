@@ -111,14 +111,21 @@ def _get_ghost_sprite() -> "pygame.Surface":
     body_y2 = (26 + PAD) * SS
     body_rect = pygame.Rect((1 + PAD) * SS, gcy,
                             (28 - 2) * SS, body_y2 - gcy)
+    # Symmetric 3-bump / 2-indent scallop with uniform-width waves. The
+    # 7 control points are mirror-symmetric about the body's vertical
+    # centreline and evenly spaced (each segment span_x // 6 wide), so
+    # every "wave" along the bottom has the same width — no more
+    # lopsided original where the centre bump was off-axis.
+    bump_y   = (GH - 4) * SS           # bumps hang to (canvas) y=36
+    indent_y = body_y2 + 4 * SS        # indents stop at body_y2 + 4
+    x_left   = (1 + PAD) * SS          # = body_rect.left
+    x_right  = (28 - 2 + PAD) * SS     # = body_rect.right - SS (same column
+                                       # the original right endpoint used)
+    span_x   = x_right - x_left
     scallop = [
-        ((1 + PAD) * SS,         body_y2),
-        ((6 + PAD) * SS,         (GH - 4) * SS),
-        ((11 + PAD) * SS,        body_y2 + 4 * SS),
-        ((14 + PAD) * SS,        (GH - 4) * SS),
-        ((28 - 12 + PAD) * SS,   body_y2 + 4 * SS),
-        ((28 - 7 + PAD) * SS,    (GH - 4) * SS),
-        ((28 - 2 + PAD) * SS,    body_y2),
+        (x_left + i * span_x // 6,
+         body_y2 if i in (0, 6) else (bump_y if i % 2 == 1 else indent_y))
+        for i in range(7)
     ]
 
     OUTLINE_COLOR = (40, 50, 90)
