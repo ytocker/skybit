@@ -1,8 +1,8 @@
-name: Deploy to GitHub Pages (v3_skybit_patch)
+name: Deploy to GitHub Pages (v3_skybit)
 
 on:
   push:
-    branches: [v3_skybit_patch]
+    branches: [v3_skybit]
   workflow_dispatch:
 
 permissions:
