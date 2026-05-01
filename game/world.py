@@ -685,7 +685,8 @@ class World:
         self._spawn_poof(self.bird.x, self.bird.y)
         self._pickup_burst(m, ((210, 138, 42), (238, 178, 72), (148, 82, 18), WHITE), n=28)
         self.float_texts.append(FloatText(
-            "FINGER LICKIN'!", m.x, m.y - 22, (230, 160, 40), size=22, life=1.6, vy=-28,
+            "FINGER LICKIN'!", m.x, m.y - 26, (230, 160, 40),
+            size=26, life=1.6, vy=-28, style="powerup",
         ))
 
     def _activate_ghost(self, m):
@@ -714,7 +715,8 @@ class World:
                 gravity=60,
             ))
         self.float_texts.append(FloatText(
-            "GHOST!", m.x, m.y - 22, (180, 210, 255), size=24, life=1.3, vy=-30,
+            "GHOST!", m.x, m.y - 26, (180, 210, 255),
+            size=28, life=1.3, vy=-30, style="powerup",
         ))
 
     def _activate_grow(self, m):
@@ -729,7 +731,8 @@ class World:
         self._spawn_poof(self.bird.x, self.bird.y)
         self._pickup_burst(m, (GROW_HI, GROW_OUT, WHITE, UI_CREAM), n=30, speed_hi=300)
         self.float_texts.append(FloatText(
-            "GROW!", m.x, m.y - 22, GROW_HI, size=26, life=1.3, vy=-30,
+            "GROW!", m.x, m.y - 26, GROW_HI,
+            size=30, life=1.3, vy=-30, style="powerup",
         ))
 
     def _spawn_poof(self, x, y):

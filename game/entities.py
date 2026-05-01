@@ -497,7 +497,7 @@ def _build_reverse_icon(out_diameter: int) -> pygame.Surface:
     return pygame.transform.smoothscale(surf, (out_diameter, out_diameter))
 
 
-def _get_reverse_icon(diameter: int = (MUSHROOM_R + 8) * 2) -> pygame.Surface:
+def _get_reverse_icon(diameter: int = (POWERUP_R + 8) * 2) -> pygame.Surface:
     cached = _REVERSE_ICON_CACHE.get(diameter)
     if cached is None:
         cached = _build_reverse_icon(diameter)
