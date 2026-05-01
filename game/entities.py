@@ -324,110 +324,180 @@ _REVERSE_ICON_CACHE: "dict[int, pygame.Surface]" = {}
 
 
 def _build_reverse_icon(out_diameter: int) -> pygame.Surface:
-    """Premium icon: a rounded purple frame around a light-gray panel with
-    two clean purple monoline chevrons (up + down). Built at 4x super-
+    """Premium icon: holographic iridescent panel inside a pearl-violet frame
+    with two thick gradient purple chevrons (up + down). Built at 4x super-
     sampling and smoothscaled down for crisp edges on any background."""
     SS = 4
     size = out_diameter * SS
     surf = pygame.Surface((size, size), pygame.SRCALPHA)
 
     # ── Palette ─────────────────────────────────────────────────────────
-    OUTLINE      = (15, 5, 35)         # outer hairline, definition on any bg
-    FRAME        = (140, 60, 215)      # the purple perimeter
-    FRAME_HL     = (215, 165, 250)     # tiny top-edge highlight
-    PANEL_HI     = (245, 246, 250)     # gray panel — lit top
-    PANEL_LO     = (212, 214, 224)     # gray panel — slightly shaded bottom
-    INSET_SHADOW = (0, 0, 0, 38)       # soft inner shadow under the frame
-    ARROW        = (118, 52, 200)      # purple arrow body
-    ARROW_DK     = (62, 22, 130)       # arrow shadow / outline mix
+    OUTLINE      = (20, 12, 55)         # outer dark indigo hairline
+    FRAME        = (195, 175, 240)      # pearl-violet frame stroke
+    FRAME_HL     = (255, 255, 255)      # tiny top-edge highlight
+    INSET_SHADOW = (0, 0, 0, 38)        # soft inner shadow under the frame
+    HOLO_STOPS   = (
+        (240, 220, 240),                # top-left: pale pink
+        (210, 220, 245),                # mid: lavender-blue
+        (215, 240, 240),                # bottom-right: mint cyan
+    )
+    ARROW_TOP    = (175, 100, 230)
+    ARROW_MID    = (130, 55, 200)
+    ARROW_BOT    = (75, 25, 145)
+    ARROW_OUT    = (35, 10, 70)
+    SHEEN        = (255, 255, 255, 80)
 
-    radius   = SS * 11                # squircle-style corners
-    inset    = SS                     # 1-px outer outline gap
-    frame_t  = SS * 2                 # frame stroke = 2 final-px (clean & thin)
+    radius   = SS * 11                 # squircle-style corners
+    inset    = SS                      # 1-px outer outline gap
+    frame_t  = SS * 2                  # frame stroke = 2 final-px
 
     panel = pygame.Rect(inset, inset, size - inset * 2, size - inset * 2)
 
-    # 1) Outer 1-px dark outline so the icon reads on any background.
+    # 1) Outer 1-px dark hairline.
     pygame.draw.rect(surf, OUTLINE, panel, border_radius=radius)
-
-    # 2) Solid purple frame fill (will be partly covered by gray panel).
+    # 2) Pearl-violet frame fill.
     pygame.draw.rect(surf, FRAME, panel.inflate(-SS * 2, -SS * 2),
                      border_radius=radius - SS)
-
-    # 3) Light-gray inner panel with a subtle vertical gradient.
+    # 3) Holographic diagonal gradient panel inside the frame.
     inner = panel.inflate(-(frame_t + SS) * 2, -(frame_t + SS) * 2)
     inner_radius = max(2, radius - frame_t - SS)
-    grad_surf = pygame.Surface((size, size), pygame.SRCALPHA)
-    g0, g1 = inner.top, inner.bottom
-    for y in range(g0, g1 + 1):
-        t = (y - g0) / max(1, (g1 - g0))
-        col = (
-            int(PANEL_HI[0] + (PANEL_LO[0] - PANEL_HI[0]) * t),
-            int(PANEL_HI[1] + (PANEL_LO[1] - PANEL_HI[1]) * t),
-            int(PANEL_HI[2] + (PANEL_LO[2] - PANEL_HI[2]) * t),
-        )
-        pygame.draw.line(grad_surf, col, (0, y), (size, y))
+    grad = pygame.Surface((size, size), pygame.SRCALPHA)
+    for y in range(inner.top, inner.bottom + 1):
+        for x in range(inner.left, inner.right + 1):
+            t = ((x - inner.left) / max(1, inner.width)
+                 + (y - inner.top) / max(1, inner.height)) / 2
+            if t < 0.5:
+                u = t / 0.5
+                col = (
+                    int(HOLO_STOPS[0][0] + (HOLO_STOPS[1][0] - HOLO_STOPS[0][0]) * u),
+                    int(HOLO_STOPS[0][1] + (HOLO_STOPS[1][1] - HOLO_STOPS[0][1]) * u),
+                    int(HOLO_STOPS[0][2] + (HOLO_STOPS[1][2] - HOLO_STOPS[0][2]) * u),
+                )
+            else:
+                u = (t - 0.5) / 0.5
+                col = (
+                    int(HOLO_STOPS[1][0] + (HOLO_STOPS[2][0] - HOLO_STOPS[1][0]) * u),
+                    int(HOLO_STOPS[1][1] + (HOLO_STOPS[2][1] - HOLO_STOPS[1][1]) * u),
+                    int(HOLO_STOPS[1][2] + (HOLO_STOPS[2][2] - HOLO_STOPS[1][2]) * u),
+                )
+            grad.set_at((x, y), col)
     inner_mask = pygame.Surface((size, size), pygame.SRCALPHA)
     pygame.draw.rect(inner_mask, (255, 255, 255, 255), inner,
                      border_radius=inner_radius)
-    grad_surf.blit(inner_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-    surf.blit(grad_surf, (0, 0))
+    grad.blit(inner_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    surf.blit(grad, (0, 0))
 
-    # 4) Soft inner shadow inside the gray panel — gives the gray a
-    #    recessed feel under the frame.
+    # 4) Soft inner shadow inside the panel — gives the panel a recessed feel.
     shadow_surf = pygame.Surface((size, size), pygame.SRCALPHA)
     pygame.draw.rect(shadow_surf, INSET_SHADOW, inner,
                      border_radius=inner_radius, width=SS)
     surf.blit(shadow_surf, (0, 0))
 
-    # 5) Tiny lighter highlight along the very top edge of the frame —
-    #    sells the "lit from above" depth.
+    # 5) Top-edge highlight on the frame.
     pygame.draw.line(surf, FRAME_HL,
                      (panel.left + radius, panel.top + SS),
                      (panel.right - radius, panel.top + SS),
                      max(1, SS // 2))
 
-    # ── Arrows: clean purple monoline chevrons ─────────────────────────
+    # ── Arrows: thick filled chevrons with vertical gradient + sheen ───
     pad_x = max(SS * 5, panel.width // 6)
-    pad_y = max(SS * 5, panel.height // 6)
-    arrow_area = panel.inflate(-pad_x * 2, -pad_y * 2)
+    pad_y = max(SS * 5, panel.height // 7)
+    area = panel.inflate(-pad_x * 2, -pad_y * 2)
 
-    col_w = arrow_area.width // 2
-    lx = arrow_area.left + col_w // 2
-    rx = arrow_area.right - col_w // 2
-    # Bolder, thicker strokes for a chunkier "icon-set" feel.
-    stroke = max(SS * 4, arrow_area.height // 8)
-    head_w = max(SS * 5, arrow_area.width // 5)
-    head_h = max(SS * 5, arrow_area.height * 30 // 100)
+    col_w = area.width // 2
+    lx = area.left + col_w // 2
+    rx = area.right - col_w // 2
+    head_h  = area.height * 42 // 100
+    shaft_w = area.width * 17 // 100
+    head_w  = shaft_w * 26 // 10
 
-    def _arrow(target, col_x, *, point_up, color, stroke_w):
+    def silhouette(col_x, *, point_up, expand=0):
+        e = expand
+        sw = shaft_w + e * 2
+        hw = head_w + e * 2
         if point_up:
-            tip  = (col_x, arrow_area.top)
-            tail = (col_x, arrow_area.bottom)
-            wing_y = arrow_area.top + head_h
+            tip  = (col_x, area.top - e)
+            base = area.bottom + e
+            sh_y = area.top + head_h - e // 3
+            return [
+                tip,
+                (col_x + hw // 2, sh_y),
+                (col_x + sw // 2, sh_y),
+                (col_x + sw // 2, base),
+                (col_x - sw // 2, base),
+                (col_x - sw // 2, sh_y),
+                (col_x - hw // 2, sh_y),
+            ]
         else:
-            tip  = (col_x, arrow_area.bottom)
-            tail = (col_x, arrow_area.top)
-            wing_y = arrow_area.bottom - head_h
-        wl = (col_x - head_w, wing_y)
-        wr = (col_x + head_w, wing_y)
-        pygame.draw.line(target, color, tail, tip, stroke_w)
-        pygame.draw.line(target, color, tip, wl, stroke_w)
-        pygame.draw.line(target, color, tip, wr, stroke_w)
-        # Round caps so the strokes don't look chopped at small sizes.
-        for p in (tail, wl, wr, tip):
-            pygame.draw.circle(target, color, p, stroke_w // 2)
+            tip  = (col_x, area.bottom + e)
+            base = area.top - e
+            sh_y = area.bottom - head_h + e // 3
+            return [
+                tip,
+                (col_x - hw // 2, sh_y),
+                (col_x - sw // 2, sh_y),
+                (col_x - sw // 2, base),
+                (col_x + sw // 2, base),
+                (col_x + sw // 2, sh_y),
+                (col_x + hw // 2, sh_y),
+            ]
 
-    # Single bold purple pass — no outline pass, the gray panel provides
-    # plenty of contrast and the arrow stays visually "thick" rather than
-    # ringed.
-    _arrow(surf, lx, point_up=True,  color=ARROW, stroke_w=stroke)
-    _arrow(surf, rx, point_up=False, color=ARROW, stroke_w=stroke)
+    def draw_arrow(col_x, *, point_up):
+        # Outline.
+        pygame.draw.polygon(surf, ARROW_OUT,
+                            silhouette(col_x, point_up=point_up, expand=SS))
+        # Vertical gradient body, scanline-masked.
+        body = silhouette(col_x, point_up=point_up, expand=0)
+        body_surf = pygame.Surface((size, size), pygame.SRCALPHA)
+        ys = [p[1] for p in body]
+        y0, y1 = min(ys), max(ys)
+        for y in range(y0, y1 + 1):
+            t = (y - y0) / max(1, (y1 - y0))
+            if not point_up:
+                t = 1.0 - t
+            if t < 0.4:
+                u = t / 0.4
+                col = (
+                    int(ARROW_TOP[0] + (ARROW_MID[0] - ARROW_TOP[0]) * u),
+                    int(ARROW_TOP[1] + (ARROW_MID[1] - ARROW_TOP[1]) * u),
+                    int(ARROW_TOP[2] + (ARROW_MID[2] - ARROW_TOP[2]) * u),
+                )
+            else:
+                u = (t - 0.4) / 0.6
+                col = (
+                    int(ARROW_MID[0] + (ARROW_BOT[0] - ARROW_MID[0]) * u),
+                    int(ARROW_MID[1] + (ARROW_BOT[1] - ARROW_MID[1]) * u),
+                    int(ARROW_MID[2] + (ARROW_BOT[2] - ARROW_MID[2]) * u),
+                )
+            pygame.draw.line(body_surf, col, (0, y), (size, y))
+        mask = pygame.Surface((size, size), pygame.SRCALPHA)
+        pygame.draw.polygon(mask, (255, 255, 255, 255), body)
+        body_surf.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        surf.blit(body_surf, (0, 0))
+
+        # Glossy sheen across the arrow head.
+        sheen = pygame.Surface((size, size), pygame.SRCALPHA)
+        if point_up:
+            sy0, sy1 = area.top, area.top + head_h * 9 // 10
+        else:
+            sy0, sy1 = area.bottom - head_h * 9 // 10, area.bottom
+        for y in range(min(sy0, sy1), max(sy0, sy1) + 1):
+            t = (y - sy0) / max(1, (sy1 - sy0))
+            if not point_up:
+                t = 1.0 - t
+            a = int(SHEEN[3] * (1.0 - t) ** 1.4)
+            if a > 0:
+                pygame.draw.line(sheen, (*SHEEN[:3], a), (0, y), (size, y))
+        sheen.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        surf.blit(sheen, (0, 0))
+
+    draw_arrow(lx, point_up=True)
+    draw_arrow(rx, point_up=False)
 
     return pygame.transform.smoothscale(surf, (out_diameter, out_diameter))
 
 
-def _get_reverse_icon(diameter: int = (MUSHROOM_R + 12) * 2) -> pygame.Surface:
+def _get_reverse_icon(diameter: int = (MUSHROOM_R + 8) * 2) -> pygame.Surface:
     cached = _REVERSE_ICON_CACHE.get(diameter)
     if cached is None:
         cached = _build_reverse_icon(diameter)
