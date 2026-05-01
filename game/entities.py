@@ -851,51 +851,57 @@ class PowerUp:
         cy = int(self.y + math.sin(self.pulse * 0.9) * 4
                         + math.sin(self.pulse * 1.8) * 1.5)
 
-        DARK     = (32,  52, 120, 255)
+        # Premium midnight-indigo outline (deeper + slight violet shift
+        # vs the previous muted navy) and a 2-px ring for a more
+        # confident silhouette on bright skies.
+        DARK     = (18,  22,  75, 255)
         BODY     = (205, 228, 255, 235)
         EYE_W    = (252, 254, 255, 255)
         EYE_IRIS = (50,  110, 220, 255)
         EYE_PUP  = (12,  18,  60,  255)
 
         # ── Classic ghost silhouette on scratch SRCALPHA surface ──────────────
-        # 28 × 36 px sprite; head centre at local (14, 12).
-        GW, GH   = 28, 36
-        gcx      = GW // 2    # 14
-        gcy      = 12         # head-circle centre y
-        hr       = 12         # head radius
-        body_y2  = 26         # y where straight sides end, scallop starts
+        # Canvas grows by 2 px on every side so the bolder outline doesn't
+        # clip; head centre lands at the same world coords via the blit
+        # offset below.
+        PAD      = 2
+        GW, GH   = 28 + PAD * 2, 36 + PAD * 2
+        gcx      = 14 + PAD       # head centre x in canvas
+        gcy      = 12 + PAD       # head circle centre y
+        hr       = 12             # head radius
+        body_y2  = 26 + PAD       # y where straight sides end, scallop starts
 
         # Scalloped-skirt polygon: 3 hanging bumps with 2 concave indents.
         scallop = [
-            (1,        body_y2),
-            (6,        GH - 4),          # left bump
-            (11,       body_y2 + 4),     # indent 1
-            (gcx,      GH - 4),          # centre bump
-            (GW - 12,  body_y2 + 4),     # indent 2
-            (GW - 7,   GH - 4),          # right bump
-            (GW - 2,   body_y2),
+            (1 + PAD,            body_y2),
+            (6 + PAD,             GH - 4 - PAD),   # left bump
+            (11 + PAD,            body_y2 + 4),    # indent 1
+            (gcx,                 GH - 4 - PAD),   # centre bump
+            (28 - 12 + PAD,       body_y2 + 4),    # indent 2
+            (28 - 7 + PAD,        GH - 4 - PAD),   # right bump
+            (28 - 2 + PAD,        body_y2),
         ]
-        # Expanded by 1 px for the outline pass
+        # Expanded by 2 px in every outward direction for the bolder outline.
         scallop_o = [
-            (0,        body_y2),
-            (6,        GH - 3),
-            (10,       body_y2 + 4),
-            (gcx,      GH - 3),
-            (GW - 11,  body_y2 + 4),
-            (GW - 7,   GH - 3),
-            (GW,       body_y2),
+            (-1 + PAD,            body_y2),
+            (6 + PAD,             GH - 2 - PAD),
+            (9 + PAD,             body_y2 + 4),
+            (gcx,                 GH - 2 - PAD),
+            (28 - 10 + PAD,       body_y2 + 4),
+            (28 - 7 + PAD,        GH - 2 - PAD),
+            (28 + 1 + PAD,        body_y2),
         ]
 
         g = pygame.Surface((GW, GH), pygame.SRCALPHA)
 
-        # Outline pass
-        pygame.draw.circle(g, DARK, (gcx, gcy), hr + 1)
-        pygame.draw.rect(g, DARK, (0, gcy, GW, body_y2 - gcy + 1))
+        # Outline pass — 2 px ring (was 1 px)
+        pygame.draw.circle(g, DARK, (gcx, gcy), hr + 2)
+        pygame.draw.rect(g, DARK, (-1 + PAD, gcy, 28 + 2, body_y2 - gcy + 2))
         pygame.draw.polygon(g, DARK, scallop_o)
 
-        # Body fill
+        # Body fill (unchanged size — the 2-px ring is the bolder outline).
         pygame.draw.circle(g, BODY, (gcx, gcy), hr)
-        pygame.draw.rect(g, BODY, (1, gcy, GW - 2, body_y2 - gcy))
+        pygame.draw.rect(g, BODY, (1 + PAD, gcy, 28 - 2, body_y2 - gcy))
         pygame.draw.polygon(g, BODY, scallop)
 
         # Eyes: white → iris → pupil → specular dot
