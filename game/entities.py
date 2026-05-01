@@ -402,7 +402,7 @@ _COIN_FACE_CACHE: "pygame.Surface | None" = None
 
 
 def _get_coin_face() -> pygame.Surface:
-    """Build the face-on coin sprite once at 4x super-sample. Layers:
+    """Build the face-on coin sprite once at 8x super-sample. Layers:
     dark-amber outline, a twisted-rope rim (alternating dark/light
     segments around the perimeter), a vertical gold gradient body, an
     embossed parrot silhouette, and a soft upper-left specular highlight.
@@ -411,7 +411,7 @@ def _get_coin_face() -> pygame.Surface:
     global _COIN_FACE_CACHE
     if _COIN_FACE_CACHE is not None:
         return _COIN_FACE_CACHE
-    SS = 4
+    SS = 8
     final_d = COIN_R * 2 + 4
     size = final_d * SS
     surf = pygame.Surface((size, size), pygame.SRCALPHA)
