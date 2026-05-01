@@ -544,7 +544,8 @@ class World:
         audio.play_mushroom()
         self._pickup_burst(m, (UI_ORANGE, UI_GOLD, BIRD_RED, UI_CREAM))
         self.float_texts.append(FloatText(
-            "3X POWER!", m.x, m.y - 22, UI_ORANGE, size=26, life=1.4, vy=-30,
+            "3X POWER!", m.x, m.y - 26, UI_ORANGE,
+            size=30, life=1.4, vy=-30, style="powerup",
         ))
 
     def _activate_magnet(self, m):
@@ -554,7 +555,8 @@ class World:
         audio.play_magnet()
         self._pickup_burst(m, (BIRD_RED, (220, 30, 40), UI_CREAM, WHITE))
         self.float_texts.append(FloatText(
-            "MAGNET!", m.x, m.y - 22, BIRD_RED, size=24, life=1.3, vy=-30,
+            "MAGNET!", m.x, m.y - 26, BIRD_RED,
+            size=28, life=1.3, vy=-30, style="powerup",
         ))
 
     def _activate_slowmo(self, m):
@@ -564,7 +566,8 @@ class World:
         audio.play_slowmo()
         self._pickup_burst(m, ((180, 100, 255), (120, 60, 200), WHITE, UI_CREAM))
         self.float_texts.append(FloatText(
-            "SLOW-MO!", m.x, m.y - 22, (200, 140, 255), size=24, life=1.3, vy=-30,
+            "SLOW-MO!", m.x, m.y - 26, (200, 140, 255),
+            size=28, life=1.3, vy=-30, style="powerup",
         ))
 
     def _activate_reverse(self, m):
@@ -576,7 +579,8 @@ class World:
         audio.play_slowmo()
         self._pickup_burst(m, ((170, 90, 230), (110, 50, 180), (215, 165, 250), WHITE))
         self.float_texts.append(FloatText(
-            "FLIP!", m.x, m.y - 22, (190, 130, 245), size=24, life=1.3, vy=-30,
+            "FLIP!", m.x, m.y - 26, (190, 130, 245),
+            size=30, life=1.3, vy=-30, style="powerup",
         ))
 
     # ── utility ──────────────────────────────────────────────────────────────
