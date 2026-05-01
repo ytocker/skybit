@@ -34,8 +34,8 @@ COIN_RUSH_GAP_BOOST = 1.30
 COIN_RUSH_COINS    = 14
 
 POWERUP_R          = 14    # collision + footprint radius for every power-up
-POWERUP_CHANCE     = 0.14  # chance to spawn a power-up after a pipe gate
-POWERUP_COOLDOWN   = 5.5   # min seconds between power-up spawns
+POWERUP_CHANCE     = 0.50  # chance to spawn a power-up after a pipe gate
+POWERUP_COOLDOWN   = 0.0   # min seconds between power-up spawns (0 = no gap)
 TRIPLE_DURATION    = 8.0
 MAGNET_DURATION    = 8.0
 MAGNET_RADIUS      = 82.0
