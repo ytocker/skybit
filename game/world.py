@@ -572,16 +572,20 @@ class World:
         if value == 3:
             label = "+3"
             color = UI_ORANGE
-            size = 30
+            size = 32
             text_y_offset = 18
         else:
             label = "+1"
             color = UI_GOLD
-            size = 22
+            size = 24
             text_y_offset = 8
+        # style="powerup" gives the +N a bold dark outline + vertical
+        # gradient + sparkle dots, matching the look of the power-up
+        # activation float-texts. Gradient/outline are auto-derived from
+        # `color`, so +1 reads gold and +3 reads orange.
         self.float_texts.append(
             FloatText(label, coin.x, coin.y - text_y_offset, color,
-                      size=size, life=0.9))
+                      size=size, life=0.9, style="powerup"))
 
         if value == 3:
             audio.play_coin_triple()
