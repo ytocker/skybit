@@ -324,125 +324,109 @@ _REVERSE_ICON_CACHE: "dict[int, pygame.Surface]" = {}
 
 
 def _build_reverse_icon(out_diameter: int) -> pygame.Surface:
-    """Premium app-icon-style: rounded purple panel with a vertical gradient
-    and a thin top-highlight rim, plus two clean monoline white chevrons
-    (up + down) with a soft drop shadow. Built at 4x super-sampling and
-    smoothscaled down for crisp edges."""
+    """Premium icon: a rounded purple frame around a light-gray panel with
+    two clean purple monoline chevrons (up + down). Built at 4x super-
+    sampling and smoothscaled down for crisp edges on any background."""
     SS = 4
     size = out_diameter * SS
     surf = pygame.Surface((size, size), pygame.SRCALPHA)
-    cx = cy = size // 2
 
-    # ── Panel palette ───────────────────────────────────────────────────
-    PANEL_HI    = (138, 70, 215)     # top of gradient (lit)
-    PANEL_LO    = (60, 20, 115)      # bottom (shaded)
-    RIM_HI      = (200, 155, 245)    # top inner highlight rim
-    RIM_LO      = (35, 10, 70)       # bottom inner shadow rim
-    OUTLINE     = (15, 5, 35)        # outer definition outline
-    ARROW_COL   = (250, 245, 255)    # crisp off-white
-    SHADOW      = (0, 0, 0, 110)     # arrow drop shadow
+    # ── Palette ─────────────────────────────────────────────────────────
+    OUTLINE      = (15, 5, 35)         # outer hairline, definition on any bg
+    FRAME        = (140, 60, 215)      # the purple perimeter
+    FRAME_HL     = (215, 165, 250)     # tiny top-edge highlight
+    PANEL_HI     = (245, 246, 250)     # gray panel — lit top
+    PANEL_LO     = (212, 214, 224)     # gray panel — slightly shaded bottom
+    INSET_SHADOW = (0, 0, 0, 38)       # soft inner shadow under the frame
+    ARROW        = (118, 52, 200)      # purple arrow body
+    ARROW_DK     = (62, 22, 130)       # arrow shadow / outline mix
 
-    radius     = SS * 6
-    outline_t  = SS                  # outer dark outline (1 final-px)
-    inset      = SS                  # margin from surface edge
+    radius   = SS * 6
+    inset    = SS                     # 1-px outer outline gap
+    frame_t  = SS * 2                 # frame stroke = 2 final-px (clean & thin)
 
     panel = pygame.Rect(inset, inset, size - inset * 2, size - inset * 2)
 
-    # ── 1. Outer dark outline (definition on any background) ───────────
+    # 1) Outer 1-px dark outline so the icon reads on any background.
     pygame.draw.rect(surf, OUTLINE, panel, border_radius=radius)
 
-    # ── 2. Gradient fill panel (one step inside the outline) ──────────
-    gradient_rect = panel.inflate(-outline_t * 2, -outline_t * 2)
+    # 2) Solid purple frame fill (will be partly covered by gray panel).
+    pygame.draw.rect(surf, FRAME, panel.inflate(-SS * 2, -SS * 2),
+                     border_radius=radius - SS)
+
+    # 3) Light-gray inner panel with a subtle vertical gradient.
+    inner = panel.inflate(-(frame_t + SS) * 2, -(frame_t + SS) * 2)
+    inner_radius = max(2, radius - frame_t - SS)
     grad_surf = pygame.Surface((size, size), pygame.SRCALPHA)
-    g_y0, g_y1 = gradient_rect.top, gradient_rect.bottom
-    for y in range(g_y0, g_y1 + 1):
-        t = (y - g_y0) / max(1, (g_y1 - g_y0))
+    g0, g1 = inner.top, inner.bottom
+    for y in range(g0, g1 + 1):
+        t = (y - g0) / max(1, (g1 - g0))
         col = (
             int(PANEL_HI[0] + (PANEL_LO[0] - PANEL_HI[0]) * t),
             int(PANEL_HI[1] + (PANEL_LO[1] - PANEL_HI[1]) * t),
             int(PANEL_HI[2] + (PANEL_LO[2] - PANEL_HI[2]) * t),
         )
         pygame.draw.line(grad_surf, col, (0, y), (size, y))
-    # Mask the gradient strip to the rounded panel shape.
-    mask = pygame.Surface((size, size), pygame.SRCALPHA)
-    pygame.draw.rect(mask, (255, 255, 255, 255), gradient_rect,
-                     border_radius=max(1, radius - outline_t))
-    grad_surf.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    inner_mask = pygame.Surface((size, size), pygame.SRCALPHA)
+    pygame.draw.rect(inner_mask, (255, 255, 255, 255), inner,
+                     border_radius=inner_radius)
+    grad_surf.blit(inner_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
     surf.blit(grad_surf, (0, 0))
 
-    # ── 3. Inner top highlight rim (1px lighter line just inside top) ─
-    rim_rect = gradient_rect.inflate(-SS, -SS)
-    pygame.draw.rect(surf, RIM_HI, rim_rect,
-                     border_radius=max(1, radius - outline_t - SS // 2),
-                     width=SS // 2 if SS // 2 > 0 else 1)
-    # Override the lower half of that rim with a darker shadow line so the
-    # highlight reads as "lit from above". Done by drawing a clipped line
-    # along the bottom edge.
-    bot_y = rim_rect.bottom - SS // 2
-    pygame.draw.line(surf, RIM_LO,
-                     (rim_rect.left + radius, bot_y),
-                     (rim_rect.right - radius, bot_y),
+    # 4) Soft inner shadow inside the gray panel — gives the gray a
+    #    recessed feel under the frame.
+    shadow_surf = pygame.Surface((size, size), pygame.SRCALPHA)
+    pygame.draw.rect(shadow_surf, INSET_SHADOW, inner,
+                     border_radius=inner_radius, width=SS)
+    surf.blit(shadow_surf, (0, 0))
+
+    # 5) Tiny lighter highlight along the very top edge of the frame —
+    #    sells the "lit from above" depth.
+    pygame.draw.line(surf, FRAME_HL,
+                     (panel.left + radius, panel.top + SS),
+                     (panel.right - radius, panel.top + SS),
                      max(1, SS // 2))
 
-    # ── 4. Soft inner top-edge gloss (subtle gradient overlay) ────────
-    gloss = pygame.Surface((size, size), pygame.SRCALPHA)
-    gloss_rect = gradient_rect.inflate(-SS * 2, -SS * 2)
-    gloss_h = gloss_rect.height // 3
-    for i in range(gloss_h):
-        a = int(45 * (1 - i / gloss_h) ** 1.6)
-        if a <= 0:
-            continue
-        pygame.draw.line(gloss, (255, 255, 255, a),
-                         (gloss_rect.left, gloss_rect.top + i),
-                         (gloss_rect.right, gloss_rect.top + i))
-    gloss.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-    surf.blit(gloss, (0, 0))
+    # ── Arrows: clean purple monoline chevrons ─────────────────────────
+    pad_x = max(SS * 5, panel.width // 6)
+    pad_y = max(SS * 5, panel.height // 6)
+    arrow_area = panel.inflate(-pad_x * 2, -pad_y * 2)
 
-    # ── 5. Arrows: clean monoline chevrons in white ───────────────────
-    # Geometry — use the panel inner area, with healthy padding.
-    pad_x = max(SS * 4, panel.width // 7)
-    pad_y = max(SS * 4, panel.height // 7)
-    inner = panel.inflate(-pad_x * 2, -pad_y * 2)
+    col_w = arrow_area.width // 2
+    lx = arrow_area.left + col_w // 2
+    rx = arrow_area.right - col_w // 2
+    stroke = max(SS * 2, arrow_area.height // 13)
+    head_w = max(SS * 4, arrow_area.width // 6)
+    head_h = max(SS * 4, arrow_area.height // 4)
 
-    # Two columns: up-arrow on left, down-arrow on right.
-    col_w  = inner.width // 2
-    lx     = inner.left + col_w // 2
-    rx     = inner.right - col_w // 2
-
-    # Stroke widths.
-    stroke = max(SS * 2, inner.height // 14)         # shaft thickness
-    head_w = max(SS * 5, inner.width // 5)           # half-width of arrow head
-    head_h = max(SS * 5, inner.height // 4)          # head height
-
-    def _arrow_lines(target, col_x, *, point_up, color, offset=(0, 0)):
-        ox, oy = offset
+    def _arrow(target, col_x, *, point_up, color):
         if point_up:
-            tip = (col_x + ox, inner.top + oy)
-            tail = (col_x + ox, inner.bottom + oy)
-            wing_y = inner.top + head_h + oy
+            tip  = (col_x, arrow_area.top)
+            tail = (col_x, arrow_area.bottom)
+            wing_y = arrow_area.top + head_h
         else:
-            tip = (col_x + ox, inner.bottom + oy)
-            tail = (col_x + ox, inner.top + oy)
-            wing_y = inner.bottom - head_h + oy
-        wl = (col_x - head_w + ox, wing_y)
-        wr = (col_x + head_w + ox, wing_y)
+            tip  = (col_x, arrow_area.bottom)
+            tail = (col_x, arrow_area.top)
+            wing_y = arrow_area.bottom - head_h
+        wl = (col_x - head_w, wing_y)
+        wr = (col_x + head_w, wing_y)
         pygame.draw.line(target, color, tail, tip, stroke)
         pygame.draw.line(target, color, tip, wl, stroke)
         pygame.draw.line(target, color, tip, wr, stroke)
+        # Round caps so the strokes don't look chopped at small sizes.
         for p in (tail, wl, wr, tip):
             pygame.draw.circle(target, color, p, stroke // 2)
 
-    # Drop shadow on a separate alpha surface so it composites with alpha.
-    shadow_surf = pygame.Surface((size, size), pygame.SRCALPHA)
-    _arrow_lines(shadow_surf, lx, point_up=True,
-                 color=SHADOW, offset=(SS, SS * 2))
-    _arrow_lines(shadow_surf, rx, point_up=False,
-                 color=SHADOW, offset=(SS, SS * 2))
-    surf.blit(shadow_surf, (0, 0))
-
-    # Arrows on top.
-    _arrow_lines(surf, lx, point_up=True,  color=ARROW_COL)
-    _arrow_lines(surf, rx, point_up=False, color=ARROW_COL)
+    # Subtle dark outline pass under the arrow (1-px wider) for definition.
+    _arrow(surf, lx, point_up=True,  color=ARROW_DK)
+    _arrow(surf, rx, point_up=False, color=ARROW_DK)
+    # Re-draw the arrows slightly thinner on top in the main purple so the
+    # outline shows as a thin ring around the body.
+    saved_stroke = stroke
+    stroke = max(2, stroke - SS)
+    _arrow(surf, lx, point_up=True,  color=ARROW)
+    _arrow(surf, rx, point_up=False, color=ARROW)
+    stroke = saved_stroke
 
     return pygame.transform.smoothscale(surf, (out_diameter, out_diameter))
 
