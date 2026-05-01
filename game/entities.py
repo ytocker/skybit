@@ -89,8 +89,60 @@ def _get_kfc_sprite() -> "pygame.Surface":
 # Holographic foil body (diagonal pearl-pink → cyan → mint → ivory) inside a
 # 2-px premium navy outline ring + crisp eyes + soft sheen.
 _ghost_sprite: "pygame.Surface | None" = None
-_GHOST_HEAD_OFFSET_X = 16   # head-circle centre x in the sprite
-_GHOST_HEAD_OFFSET_Y = 14   # head-circle centre y in the sprite
+_GHOST_HEAD_OFFSET_X = 17   # head-circle centre x in the sprite (14 + PAD=3)
+_GHOST_HEAD_OFFSET_Y = 15   # head-circle centre y in the sprite (12 + PAD=3)
+
+
+def _ghost_silhouette_pts(gcx, gcy, hr, body_y2, bump_y, indent_y, scale=1):
+    """Return a smooth polygon tracing the entire ghost perimeter:
+    upper-half-circle head + straight sides aligned with the head's
+    left/right edges + a cosine-interpolated 3-bump scallop bottom.
+    The endpoints of the scallop sit at the same (x = gcx ± hr)
+    columns as the head sides, so the silhouette flows without a
+    step at the head-to-body and body-to-scallop joints."""
+    s = scale
+    pts = []
+    # 1) Top of head — upper semicircle from leftmost (gcx-hr) over the
+    #    top to rightmost (gcx+hr). 36 samples gives a clean smooth arc
+    #    even before the supersample downscale.
+    n_arc = 36
+    for i in range(n_arc + 1):
+        theta = math.pi - i * math.pi / n_arc      # π → 0
+        x = gcx + hr * math.cos(theta)
+        y = gcy - hr * math.sin(theta)             # top half (smaller y)
+        pts.append((x * s, y * s))
+    # 2) Right side — straight line down to body_y2 (aligned with the
+    #    head's right edge so there's no step at the join).
+    pts.append(((gcx + hr) * s, body_y2 * s))
+    # 3) Smooth scallop bottom, traced right-to-left through 7 control
+    #    points. Cosine ease between each consecutive pair gives soft
+    #    rounded bumps and indents instead of the original V-shaped
+    #    polygon corners.
+    ctrls = [
+        (gcx - hr,        body_y2),     # left endpoint
+        (gcx - hr + 5,    bump_y),      # left bump
+        (gcx - hr + 11,   indent_y),    # indent 1
+        (gcx,             bump_y),      # centre bump
+        (gcx + hr - 11,   indent_y),    # indent 2
+        (gcx + hr - 5,    bump_y),      # right bump
+        (gcx + hr,        body_y2),     # right endpoint
+    ]
+    rev_ctrls = list(reversed(ctrls))
+    n_per = 12
+    for i in range(len(rev_ctrls) - 1):
+        a = rev_ctrls[i]
+        b = rev_ctrls[i + 1]
+        # Skip i=0 first-point (already added as right-side endpoint)
+        start = 1 if i == 0 else 0
+        for j in range(start, n_per + 1):
+            t = j / n_per
+            t_smooth = (1 - math.cos(t * math.pi)) / 2
+            x = a[0] + (b[0] - a[0]) * t_smooth
+            y = a[1] + (b[1] - a[1]) * t_smooth
+            pts.append((x * s, y * s))
+    # 4) Left side — straight line back up to head's leftmost point.
+    pts.append(((gcx - hr) * s, gcy * s))
+    return pts
 
 
 def _get_ghost_sprite() -> "pygame.Surface":
@@ -99,38 +151,30 @@ def _get_ghost_sprite() -> "pygame.Surface":
         return _ghost_sprite
 
     SS = 4
-    PAD = 2
-    GW, GH = (28 + PAD * 2), (36 + PAD * 2)   # 32 × 40 final-px
+    PAD = 3                                 # extra room for the 3-px outline
+    GW, GH = (28 + PAD * 2), (36 + PAD * 2)
     sw, sh = GW * SS, GH * SS
     big = pygame.Surface((sw, sh), pygame.SRCALPHA)
 
-    # Geometry in supersampled units
-    gcx = (14 + PAD) * SS
-    gcy = (12 + PAD) * SS
-    hr  = 12 * SS
-    body_y2 = (26 + PAD) * SS
-    body_rect = pygame.Rect((1 + PAD) * SS, gcy,
-                            (28 - 2) * SS, body_y2 - gcy)
-    scallop = [
-        ((1 + PAD) * SS,         body_y2),
-        ((6 + PAD) * SS,         (GH - 4) * SS),
-        ((11 + PAD) * SS,        body_y2 + 4 * SS),
-        ((14 + PAD) * SS,        (GH - 4) * SS),
-        ((28 - 12 + PAD) * SS,   body_y2 + 4 * SS),
-        ((28 - 7 + PAD) * SS,    (GH - 4) * SS),
-        ((28 - 2 + PAD) * SS,    body_y2),
-    ]
+    # Geometry in final-px (un-supersampled). The silhouette helper takes
+    # `scale=SS` and returns supersampled points in one pass. Bump and
+    # indent dips below body_y2 match the original (8 px / 4 px) so the
+    # smoothed silhouette has the same proportions as before.
+    gcx, gcy, hr = 14 + PAD, 12 + PAD, 12
+    body_y2      = 26 + PAD
+    bump_y       = body_y2 + 8        # 3 hanging bumps go this deep
+    indent_y     = body_y2 + 4        # 2 indents stop here
+    perimeter = _ghost_silhouette_pts(
+        gcx, gcy, hr, body_y2, bump_y, indent_y, scale=SS)
 
-    OUTLINE_COLOR = (40, 50, 90)
-    THICKNESS_PX  = 2
+    OUTLINE_COLOR = (28, 38, 80)              # deeper, richer than (40,50,90)
+    THICKNESS_PX  = 3                         # was 2
 
-    # 1) Outline ring — stack the silhouette in OUTLINE_COLOR at every
-    #    offset within a circle of radius `THICKNESS_PX*SS` so the ring
-    #    is uniformly thick around the entire silhouette.
+    # 1) Outline ring — stack a filled silhouette polygon in OUTLINE_COLOR
+    #    at every offset within a circle of radius `THICKNESS_PX*SS` so
+    #    the ring is uniformly thick around the entire smoothed shape.
     sil = pygame.Surface((sw, sh), pygame.SRCALPHA)
-    pygame.draw.circle(sil, OUTLINE_COLOR, (gcx, gcy), hr)
-    pygame.draw.rect(sil, OUTLINE_COLOR, body_rect)
-    pygame.draw.polygon(sil, OUTLINE_COLOR, scallop)
+    pygame.draw.polygon(sil, OUTLINE_COLOR, perimeter)
     t_big = THICKNESS_PX * SS
     step = max(1, SS // 2)
     for dx in range(-t_big, t_big + 1, step):
@@ -138,11 +182,12 @@ def _get_ghost_sprite() -> "pygame.Surface":
             if dx * dx + dy * dy <= t_big * t_big:
                 big.blit(sil, (dx, dy))
 
-    # 2) Silhouette mask (used to clip both the body gradient and the sheen).
+    # 2) Silhouette mask (used to clip the body gradient and the sheen).
     mask = pygame.Surface((sw, sh), pygame.SRCALPHA)
-    pygame.draw.circle(mask, (255, 255, 255, 255), (gcx, gcy), hr)
-    pygame.draw.rect(mask, (255, 255, 255, 255), body_rect)
-    pygame.draw.polygon(mask, (255, 255, 255, 255), scallop)
+    pygame.draw.polygon(mask, (255, 255, 255, 255), perimeter)
+    # Compatibility shim — gcy/hr/body_y2 in supersampled units for the
+    # gradient + sheen + eye code below.
+    gcx *= SS; gcy *= SS; hr *= SS; body_y2 *= SS
 
     # 3) Holographic foil body — diagonal multi-stop gradient.
     stops = [
