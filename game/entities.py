@@ -341,7 +341,7 @@ def _build_reverse_icon(out_diameter: int) -> pygame.Surface:
     ARROW        = (118, 52, 200)      # purple arrow body
     ARROW_DK     = (62, 22, 130)       # arrow shadow / outline mix
 
-    radius   = SS * 6
+    radius   = SS * 11                # squircle-style corners
     inset    = SS                     # 1-px outer outline gap
     frame_t  = SS * 2                 # frame stroke = 2 final-px (clean & thin)
 
@@ -395,11 +395,12 @@ def _build_reverse_icon(out_diameter: int) -> pygame.Surface:
     col_w = arrow_area.width // 2
     lx = arrow_area.left + col_w // 2
     rx = arrow_area.right - col_w // 2
-    stroke = max(SS * 2, arrow_area.height // 13)
-    head_w = max(SS * 4, arrow_area.width // 6)
-    head_h = max(SS * 4, arrow_area.height // 4)
+    # Bolder, thicker strokes for a chunkier "icon-set" feel.
+    stroke = max(SS * 4, arrow_area.height // 8)
+    head_w = max(SS * 5, arrow_area.width // 5)
+    head_h = max(SS * 5, arrow_area.height * 30 // 100)
 
-    def _arrow(target, col_x, *, point_up, color):
+    def _arrow(target, col_x, *, point_up, color, stroke_w):
         if point_up:
             tip  = (col_x, arrow_area.top)
             tail = (col_x, arrow_area.bottom)
@@ -410,23 +411,18 @@ def _build_reverse_icon(out_diameter: int) -> pygame.Surface:
             wing_y = arrow_area.bottom - head_h
         wl = (col_x - head_w, wing_y)
         wr = (col_x + head_w, wing_y)
-        pygame.draw.line(target, color, tail, tip, stroke)
-        pygame.draw.line(target, color, tip, wl, stroke)
-        pygame.draw.line(target, color, tip, wr, stroke)
+        pygame.draw.line(target, color, tail, tip, stroke_w)
+        pygame.draw.line(target, color, tip, wl, stroke_w)
+        pygame.draw.line(target, color, tip, wr, stroke_w)
         # Round caps so the strokes don't look chopped at small sizes.
         for p in (tail, wl, wr, tip):
-            pygame.draw.circle(target, color, p, stroke // 2)
+            pygame.draw.circle(target, color, p, stroke_w // 2)
 
-    # Subtle dark outline pass under the arrow (1-px wider) for definition.
-    _arrow(surf, lx, point_up=True,  color=ARROW_DK)
-    _arrow(surf, rx, point_up=False, color=ARROW_DK)
-    # Re-draw the arrows slightly thinner on top in the main purple so the
-    # outline shows as a thin ring around the body.
-    saved_stroke = stroke
-    stroke = max(2, stroke - SS)
-    _arrow(surf, lx, point_up=True,  color=ARROW)
-    _arrow(surf, rx, point_up=False, color=ARROW)
-    stroke = saved_stroke
+    # Single bold purple pass — no outline pass, the gray panel provides
+    # plenty of contrast and the arrow stays visually "thick" rather than
+    # ringed.
+    _arrow(surf, lx, point_up=True,  color=ARROW, stroke_w=stroke)
+    _arrow(surf, rx, point_up=False, color=ARROW, stroke_w=stroke)
 
     return pygame.transform.smoothscale(surf, (out_diameter, out_diameter))
 
