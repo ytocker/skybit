@@ -221,6 +221,15 @@ variants from its seed, with distinct silhouettes and decorations
 (prayer flags, banner poles, terraces with cascading vines,
 monasteries, hero lanterns, jungle-ruin masonry, menhirs).
 
+---
+
+## Leaderboard & anti-cheat
+
+A global top-10 lives in Supabase (`public.scores` table) and is read
++ written from the browser. Native runs persist scores to a local JSON
+file instead. The full schema + RLS policies are in
+[`supabase/schema.sql`](supabase/schema.sql).
+
 ### Anti-cheat caveat
 
 The leaderboard is a **soft** leaderboard. Without a server we control
