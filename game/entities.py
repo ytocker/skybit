@@ -258,39 +258,40 @@ _COIN_FACE_CACHE: "pygame.Surface | None" = None
 
 
 def _get_coin_face() -> pygame.Surface:
-    """Build the face-on coin sprite once at 4x super-sample, with a bold
-    dark-amber outline, a vertical gold gradient (light top → dark gold
-    bottom), an embossed parrot silhouette, and a soft specular highlight.
-    Smoothscaled per frame to apply the spin squeeze."""
+    """Build the face-on coin sprite once at 4x super-sample. Layers:
+    dark-amber outline, a twisted-rope rim (alternating dark/light
+    segments around the perimeter), a vertical gold gradient body, an
+    embossed parrot silhouette, and a soft upper-left specular highlight.
+    Smoothscaled per frame to apply the coin-spin squeeze, so the rope
+    rim stays visible across every frame of the rotation animation."""
     global _COIN_FACE_CACHE
     if _COIN_FACE_CACHE is not None:
         return _COIN_FACE_CACHE
     SS = 4
-    final_d = COIN_R * 2 + 2          # match the previous visual diameter
+    final_d = COIN_R * 2 + 4
     size = final_d * SS
     surf = pygame.Surface((size, size), pygame.SRCALPHA)
     cx = cy = size // 2
-    r_outer = size // 2 - SS          # leaves SS for anti-aliasing
+    r_outer = size // 2 - SS
     r_outline = max(SS * 2, r_outer // 6)
     r_body = r_outer - r_outline
 
-    # Palette — light to deep gold, plus a much darker amber outline so
-    # the coin reads as a confident silhouette on bright skies.
     GOLD_HI    = (255, 232, 130)
     GOLD_MID   = (240, 195,  55)
     GOLD_LO    = (190, 130,  20)
     OUTLINE_DK = ( 95,  50,   0)
     OUTLINE_LT = (150,  90,  10)
     EMBOSS     = (130,  80,   0)
+    DARK_AMBER = ( 75,  35,   0)
+    LITE_AMBER = (210, 165,  50)
 
-    # 1) Bold double-band outline (dark outer + lighter inner edge).
+    # 1) Bold double-band outline.
     pygame.draw.circle(surf, OUTLINE_DK, (cx, cy), r_outer)
     pygame.draw.circle(surf, OUTLINE_LT, (cx, cy), r_outer - SS)
 
     # 2) Vertical gradient body, masked to the inner circle.
     body_surf = pygame.Surface((size, size), pygame.SRCALPHA)
-    y0 = cy - r_body
-    y1 = cy + r_body
+    y0, y1 = cy - r_body, cy + r_body
     for yy in range(y0, y1 + 1):
         t = (yy - y0) / max(1, (y1 - y0))
         if t < 0.4:
@@ -313,8 +314,27 @@ def _get_coin_face() -> pygame.Surface:
     body_surf.blit(body_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
     surf.blit(body_surf, (0, 0))
 
-    # 3) Embossed parrot silhouette (scaled-up version of the original
-    #    hand-tuned shape — body / head / hooked beak / gold eye).
+    # 3) Twisted-rope rim — alternating dark/light arcs around the perimeter.
+    n_segs = 22
+    ring_r = r_outer - r_outline // 2
+    seg_w = max(SS * 3, r_outline + SS)
+    for i in range(n_segs):
+        ang = i * (math.tau / n_segs)
+        ang_next = (i + 1) * (math.tau / n_segs)
+        mid = (ang + ang_next) / 2
+        sx = cx + math.cos(mid) * ring_r
+        sy = cy + math.sin(mid) * ring_r
+        seg_len = int((math.tau / n_segs) * ring_r * 0.95)
+        seg = pygame.Surface((seg_len, seg_w), pygame.SRCALPHA)
+        col       = DARK_AMBER if i % 2 == 0 else LITE_AMBER
+        highlight = LITE_AMBER if i % 2 == 0 else GOLD_HI
+        pygame.draw.ellipse(seg, col, seg.get_rect())
+        pygame.draw.ellipse(seg, highlight, seg.get_rect().inflate(-SS, -SS))
+        rotated = pygame.transform.rotate(seg, -math.degrees(mid))
+        r_rect = rotated.get_rect(center=(int(sx), int(sy)))
+        surf.blit(rotated, r_rect.topleft)
+
+    # 4) Embossed parrot silhouette inside the rope rim.
     pygame.draw.ellipse(surf, EMBOSS,
                         (cx - 2 * SS, cy - 1 * SS, 7 * SS, 5 * SS))
     pygame.draw.circle(surf, EMBOSS, (cx - 1 * SS, cy - 3 * SS), 3 * SS)
@@ -324,12 +344,12 @@ def _get_coin_face() -> pygame.Surface:
                          (cx - 3 * SS, cy - 1 * SS)])
     pygame.draw.circle(surf, GOLD_HI, (cx, cy - 4 * SS), max(1, SS - 1))
 
-    # 4) Specular highlight crescent on the upper-left, masked to body.
+    # 5) Specular highlight crescent on the upper-left, masked to body.
     hl = pygame.Surface((size, size), pygame.SRCALPHA)
     hl_rect = pygame.Rect(cx - r_body + r_body // 5,
                           cy - r_body + r_body // 6,
-                          int(r_body * 1.1), int(r_body * 0.55))
-    pygame.draw.ellipse(hl, (255, 255, 235, 120), hl_rect)
+                          int(r_body * 1.1), int(r_body * 0.5))
+    pygame.draw.ellipse(hl, (255, 255, 235, 110), hl_rect)
     hl.blit(body_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
     surf.blit(hl, (0, 0))
 
@@ -372,24 +392,19 @@ class Coin:
             draw_tilted(surf, cx, cy, t=self.float_t)
             return
 
+        # Spin animation: the cached face is smoothscaled horizontally by
+        # |cos(spin)| every frame, so the rope rim, outline, gradient, and
+        # embossed parrot are all preserved across every angle of the
+        # rotation — including near-edge-on slivers. A small floor on the
+        # squeeze (10% width) keeps the edge-on frame readable instead of
+        # collapsing to a 1-px line.
         cos_s = math.cos(self.spin)
         r = COIN_R
-        rx = max(1, int(abs(cos_s) * r))
-
-        if abs(cos_s) <= 0.35:
-            # Edge-on sliver — a thin gold bar with dark rim, no detail.
-            pygame.draw.ellipse(surf, COIN_DARK,
-                                (cx - rx - 1, cy - r, (rx + 1) * 2, r * 2))
-            pygame.draw.ellipse(surf, COIN_GOLD,
-                                (cx - rx, cy - r, rx * 2, r * 2))
-            return
-
-        # Face-on: smoothscale-squish the cached high-quality face by the
-        # current spin angle. The cached face owns the gradient + outline +
-        # emboss; this stays consistent through the rotation.
+        squeeze = max(0.10, abs(cos_s))
         face = _get_coin_face()
         fw, fh = face.get_size()
-        squeezed = pygame.transform.smoothscale(face, (rx * 2 + 2, fh))
+        target_w = max(2, int(fw * squeeze))
+        squeezed = pygame.transform.smoothscale(face, (target_w, fh))
         rect = squeezed.get_rect(center=(cx, cy))
         surf.blit(squeezed, rect.topleft)
 
