@@ -22,6 +22,7 @@ from game.config import (
 from game.entities import (
     Bird, Pipe, Coin, PowerUp, Particle, CloudPuff, FloatText,
 )
+from game._proof import ProofState
 from game.draw import (
     COIN_GOLD, COIN_LIGHT,
     PARTICLE_GOLD, PARTICLE_ORNG, PARTICLE_WHT, PARTICLE_CRIM,
@@ -90,6 +91,12 @@ class World:
         # (bird bob during the ready wait) so they keep moving even while
         # biome_time is frozen.
         self._idle_t = 0.0
+
+        # Tamper-evident parallel ledger of every scoring event in the
+        # run. The leaderboard submission carries the proof state, not
+        # ``self.score``, so a JS-side ``world.score = 99999`` does not
+        # change what gets submitted.
+        self._proof = ProofState()
 
         self.weather = Weather()
 
@@ -358,6 +365,7 @@ class World:
                     p.scored = True
                     self.score += 1
                     self.pillars_passed += 1
+                    self._proof.record(self.time_alive, 1, "pipe")
 
             # Near-miss detection: once per pipe, flag if the bird was within
             # a narrow band of either edge without hitting. Fires as the pipe
@@ -555,6 +563,7 @@ class World:
         value = 3 if self.triple_timer > 0 else 1
         self.score += value
         self.coin_count += 1
+        self._proof.record(self.time_alive, value, "coin")
 
         # *** GLITCH FIX ***
         # NO screen-wide flash. Only localized sparkle particles.

@@ -154,6 +154,34 @@ The full SQL (table definitions + RLS policies) lives in
 [`supabase/schema.sql`](supabase/schema.sql) — paste it into the Supabase
 dashboard SQL editor once per environment.
 
+### Anti-cheat caveat
+
+The leaderboard is a **soft** leaderboard. Without a server we control
+to validate submissions, the Supabase anon key has to ship in the
+browser bundle, and the `public.scores` row policy accepts any insert.
+A determined attacker who reads the bundle can post forged rows
+directly with `curl`.
+
+What ships in this build is layered client-side hardening to cover the
+casual-cheat surface:
+
+* No `window.lbSubmitStart` / `lbFetchStart` / `skyLogPlayStart` globals.
+  Everything funnels through one closure-private `window.__sk(action,
+  payload)` dispatcher (see `inject_theme.py`).
+* Score submissions ride a tamper-evident proof bundle (per-run UUID,
+  append-only event ledger, rolling SHA-256 chain hash) computed in
+  Python (`game/_proof.py`). The dispatcher recomputes the chain hash
+  on the JS side and refuses any payload that doesn't match.
+* The submitted score is the proof ledger's sum, not `world.score` —
+  so poking `world.score = 99999` in the console doesn't change what
+  goes over the wire.
+* A deterministic plausibility check (`game/_plausibility.py`) runs
+  before the network call, using the gameplay constants in
+  `game/config.py` as bounds. It also runs on the read path: rows with
+  scores above the ceiling are filtered out of the displayed top-10.
+* The dispatcher tracks consumed run UUIDs in a closure-private set,
+  so a captured legitimate submission can't be replayed.
+
 ---
 
 ## Evolving Scenery
