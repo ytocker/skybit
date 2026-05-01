@@ -49,7 +49,11 @@ REVERSE_DURATION   = 8.0
 
 # Spawn weights for power-up kinds. Must sum to anything — they're
 # normalized at pick time. `surprise` resolves at pickup-time to one of
-# the seven "real" kinds chosen at random (see World._activate_surprise).
+# the six "real" kinds chosen at random (see World._on_powerup).
+# `reverse` is intentionally excluded — the implementation is kept in
+# place but the power-up doesn't spawn or resolve from a surprise box.
+# To re-enable: add ("reverse", 1) below AND restore "reverse" in the
+# random.choice() inside World._on_powerup.
 POWERUP_WEIGHTS    = (
     ("triple",   1),
     ("slowmo",   1),
@@ -57,7 +61,6 @@ POWERUP_WEIGHTS    = (
     ("kfc",      1),
     ("ghost",    1),
     ("grow",     1),
-    ("reverse",  1),
     ("surprise", 1),
 )
 
