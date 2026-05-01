@@ -98,8 +98,8 @@ def _get_ghost_sprite() -> "pygame.Surface":
     if _ghost_sprite is not None:
         return _ghost_sprite
 
-    SS = 8                                    # was 4 — denser super-sample
-                                              # for cleaner anti-aliased edges
+    SS = 16                                   # high-res super-sample for
+                                              # genuinely smooth perimeter
     PAD = 2
     GW, GH = (28 + PAD * 2), (36 + PAD * 2)   # 32 × 40 final-px
     sw, sh = GW * SS, GH * SS
@@ -110,52 +110,60 @@ def _get_ghost_sprite() -> "pygame.Surface":
     gcy = (12 + PAD) * SS
     hr  = 12 * SS
     body_y2 = (26 + PAD) * SS
-    body_rect = pygame.Rect((1 + PAD) * SS, gcy,
-                            (28 - 2) * SS, body_y2 - gcy)
-    # Symmetric 3-bump / 2-indent scallop with uniform-width waves. The
-    # 7 control points are mirror-symmetric about the body's vertical
-    # centreline and evenly spaced (each segment span/6 wide), so every
-    # "wave" along the bottom has the same width.
+
+    # Build the full silhouette as a SINGLE perimeter polygon (head
+    # semicircle → right side → angular scallop → left side). This lets
+    # us stroke the outline with a fast line+circle pass instead of the
+    # offset-stack (which scales O(SS²) and would be ~1 G pixel-ops at
+    # SS=16). Same angular V-bumps as before, just rendered cleanly.
+    perimeter = []
+    n_arc = 64                                # head arc resolution
+    for i in range(n_arc + 1):
+        theta = math.pi - i * math.pi / n_arc
+        x = gcx + hr * math.cos(theta)
+        y = gcy - hr * math.sin(theta)
+        perimeter.append((int(x), int(y)))
+    # Right side down to body bottom
+    perimeter.append((gcx + hr, body_y2))
+    # Angular scallop — symmetric, uniform-width waves, traced
+    # right-to-left through 7 control points.
     bump_y   = (GH - 4) * SS
     indent_y = body_y2 + 4 * SS
     x_left   = (1 + PAD) * SS
     x_right  = (28 - 2 + PAD) * SS
     span_x   = x_right - x_left
-    scallop = [
+    scallop_lr = [
         (x_left + i * span_x // 6,
          body_y2 if i in (0, 6) else (bump_y if i % 2 == 1 else indent_y))
         for i in range(7)
     ]
+    perimeter.extend(reversed(scallop_lr))
+    # Left side back up to head's leftmost point
+    perimeter.append((gcx - hr, gcy))
 
     OUTLINE_COLOR = (40, 50, 90)
     THICKNESS_PX  = 2
-
-    # 1) Outline ring — stack the silhouette in OUTLINE_COLOR at every
-    #    integer offset within a circle of radius `THICKNESS_PX*SS`. The
-    #    dense step (1, was SS//2 = 4) keeps the ring perfectly uniform
-    #    around the full perimeter — no thin spots at the bump corners.
-    sil = pygame.Surface((sw, sh), pygame.SRCALPHA)
-    pygame.draw.circle(sil, OUTLINE_COLOR, (gcx, gcy), hr)
-    pygame.draw.rect(sil, OUTLINE_COLOR, body_rect)
-    pygame.draw.polygon(sil, OUTLINE_COLOR, scallop)
     t_big = THICKNESS_PX * SS
-    for dx in range(-t_big, t_big + 1):
-        for dy in range(-t_big, t_big + 1):
-            if dx * dx + dy * dy <= t_big * t_big:
-                big.blit(sil, (dx, dy))
 
-    # 2) Silhouette mask (used to clip the body gradient and the sheen).
+    # 1) Outline ring — stroke each perimeter edge as a thick line, plus a
+    #    circle at every vertex so corners join cleanly without gaps. This
+    #    is O(N) in perimeter length, not O(SS²) like the offset-stack.
+    for i in range(len(perimeter)):
+        p1 = perimeter[i]
+        p2 = perimeter[(i + 1) % len(perimeter)]
+        pygame.draw.line(big, OUTLINE_COLOR, p1, p2, t_big * 2)
+    for p in perimeter:
+        pygame.draw.circle(big, OUTLINE_COLOR, p, t_big)
+
+    # 2) Silhouette mask — single filled polygon traced from the same
+    #    perimeter, so it lines up with the outline ring above to the pixel.
     mask = pygame.Surface((sw, sh), pygame.SRCALPHA)
-    pygame.draw.circle(mask, (255, 255, 255, 255), (gcx, gcy), hr)
-    pygame.draw.rect(mask, (255, 255, 255, 255), body_rect)
-    pygame.draw.polygon(mask, (255, 255, 255, 255), scallop)
+    pygame.draw.polygon(mask, (255, 255, 255, 255), perimeter)
 
     # 3) Holographic foil body — diagonal multi-stop gradient. Build a
-    #    1-D gradient strip of length sw+sh once (per-pixel set_at on a
-    #    single row, so cheap), then per row blit a sw-wide slice of it
-    #    starting at offset y. This produces the 45° diagonal gradient
-    #    without per-pixel work over the full sw×sh canvas — important
-    #    now that SS=8 means a 256×320 supersampled surface.
+    #    1-D gradient strip of length sw+sh once, then per row blit a
+    #    sw-wide slice of it starting at offset y. Avoids per-pixel
+    #    set_at over the full sw×sh canvas.
     stops = [
         (0.00, (240, 215, 255)),  # pale lavender
         (0.30, (255, 220, 240)),  # pearl pink
@@ -187,7 +195,6 @@ def _get_ghost_sprite() -> "pygame.Surface":
         strip.set_at((xx, 0), col + (245,))
     grad = pygame.Surface((sw, sh), pygame.SRCALPHA)
     for yy in range(sh):
-        # Slice (yy, 0, sw, 1) of the strip lands on row yy of the gradient.
         slice_rect = pygame.Rect(yy, 0, sw, 1)
         grad.blit(strip, (0, yy), area=slice_rect)
     grad.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
