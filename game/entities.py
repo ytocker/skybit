@@ -121,13 +121,17 @@ class Bird:
         t = max(-0.5, min(0.75, self.vy / 500.0))
         return -t * 55.0
 
-    def flap(self):
+    def flap(self, gravity_sign=1):
         if self.alive:
-            self.vy = FLAP_V
+            self.vy = FLAP_V * gravity_sign
             self.flap_boost = 0.45
 
-    def update(self, dt):
-        self.vy = min(self.vy + GRAVITY * dt, MAX_FALL)
+    def update(self, dt, gravity_sign=1):
+        new_vy = self.vy + GRAVITY * gravity_sign * dt
+        if gravity_sign >= 0:
+            self.vy = min(new_vy, MAX_FALL)
+        else:
+            self.vy = max(new_vy, -MAX_FALL)
         self.y += self.vy * dt
 
         base_hz = 9.0 + self.flap_boost * 20.0
@@ -140,20 +144,26 @@ class Bird:
         if self.ghost_active:
             self.ghost_pulse += dt * 2.4
 
-    def draw(self, surf, shake_x=0, shake_y=0):
+    def draw(self, surf, shake_x=0, shake_y=0, flipped=False):
         frame_idx = int(self.frame_t) % len(parrot.FRAMES)
+        # When flipped (reverse-gravity buff), negate the tilt so a rising
+        # bird's head still leads in the direction of motion after the
+        # vertical mirror is applied below.
+        tilt = -self.tilt_deg if flipped else self.tilt_deg
         if self.kfc_active:
-            img = parrot.get_fried_parrot(frame_idx, self.tilt_deg)
+            img = parrot.get_fried_parrot(frame_idx, tilt)
         elif self.ghost_active:
-            img = parrot.get_ghost_parrot(frame_idx, self.tilt_deg)
+            img = parrot.get_ghost_parrot(frame_idx, tilt)
         elif self.triple_active:
-            img = parrot.get_hat_parrot(frame_idx, self.tilt_deg)
+            img = parrot.get_hat_parrot(frame_idx, tilt)
         else:
-            img = parrot.get_parrot(frame_idx, self.tilt_deg)
+            img = parrot.get_parrot(frame_idx, tilt)
         if self.grow_active:
             from game.config import GROW_SCALE
             w, h = img.get_size()
             img = pygame.transform.smoothscale(img, (int(w * GROW_SCALE), int(h * GROW_SCALE)))
+        if flipped:
+            img = pygame.transform.flip(img, False, True)
         if self.ghost_active:
             # Faded breathing: alpha oscillates ~90..170 over a slow sine,
             # so the ghost reads as clearly translucent and ethereal.
@@ -181,12 +191,19 @@ class Bird:
             pw, ph = parcel.get_size()
             parcel = pygame.transform.smoothscale(
                 parcel, (int(pw * scale), int(ph * scale)))
-        # Tilt-aware offset: the parcel orbits Pip's centre as he banks.
-        offset = pygame.math.Vector2(0, PARCEL_Y_OFFSET * scale)
-        offset = offset.rotate(-self.tilt_deg)
+        # When reverse-gravity is active, the parcel mirrors with Pip:
+        # the sprite flips vertically, the y-offset negates so the parcel
+        # rides ABOVE Pip's centre, and the tilt direction inverts so the
+        # parcel banks the same way as the flipped bird.
+        if flipped:
+            parcel = pygame.transform.flip(parcel, False, True)
+        y_off = -PARCEL_Y_OFFSET * scale if flipped else PARCEL_Y_OFFSET * scale
+        parcel_tilt = -self.tilt_deg if flipped else self.tilt_deg
+        offset = pygame.math.Vector2(0, y_off)
+        offset = offset.rotate(-parcel_tilt)
         # Rotate the parcel sprite to match tilt so the gift bow keeps
-        # pointing "up" relative to Pip.
-        parcel_rot = pygame.transform.rotate(parcel, self.tilt_deg)
+        # pointing "up" relative to Pip's local frame.
+        parcel_rot = pygame.transform.rotate(parcel, parcel_tilt)
         if self.ghost_active:
             parcel_rot = parcel_rot.copy()
             parcel_rot.set_alpha(int(90 + pulse * 80))
@@ -305,6 +322,196 @@ class Coin:
 
 # ── PowerUp ──────────────────────────────────────────────────────────────────
 
+# Lazy-initialized high-resolution cache for the "reverse" power-up icon —
+# two purple arrows (up on the left, down on the right) on a fully transparent
+# background. Rendered once at 4x super-sampling and smoothscaled down so the
+# arrow edges read clean at any size. Reused for both the in-world pickup and
+# the HUD active-buff badge.
+_REVERSE_ICON_CACHE: "dict[int, pygame.Surface]" = {}
+
+
+def _build_reverse_icon(out_diameter: int) -> pygame.Surface:
+    """Premium icon: holographic iridescent panel inside a pearl-violet frame
+    with two thick gradient purple chevrons (up + down). Built at 4x super-
+    sampling and smoothscaled down for crisp edges on any background."""
+    SS = 4
+    size = out_diameter * SS
+    surf = pygame.Surface((size, size), pygame.SRCALPHA)
+
+    # ── Palette ─────────────────────────────────────────────────────────
+    OUTLINE      = (20, 12, 55)         # outer dark indigo hairline
+    FRAME        = (195, 175, 240)      # pearl-violet frame stroke
+    FRAME_HL     = (255, 255, 255)      # tiny top-edge highlight
+    INSET_SHADOW = (0, 0, 0, 38)        # soft inner shadow under the frame
+    HOLO_STOPS   = (
+        (240, 220, 240),                # top-left: pale pink
+        (210, 220, 245),                # mid: lavender-blue
+        (215, 240, 240),                # bottom-right: mint cyan
+    )
+    ARROW_TOP    = (175, 100, 230)
+    ARROW_MID    = (130, 55, 200)
+    ARROW_BOT    = (75, 25, 145)
+    ARROW_OUT    = (35, 10, 70)
+    SHEEN        = (255, 255, 255, 80)
+
+    radius   = SS * 11                 # squircle-style corners
+    inset    = SS                      # 1-px outer outline gap
+    frame_t  = SS * 2                  # frame stroke = 2 final-px
+
+    panel = pygame.Rect(inset, inset, size - inset * 2, size - inset * 2)
+
+    # 1) Outer 1-px dark hairline.
+    pygame.draw.rect(surf, OUTLINE, panel, border_radius=radius)
+    # 2) Pearl-violet frame fill.
+    pygame.draw.rect(surf, FRAME, panel.inflate(-SS * 2, -SS * 2),
+                     border_radius=radius - SS)
+    # 3) Holographic diagonal gradient panel inside the frame.
+    inner = panel.inflate(-(frame_t + SS) * 2, -(frame_t + SS) * 2)
+    inner_radius = max(2, radius - frame_t - SS)
+    grad = pygame.Surface((size, size), pygame.SRCALPHA)
+    for y in range(inner.top, inner.bottom + 1):
+        for x in range(inner.left, inner.right + 1):
+            t = ((x - inner.left) / max(1, inner.width)
+                 + (y - inner.top) / max(1, inner.height)) / 2
+            if t < 0.5:
+                u = t / 0.5
+                col = (
+                    int(HOLO_STOPS[0][0] + (HOLO_STOPS[1][0] - HOLO_STOPS[0][0]) * u),
+                    int(HOLO_STOPS[0][1] + (HOLO_STOPS[1][1] - HOLO_STOPS[0][1]) * u),
+                    int(HOLO_STOPS[0][2] + (HOLO_STOPS[1][2] - HOLO_STOPS[0][2]) * u),
+                )
+            else:
+                u = (t - 0.5) / 0.5
+                col = (
+                    int(HOLO_STOPS[1][0] + (HOLO_STOPS[2][0] - HOLO_STOPS[1][0]) * u),
+                    int(HOLO_STOPS[1][1] + (HOLO_STOPS[2][1] - HOLO_STOPS[1][1]) * u),
+                    int(HOLO_STOPS[1][2] + (HOLO_STOPS[2][2] - HOLO_STOPS[1][2]) * u),
+                )
+            grad.set_at((x, y), col)
+    inner_mask = pygame.Surface((size, size), pygame.SRCALPHA)
+    pygame.draw.rect(inner_mask, (255, 255, 255, 255), inner,
+                     border_radius=inner_radius)
+    grad.blit(inner_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    surf.blit(grad, (0, 0))
+
+    # 4) Soft inner shadow inside the panel — gives the panel a recessed feel.
+    shadow_surf = pygame.Surface((size, size), pygame.SRCALPHA)
+    pygame.draw.rect(shadow_surf, INSET_SHADOW, inner,
+                     border_radius=inner_radius, width=SS)
+    surf.blit(shadow_surf, (0, 0))
+
+    # 5) Top-edge highlight on the frame.
+    pygame.draw.line(surf, FRAME_HL,
+                     (panel.left + radius, panel.top + SS),
+                     (panel.right - radius, panel.top + SS),
+                     max(1, SS // 2))
+
+    # ── Arrows: thick filled chevrons with vertical gradient + sheen ───
+    pad_x = max(SS * 5, panel.width // 6)
+    pad_y = max(SS * 5, panel.height // 7)
+    area = panel.inflate(-pad_x * 2, -pad_y * 2)
+
+    col_w = area.width // 2
+    lx = area.left + col_w // 2
+    rx = area.right - col_w // 2
+    head_h  = area.height * 42 // 100
+    shaft_w = area.width * 17 // 100
+    head_w  = shaft_w * 26 // 10
+
+    def silhouette(col_x, *, point_up, expand=0):
+        e = expand
+        sw = shaft_w + e * 2
+        hw = head_w + e * 2
+        if point_up:
+            tip  = (col_x, area.top - e)
+            base = area.bottom + e
+            sh_y = area.top + head_h - e // 3
+            return [
+                tip,
+                (col_x + hw // 2, sh_y),
+                (col_x + sw // 2, sh_y),
+                (col_x + sw // 2, base),
+                (col_x - sw // 2, base),
+                (col_x - sw // 2, sh_y),
+                (col_x - hw // 2, sh_y),
+            ]
+        else:
+            tip  = (col_x, area.bottom + e)
+            base = area.top - e
+            sh_y = area.bottom - head_h + e // 3
+            return [
+                tip,
+                (col_x - hw // 2, sh_y),
+                (col_x - sw // 2, sh_y),
+                (col_x - sw // 2, base),
+                (col_x + sw // 2, base),
+                (col_x + sw // 2, sh_y),
+                (col_x + hw // 2, sh_y),
+            ]
+
+    def draw_arrow(col_x, *, point_up):
+        # Outline.
+        pygame.draw.polygon(surf, ARROW_OUT,
+                            silhouette(col_x, point_up=point_up, expand=SS))
+        # Vertical gradient body, scanline-masked.
+        body = silhouette(col_x, point_up=point_up, expand=0)
+        body_surf = pygame.Surface((size, size), pygame.SRCALPHA)
+        ys = [p[1] for p in body]
+        y0, y1 = min(ys), max(ys)
+        for y in range(y0, y1 + 1):
+            t = (y - y0) / max(1, (y1 - y0))
+            if not point_up:
+                t = 1.0 - t
+            if t < 0.4:
+                u = t / 0.4
+                col = (
+                    int(ARROW_TOP[0] + (ARROW_MID[0] - ARROW_TOP[0]) * u),
+                    int(ARROW_TOP[1] + (ARROW_MID[1] - ARROW_TOP[1]) * u),
+                    int(ARROW_TOP[2] + (ARROW_MID[2] - ARROW_TOP[2]) * u),
+                )
+            else:
+                u = (t - 0.4) / 0.6
+                col = (
+                    int(ARROW_MID[0] + (ARROW_BOT[0] - ARROW_MID[0]) * u),
+                    int(ARROW_MID[1] + (ARROW_BOT[1] - ARROW_MID[1]) * u),
+                    int(ARROW_MID[2] + (ARROW_BOT[2] - ARROW_MID[2]) * u),
+                )
+            pygame.draw.line(body_surf, col, (0, y), (size, y))
+        mask = pygame.Surface((size, size), pygame.SRCALPHA)
+        pygame.draw.polygon(mask, (255, 255, 255, 255), body)
+        body_surf.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        surf.blit(body_surf, (0, 0))
+
+        # Glossy sheen across the arrow head.
+        sheen = pygame.Surface((size, size), pygame.SRCALPHA)
+        if point_up:
+            sy0, sy1 = area.top, area.top + head_h * 9 // 10
+        else:
+            sy0, sy1 = area.bottom - head_h * 9 // 10, area.bottom
+        for y in range(min(sy0, sy1), max(sy0, sy1) + 1):
+            t = (y - sy0) / max(1, (sy1 - sy0))
+            if not point_up:
+                t = 1.0 - t
+            a = int(SHEEN[3] * (1.0 - t) ** 1.4)
+            if a > 0:
+                pygame.draw.line(sheen, (*SHEEN[:3], a), (0, y), (size, y))
+        sheen.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        surf.blit(sheen, (0, 0))
+
+    draw_arrow(lx, point_up=True)
+    draw_arrow(rx, point_up=False)
+
+    return pygame.transform.smoothscale(surf, (out_diameter, out_diameter))
+
+
+def _get_reverse_icon(diameter: int = (POWERUP_R + 8) * 2) -> pygame.Surface:
+    cached = _REVERSE_ICON_CACHE.get(diameter)
+    if cached is None:
+        cached = _build_reverse_icon(diameter)
+        _REVERSE_ICON_CACHE[diameter] = cached
+    return cached
+
+
 class PowerUp:
     """A collectible buff. `kind` selects visuals and pickup effect:
        triple   — red mushroom, 3x coin value for TRIPLE_DURATION
@@ -313,7 +520,8 @@ class PowerUp:
        kfc      — KFC bucket, fried-chicken parrot mode for KFC_DURATION
        ghost    — phantom, phase-through pipes for GHOST_DURATION
        grow     — Mario mushroom, scaled-up parrot for GROW_DURATION
-       surprise — gold "?" block; resolves at pickup to one of the six
+       reverse  — purple double-arrow, flips Pip's gravity for REVERSE_DURATION
+       surprise — gold "?" block; resolves at pickup to one of the seven
                   effects above (the matching sound plays, no separate
                   surprise sound).
     """
@@ -340,6 +548,8 @@ class PowerUp:
             self._draw_ghost(surf)
         elif self.kind == "grow":
             self._draw_mushroom(surf)    # mushroom icon (Mario super-mushroom feel)
+        elif self.kind == "reverse":
+            self._draw_reverse(surf)
         elif self.kind == "surprise":
             self._draw_surprise(surf)
 
@@ -642,6 +852,20 @@ class PowerUp:
         bird = _get_grow_parrot()
         surf.blit(bird, (cx - bird.get_width() // 2, cy - bird.get_height() // 2))
 
+    def _draw_reverse(self, surf):
+        cx = int(self.x)
+        cy = int(self.y)
+        # Breathing scale gives the pickup life without any background.
+        breath = 0.5 + 0.5 * math.sin(self.pulse)
+        scale = 1.0 + 0.06 * breath
+        icon = _get_reverse_icon()
+        if scale != 1.0:
+            iw, ih = icon.get_size()
+            icon = pygame.transform.smoothscale(
+                icon, (int(iw * scale), int(ih * scale)))
+        surf.blit(icon, (cx - icon.get_width() // 2,
+                         cy - icon.get_height() // 2))
+
 
 # Back-compat alias — some callers (e.g. snapshot/playtest scripts) still say Mushroom.
 Mushroom = PowerUp
@@ -734,9 +958,11 @@ def _get_float_font(size, bold=True):
 
 
 class FloatText:
-    __slots__ = ("text", "x", "y", "vy", "life", "life_max", "color", "size")
+    __slots__ = ("text", "x", "y", "vy", "life", "life_max", "color",
+                 "size", "style", "_sparkles")
 
-    def __init__(self, text, x, y, color, size=22, life=1.0, vy=-60):
+    def __init__(self, text, x, y, color, size=22, life=1.0, vy=-60,
+                 style="plain"):
         self.text = text
         self.x = x
         self.y = y
@@ -745,6 +971,18 @@ class FloatText:
         self.life_max = life
         self.color = color
         self.size = size
+        self.style = style
+        # Pre-computed sparkle offsets (relative to the text center) so
+        # they stay stable across frames as the text floats up.
+        if style == "powerup":
+            rng = random.Random(hash((text, int(x), int(y))) & 0xFFFFFFFF)
+            self._sparkles = [
+                (rng.randint(-int(size * 1.6), int(size * 1.6)),
+                 rng.randint(-int(size * 0.7), int(size * 0.7)))
+                for _ in range(8)
+            ]
+        else:
+            self._sparkles = ()
 
     def update(self, dt):
         self.y += self.vy * dt
@@ -755,6 +993,12 @@ class FloatText:
         return self.life > 0
 
     def draw(self, surf):
+        if self.style == "powerup":
+            self._draw_powerup(surf)
+        else:
+            self._draw_plain(surf)
+
+    def _draw_plain(self, surf):
         t = max(0.0, self.life / self.life_max)
         a = int(255 * min(1.0, t * 2))
         font = _get_float_font(self.size)
@@ -765,3 +1009,59 @@ class FloatText:
         r = text.get_rect(center=(int(self.x), int(self.y)))
         surf.blit(shadow, (r.x + 2, r.y + 2))
         surf.blit(text, r.topleft)
+
+    def _draw_powerup(self, surf):
+        """Bold gradient fill + thick dark outline + sparkle dots, with the
+        gradient derived from `self.color` so each power-up keeps its own
+        identity color."""
+        life_t = max(0.0, self.life / self.life_max)
+        alpha = int(255 * min(1.0, life_t * 2))
+        font = _get_float_font(self.size)
+        text_surf = font.render(self.text, True, (255, 255, 255))
+        bw, bh = text_surf.get_size()
+        pad = max(8, self.size // 3)
+        comp = pygame.Surface((bw + pad * 2, bh + pad * 2), pygame.SRCALPHA)
+        cx = comp.get_width() // 2
+        cy = comp.get_height() // 2
+
+        # Drop shadow.
+        shadow = font.render(self.text, True, NEAR_BLACK)
+        shadow.set_alpha(150)
+        comp.blit(shadow, (cx - bw // 2 + 3, cy - bh // 2 + 4))
+
+        # Thick dark outline derived from the base color (lerped toward black).
+        col = self.color
+        outline_col = (col[0] // 4, col[1] // 4, col[2] // 4)
+        outline = font.render(self.text, True, outline_col)
+        for ox, oy in ((-3, 0), (3, 0), (0, -3), (0, 3),
+                       (-2, -2), (2, -2), (-2, 2), (2, 2)):
+            comp.blit(outline, (cx - bw // 2 + ox, cy - bh // 2 + oy))
+
+        # Vertical gradient fill (lighter top → base color bottom),
+        # masked to the text shape.
+        top_col = (
+            int(col[0] + (255 - col[0]) * 0.4),
+            int(col[1] + (255 - col[1]) * 0.4),
+            int(col[2] + (255 - col[2]) * 0.4),
+        )
+        grad = pygame.Surface((bw, bh), pygame.SRCALPHA)
+        for yy in range(bh):
+            t = yy / max(1, bh - 1)
+            cc = (
+                int(top_col[0] + (col[0] - top_col[0]) * t),
+                int(top_col[1] + (col[1] - top_col[1]) * t),
+                int(top_col[2] + (col[2] - top_col[2]) * t),
+            )
+            pygame.draw.line(grad, cc, (0, yy), (bw, yy))
+        mask = font.render(self.text, True, (255, 255, 255))
+        grad.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        comp.blit(grad, (cx - bw // 2, cy - bh // 2))
+
+        # Sparkle dots.
+        for sx, sy in self._sparkles:
+            pygame.draw.circle(comp, (255, 240, 200), (cx + sx, cy + sy), 2)
+            pygame.draw.circle(comp, (255, 255, 255), (cx + sx, cy + sy), 1)
+
+        comp.set_alpha(alpha)
+        rect = comp.get_rect(center=(int(self.x), int(self.y)))
+        surf.blit(comp, rect.topleft)
