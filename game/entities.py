@@ -191,12 +191,19 @@ class Bird:
             pw, ph = parcel.get_size()
             parcel = pygame.transform.smoothscale(
                 parcel, (int(pw * scale), int(ph * scale)))
-        # Tilt-aware offset: the parcel orbits Pip's centre as he banks.
-        offset = pygame.math.Vector2(0, PARCEL_Y_OFFSET * scale)
-        offset = offset.rotate(-self.tilt_deg)
+        # When reverse-gravity is active, the parcel mirrors with Pip:
+        # the sprite flips vertically, the y-offset negates so the parcel
+        # rides ABOVE Pip's centre, and the tilt direction inverts so the
+        # parcel banks the same way as the flipped bird.
+        if flipped:
+            parcel = pygame.transform.flip(parcel, False, True)
+        y_off = -PARCEL_Y_OFFSET * scale if flipped else PARCEL_Y_OFFSET * scale
+        parcel_tilt = -self.tilt_deg if flipped else self.tilt_deg
+        offset = pygame.math.Vector2(0, y_off)
+        offset = offset.rotate(-parcel_tilt)
         # Rotate the parcel sprite to match tilt so the gift bow keeps
-        # pointing "up" relative to Pip.
-        parcel_rot = pygame.transform.rotate(parcel, self.tilt_deg)
+        # pointing "up" relative to Pip's local frame.
+        parcel_rot = pygame.transform.rotate(parcel, parcel_tilt)
         if self.ghost_active:
             parcel_rot = parcel_rot.copy()
             parcel_rot.set_alpha(int(90 + pulse * 80))
