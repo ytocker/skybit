@@ -46,12 +46,16 @@ class App:
         self._running = True
         self._stats_t = 0.0        # time spent on stats screen (auto-advance)
         self._stats_next_state = STATE_GAMEOVER  # where the stats screen routes to
-        # Touch dedup: SDL emits both FINGERDOWN and a synthetic MOUSEBUTTONDOWN
-        # for one tap on mobile, so naive routing types every key twice. After
-        # any FINGERDOWN, suppress mouse events for a 0.5 s window. On pure
-        # desktop this never fires (no FINGERDOWN ever arrives).
-        self._last_finger_t = -1e9
-        self._finger_dedup_window = 0.5
+        # Tap dedup. A single physical tap can produce multiple events:
+        # Windows touchscreens fire two MOUSEBUTTONDOWNs per tap; pygbag on
+        # iOS/Android can fire FINGERDOWN + a synthesised MOUSEBUTTONDOWN.
+        # We accept whichever event comes first and ignore any follow-up
+        # that lands at the same pixel within a short window. Real users
+        # cannot tap the same spot twice that fast.
+        self._last_tap_t = -1e9
+        self._last_tap_pos = (-9999, -9999)
+        self._tap_dedup_window = 0.3   # seconds
+        self._tap_dedup_radius_sq = 8 * 8  # pixels²
 
     # ── helpers ─────────────────────────────────────────────────────────────
 
@@ -124,28 +128,15 @@ class App:
         if e.type == pygame.QUIT:
             self._running = False
             return
-        # Note when a real finger event arrives so we can suppress the
-        # synthetic mouse follow-up that SDL fires for the same tap.
-        now = pygame.time.get_ticks() / 1000.0
-        if e.type == pygame.FINGERDOWN:
-            self._last_finger_t = now
-        elif e.type == pygame.MOUSEBUTTONDOWN:
-            if now - self._last_finger_t < self._finger_dedup_window:
-                return  # this MOUSEBUTTONDOWN is a touch echo — ignore
-        if self.state == STATE_NAMEENTRY:
-            if e.type == pygame.KEYDOWN:
+
+        # Keyboard path (physical / desktop) — handled per-state.
+        if e.type == pygame.KEYDOWN:
+            if self.state == STATE_NAMEENTRY:
                 if e.key == pygame.K_ESCAPE:
-                    # quick exit — treat as submit whatever's there
                     self.name_entry.submit()
                 else:
                     self.name_entry.handle_key(e)
-            elif e.type == pygame.MOUSEBUTTONDOWN:
-                self.name_entry.handle_tap(e.pos)
-            elif e.type == pygame.FINGERDOWN:
-                self.name_entry.handle_tap((int(e.x * W), int(e.y * H)))
-            return
-        # non name-entry states
-        if e.type == pygame.KEYDOWN:
+                return
             if e.key == pygame.K_p:
                 self._toggle_pause()
                 return
@@ -157,10 +148,47 @@ class App:
                 return
             if e.key in (pygame.K_SPACE, pygame.K_UP, pygame.K_w):
                 self._flap_input()
-        elif e.type == pygame.MOUSEBUTTONDOWN:
-            self._flap_input(e.pos)
-        elif e.type == pygame.FINGERDOWN:
-            self._flap_input((int(e.x * W), int(e.y * H)))
+            return
+
+        # Tap / click path — unify FINGERDOWN and MOUSEBUTTONDOWN into one
+        # pixel coordinate, then dedup. iOS pygbag delivers MOUSEBUTTONDOWN
+        # reliably (per pygbag maintainer); on platforms where FINGERDOWN
+        # also fires we still pick it up. Whichever arrives first wins, and
+        # the second event from the same physical tap is dropped by the
+        # position+time guard.
+        pos = self._event_pixel(e)
+        if pos is None:
+            return
+        if self._is_duplicate_tap(pos):
+            return
+
+        if self.state == STATE_NAMEENTRY:
+            self.name_entry.handle_tap(pos)
+        else:
+            self._flap_input(pos)
+
+    def _event_pixel(self, e):
+        """Return the (x, y) pixel of a tap/click event, or None."""
+        if e.type == pygame.MOUSEBUTTONDOWN:
+            return e.pos
+        if e.type == pygame.FINGERDOWN:
+            # Normalise against the live surface size — pygbag may have
+            # resized the canvas, in which case the static W,H constants
+            # would mis-scale on hi-DPI / mobile.
+            sw, sh = self.screen.get_size()
+            return (int(e.x * sw), int(e.y * sh))
+        return None
+
+    def _is_duplicate_tap(self, pos):
+        now = pygame.time.get_ticks() / 1000.0
+        dx = pos[0] - self._last_tap_pos[0]
+        dy = pos[1] - self._last_tap_pos[1]
+        if (now - self._last_tap_t < self._tap_dedup_window
+                and dx * dx + dy * dy <= self._tap_dedup_radius_sq):
+            return True
+        self._last_tap_t = now
+        self._last_tap_pos = pos
+        return False
 
     # ── update ──────────────────────────────────────────────────────────────
 
