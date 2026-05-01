@@ -247,16 +247,14 @@ def _text(surf, txt, center, size=36, color=WHITE, shadow=True):
 
 
 def _coin_icon(surf, cx, cy, r=10):
-    # Match in-world Coin.draw: dark rim + gold body + embossed parrot.
-    # No halo, no pale highlight.
-    pygame.draw.circle(surf, COIN_DARK, (cx, cy), r + 1)
-    pygame.draw.circle(surf, COIN_GOLD, (cx, cy), r)
-    emboss = (140, 85, 0)
-    pygame.draw.ellipse(surf, emboss, (cx - 2, cy - 1, 7, 5))
-    pygame.draw.circle(surf, emboss, (cx - 1, cy - 3), 3)
-    pygame.draw.polygon(surf, emboss,
-                        [(cx - 3, cy - 3), (cx - 6, cy - 2), (cx - 3, cy - 1)])
-    pygame.draw.circle(surf, COIN_GOLD, (cx, cy - 4), 1)
+    # Reuse the cached high-quality coin face from entities so the HUD pill
+    # carries the same gradient + bold outline + embossed parrot + specular
+    # highlight as the in-world coin.
+    from game.entities import _get_coin_face
+    face = _get_coin_face()
+    target = pygame.transform.smoothscale(face, (r * 2 + 2, r * 2 + 2))
+    rect = target.get_rect(center=(cx, cy))
+    surf.blit(target, rect.topleft)
 
 
 def _draw_buff_icon(surf, rect, kind):

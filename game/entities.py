@@ -254,14 +254,95 @@ class Pipe:
 
 # ── Coin ─────────────────────────────────────────────────────────────────────
 
-class Coin:
-    """Slow-rotating gold parrot medallion, drawn with no halo or glow.
+_COIN_FACE_CACHE: "pygame.Surface | None" = None
 
-    Every frame the coin is drawn directly onto the target surface as an
-    ellipse squeezed horizontally by |cos(spin)|. No cached face, no
-    smoothscale blur, no radial aura — the silhouette you see is the
-    silhouette you collect (COIN_R governs both).
-    """
+
+def _get_coin_face() -> pygame.Surface:
+    """Build the face-on coin sprite once at 4x super-sample, with a bold
+    dark-amber outline, a vertical gold gradient (light top → dark gold
+    bottom), an embossed parrot silhouette, and a soft specular highlight.
+    Smoothscaled per frame to apply the spin squeeze."""
+    global _COIN_FACE_CACHE
+    if _COIN_FACE_CACHE is not None:
+        return _COIN_FACE_CACHE
+    SS = 4
+    final_d = COIN_R * 2 + 2          # match the previous visual diameter
+    size = final_d * SS
+    surf = pygame.Surface((size, size), pygame.SRCALPHA)
+    cx = cy = size // 2
+    r_outer = size // 2 - SS          # leaves SS for anti-aliasing
+    r_outline = max(SS * 2, r_outer // 6)
+    r_body = r_outer - r_outline
+
+    # Palette — light to deep gold, plus a much darker amber outline so
+    # the coin reads as a confident silhouette on bright skies.
+    GOLD_HI    = (255, 232, 130)
+    GOLD_MID   = (240, 195,  55)
+    GOLD_LO    = (190, 130,  20)
+    OUTLINE_DK = ( 95,  50,   0)
+    OUTLINE_LT = (150,  90,  10)
+    EMBOSS     = (130,  80,   0)
+
+    # 1) Bold double-band outline (dark outer + lighter inner edge).
+    pygame.draw.circle(surf, OUTLINE_DK, (cx, cy), r_outer)
+    pygame.draw.circle(surf, OUTLINE_LT, (cx, cy), r_outer - SS)
+
+    # 2) Vertical gradient body, masked to the inner circle.
+    body_surf = pygame.Surface((size, size), pygame.SRCALPHA)
+    y0 = cy - r_body
+    y1 = cy + r_body
+    for yy in range(y0, y1 + 1):
+        t = (yy - y0) / max(1, (y1 - y0))
+        if t < 0.4:
+            u = t / 0.4
+            col = (
+                int(GOLD_HI[0]  + (GOLD_MID[0] - GOLD_HI[0])  * u),
+                int(GOLD_HI[1]  + (GOLD_MID[1] - GOLD_HI[1])  * u),
+                int(GOLD_HI[2]  + (GOLD_MID[2] - GOLD_HI[2])  * u),
+            )
+        else:
+            u = (t - 0.4) / 0.6
+            col = (
+                int(GOLD_MID[0] + (GOLD_LO[0]  - GOLD_MID[0]) * u),
+                int(GOLD_MID[1] + (GOLD_LO[1]  - GOLD_MID[1]) * u),
+                int(GOLD_MID[2] + (GOLD_LO[2]  - GOLD_MID[2]) * u),
+            )
+        pygame.draw.line(body_surf, col, (0, yy), (size, yy))
+    body_mask = pygame.Surface((size, size), pygame.SRCALPHA)
+    pygame.draw.circle(body_mask, (255, 255, 255, 255), (cx, cy), r_body)
+    body_surf.blit(body_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    surf.blit(body_surf, (0, 0))
+
+    # 3) Embossed parrot silhouette (scaled-up version of the original
+    #    hand-tuned shape — body / head / hooked beak / gold eye).
+    pygame.draw.ellipse(surf, EMBOSS,
+                        (cx - 2 * SS, cy - 1 * SS, 7 * SS, 5 * SS))
+    pygame.draw.circle(surf, EMBOSS, (cx - 1 * SS, cy - 3 * SS), 3 * SS)
+    pygame.draw.polygon(surf, EMBOSS,
+                        [(cx - 3 * SS, cy - 3 * SS),
+                         (cx - 6 * SS, cy - 2 * SS),
+                         (cx - 3 * SS, cy - 1 * SS)])
+    pygame.draw.circle(surf, GOLD_HI, (cx, cy - 4 * SS), max(1, SS - 1))
+
+    # 4) Specular highlight crescent on the upper-left, masked to body.
+    hl = pygame.Surface((size, size), pygame.SRCALPHA)
+    hl_rect = pygame.Rect(cx - r_body + r_body // 5,
+                          cy - r_body + r_body // 6,
+                          int(r_body * 1.1), int(r_body * 0.55))
+    pygame.draw.ellipse(hl, (255, 255, 235, 120), hl_rect)
+    hl.blit(body_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    surf.blit(hl, (0, 0))
+
+    _COIN_FACE_CACHE = pygame.transform.smoothscale(surf, (final_d, final_d))
+    return _COIN_FACE_CACHE
+
+
+class Coin:
+    """Spinning gold parrot medallion. Built once at 4x super-sample with a
+    bold dark outline + vertical gold gradient + embossed parrot + soft
+    specular highlight (matches the +1/+3 float-text style guidelines:
+    gradient, outline, sparkle). Squeezed horizontally per frame by
+    |cos(spin)|. Sparkle twinkles flash near the coin in the spin cycle."""
 
     SPIN_RATE = 1.1  # ≈ 5.7 seconds per full rotation
 
@@ -271,6 +352,8 @@ class Coin:
         self.spin = random.uniform(0, math.tau)
         self.collected = False
         self.float_t = random.uniform(0, math.tau)
+        # Random sparkle phase per-coin so they don't all twinkle in sync.
+        self._sparkle_phase = random.uniform(0, math.tau)
 
     def update(self, dt):
         self.spin = (self.spin + dt * self.SPIN_RATE) % math.tau
@@ -301,23 +384,28 @@ class Coin:
                                 (cx - rx, cy - r, rx * 2, r * 2))
             return
 
-        # Face-on: dark rim → gold body. Both are ellipses that share the
-        # same horizontal squeeze, so the coin shape IS its silhouette.
-        pygame.draw.ellipse(surf, COIN_DARK,
-                            (cx - rx - 1, cy - r - 1,
-                             (rx + 1) * 2, (r + 1) * 2))
-        pygame.draw.ellipse(surf, COIN_GOLD,
-                            (cx - rx, cy - r, rx * 2, r * 2))
+        # Face-on: smoothscale-squish the cached high-quality face by the
+        # current spin angle. The cached face owns the gradient + outline +
+        # emboss; this stays consistent through the rotation.
+        face = _get_coin_face()
+        fw, fh = face.get_size()
+        squeezed = pygame.transform.smoothscale(face, (rx * 2 + 2, fh))
+        rect = squeezed.get_rect(center=(cx, cy))
+        surf.blit(squeezed, rect.topleft)
 
-        # Embossed parrot silhouette — only when mostly face-on so it
-        # doesn't smear across a squeezed ellipse.
-        if abs(cos_s) > 0.75:
-            emboss = (140, 85, 0)
-            pygame.draw.ellipse(surf, emboss, (cx - 2, cy - 1, 7, 5))     # body
-            pygame.draw.circle(surf, emboss, (cx - 1, cy - 3), 3)         # head
-            pygame.draw.polygon(surf, emboss,                              # hooked beak
-                                [(cx - 3, cy - 3), (cx - 6, cy - 2), (cx - 3, cy - 1)])
-            pygame.draw.circle(surf, COIN_GOLD, (cx, cy - 4), 1)          # eye
+        # Sparkle twinkles — 2 small white dots near the coin that flash
+        # on/off out of phase. Only render when mostly face-on so they
+        # don't drift around a flat sliver.
+        if abs(cos_s) > 0.6:
+            for i, (dx, dy) in enumerate(((-r - 2, -r + 1), (r + 2, r - 1))):
+                phase = self._sparkle_phase + i * math.pi
+                t = 0.5 + 0.5 * math.sin(self.float_t * 3.0 + phase)
+                if t > 0.7:
+                    a = int(255 * (t - 0.7) / 0.3)
+                    star = pygame.Surface((6, 6), pygame.SRCALPHA)
+                    pygame.draw.circle(star, (255, 250, 220, a), (3, 3), 2)
+                    pygame.draw.circle(star, (255, 255, 255, a), (3, 3), 1)
+                    surf.blit(star, (cx + dx - 3, cy + dy - 3))
 
 
 # ── PowerUp ──────────────────────────────────────────────────────────────────
