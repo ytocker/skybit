@@ -426,6 +426,8 @@ def _get_coin_face() -> pygame.Surface:
     OUTLINE_DK = ( 95,  50,   0)
     OUTLINE_LT = (150,  90,  10)
     EMBOSS     = (130,  80,   0)
+    EMBOSS_DK  = ( 90,  50,   0)
+    EMBOSS_HI  = (180, 120,  10)
     DARK_AMBER = ( 75,  35,   0)
     LITE_AMBER = (210, 165,  50)
 
@@ -479,14 +481,51 @@ def _get_coin_face() -> pygame.Surface:
         surf.blit(rotated, r_rect.topleft)
 
     # 4) Embossed parrot silhouette inside the rope rim.
+    #    Flying-pose, head pointing left. Body + tail + tucked wing +
+    #    head + hooked beak + eye dot. Two emboss tones (mid + dark)
+    #    plus a gold highlight give the figure enough volume to read
+    #    as a bird at the 26 px coin size, instead of a flat blob.
+
+    # Body — oval, slightly elongated horizontally.
     pygame.draw.ellipse(surf, EMBOSS,
                         (cx - 2 * SS, cy - 1 * SS, 7 * SS, 5 * SS))
-    pygame.draw.circle(surf, EMBOSS, (cx - 1 * SS, cy - 3 * SS), 3 * SS)
+
+    # Tail — tapered fan extending right past the body.
+    pygame.draw.polygon(surf, EMBOSS,
+                        [(cx + 4 * SS, cy + 0 * SS),
+                         (cx + 7 * SS, cy + 1 * SS),
+                         (cx + 6 * SS, cy + 3 * SS),
+                         (cx + 4 * SS, cy + 2 * SS)])
+
+    # Wing — darker tucked shape on the body (lower-right of body),
+    # suggests a folded wing in flight.
+    pygame.draw.polygon(surf, EMBOSS_DK,
+                        [(cx + 0 * SS, cy + 0 * SS),
+                         (cx + 3 * SS, cy + 0 * SS),
+                         (cx + 4 * SS, cy + 2 * SS),
+                         (cx + 1 * SS, cy + 3 * SS)])
+
+    # Head — circle, upper-left.
+    head_cx, head_cy = cx - 1 * SS, cy - 3 * SS
+    pygame.draw.circle(surf, EMBOSS, (head_cx, head_cy), 3 * SS)
+
+    # Beak — main hooked triangle pointing left.
     pygame.draw.polygon(surf, EMBOSS,
                         [(cx - 3 * SS, cy - 3 * SS),
                          (cx - 6 * SS, cy - 2 * SS),
                          (cx - 3 * SS, cy - 1 * SS)])
-    pygame.draw.circle(surf, GOLD_HI, (cx, cy - 4 * SS), max(1, SS - 1))
+    # Beak shadow — small darker wedge under the hook for curvature.
+    pygame.draw.polygon(surf, EMBOSS_DK,
+                        [(cx - 5 * SS, cy - 2 * SS),
+                         (cx - 6 * SS, cy - 2 * SS),
+                         (cx - 4 * SS, cy - 1 * SS)])
+
+    # Eye — small bright dot on the head (replaces the original
+    # floating "highlight" with a positioned eye that gives the bird
+    # a face).
+    pygame.draw.circle(surf, GOLD_HI,
+                       (head_cx + SS // 2, head_cy - SS // 2),
+                       max(1, SS // 2))
 
     # 5) Specular highlight crescent on the upper-left, masked to body.
     hl = pygame.Surface((size, size), pygame.SRCALPHA)
