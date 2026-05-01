@@ -71,7 +71,9 @@ NAME_OVERLAY = """
   </svg>
   <p class="ne-celebrate">YOU MADE THE TOP 10!</p>
   <p class="ne-title">WELCOME TO TOP 10!</p>
-  <input id="name-input" maxlength="10" autocomplete="off" spellcheck="false"
+  <input id="name-input" type="text" inputmode="text"
+         autocapitalize="characters" autocorrect="off" autocomplete="off"
+         spellcheck="false" maxlength="10"
          placeholder="TYPE YOUR NAME…"/>
   <p id="name-counter">0 / 10</p>
   <button id="name-submit" class="ne-submit">SUBMIT</button>
@@ -530,6 +532,28 @@ body   { background: #0d0820 !important; }
         // Escape skip removed — there's a clickable SKIP button now.
     }, true);
 
+    /* iOS Safari fix: the soft keyboard only appears if focus() runs
+       inside a real user gesture. ``openNameEntry``'s setTimeout(focus)
+       fires after the gesture has ended, so iOS players see the overlay
+       but no keyboard, and tapping the input may not focus it either —
+       pygbag's SDL canvas listeners can swallow the synthesised click
+       before it reaches the field.
+
+       Capture-phase pointerdown at the document runs before any SDL
+       listener and before any preventDefault, so we can re-focus the
+       input synchronously inside the player's tap. Gated on overlay
+       visibility so it never fires during gameplay. */
+    document.addEventListener('pointerdown', function (e) {
+        var ov = document.getElementById('name-overlay');
+        if (!ov || ov.style.display !== 'flex') return;
+        var t = e.target;
+        // Don't steal focus from the SUBMIT / SKIP buttons — they need
+        // their own click handler to fire normally.
+        if (t && (t.id === 'name-submit' || t.id === 'name-skip')) return;
+        var inp = document.getElementById('name-input');
+        if (inp) try { inp.focus(); } catch (_) {}
+    }, true);
+
     window.openNameEntry = function () {
         var ov  = document.getElementById('name-overlay');
         var inp = document.getElementById('name-input');
@@ -555,8 +579,15 @@ body   { background: #0d0820 !important; }
         ov.style.display = 'flex';
         inp.value = '';
         if (ctr) ctr.textContent = '0 / 10';
-        setTimeout(function () { inp.focus(); }, 80);
         window._pendingName = '__pending__';
+
+        /* Desktop / Android: programmatic focus brings up the keyboard
+           (or readies the cursor) without further user action. iOS
+           Safari blocks focus() outside a real user gesture, so this
+           call is a no-op there — the document-level pointerdown
+           listener installed below handles iOS by re-focusing the
+           input synchronously inside the player's tap. */
+        setTimeout(function () { try { inp.focus(); } catch (_) {} }, 80);
 
         inp.oninput = function () {
             if (ctr) ctr.textContent = inp.value.length + ' / 10';
