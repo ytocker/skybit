@@ -200,25 +200,12 @@ _REVERSE_ICON_CACHE: "dict[int, pygame.Surface]" = {}
 
 
 def _build_reverse_icon(out_diameter: int) -> pygame.Surface:
-    """Slick glossy purple chevron arrows on a transparent background.
+    """Slick glossy purple chevron arrows inside a purple rectangular frame.
     Built at 4x super-sampling, smoothscaled down for crisp edges."""
     SS = 4
     size = out_diameter * SS
     surf = pygame.Surface((size, size), pygame.SRCALPHA)
     cx = cy = size // 2
-    R = size // 2 - SS
-
-    # Geometry — bold aggressive heads, thicker shafts so the silhouette
-    # reads even at small sizes.
-    top_y   = cy - R + SS
-    bot_y   = cy + R - SS
-    span    = bot_y - top_y
-    head_h  = span * 50 // 100
-    shaft_w = R * 13 // 28
-    head_w  = shaft_w * 22 // 10
-
-    lx = cx - R // 2 - R // 18
-    rx = cx + R // 2 + R // 18
 
     # Palette — vibrant glossy purple, top-lit.
     HL_BRIGHT = (250, 235, 255)   # specular ribbon
@@ -228,6 +215,46 @@ def _build_reverse_icon(out_diameter: int) -> pygame.Surface:
     BODY_LO   = (105, 35, 175)    # lower shaded body
     OUTLINE   = (35, 8, 70)       # dark violet outer
     OUTLINE_2 = (15, 0, 35)       # near-black inner edge
+    FRAME     = (175, 90, 235)    # frame perimeter — same purple family
+    FRAME_HL  = (220, 170, 250)   # subtle inner bevel highlight
+
+    # ── Frame: rounded rectangle perimeter (purple) ─────────────────────
+    # Outer dark outline so the frame reads on any background, then the
+    # purple frame stroke, then a thin lighter inner bevel for depth.
+    # Stroke widths are in big-surface units; SS=4 ⇒ 1 final-px = SS.
+    frame_t = SS * 3                  # frame stroke = 3 final-px
+    inset   = SS * 2                  # gap from surface edge
+    radius  = SS * 5                  # corner radius
+    outer_rect = pygame.Rect(
+        inset, inset, size - inset * 2, size - inset * 2)
+    # Dark perimeter outline (1 final-px) just outside the purple stroke
+    pygame.draw.rect(surf, OUTLINE_2, outer_rect.inflate(SS * 2, SS * 2),
+                     border_radius=radius + SS,
+                     width=SS)
+    # Purple frame stroke (3 final-px)
+    pygame.draw.rect(surf, FRAME, outer_rect,
+                     border_radius=radius, width=frame_t)
+    # Thin lighter inner bevel for depth (1 final-px)
+    inner_rect = outer_rect.inflate(-frame_t * 2, -frame_t * 2)
+    pygame.draw.rect(surf, FRAME_HL, inner_rect,
+                     border_radius=max(1, radius - frame_t),
+                     width=SS)
+
+    # ── Arrows (inside the frame, with breathing room) ──────────────────
+    # Inner area available for arrows = inside the frame + a small pad.
+    arrow_pad_x = frame_t + SS * 2
+    arrow_pad_y = frame_t + SS * 3
+    R_x = (size - arrow_pad_x * 2) // 2
+    R_y = (size - arrow_pad_y * 2) // 2
+    top_y = cy - R_y
+    bot_y = cy + R_y
+    span = bot_y - top_y
+    head_h = span * 50 // 100
+    shaft_w = R_y * 13 // 28
+    head_w  = shaft_w * 22 // 10
+
+    lx = cx - R_x // 2
+    rx = cx + R_x // 2
 
     def _silhouette(col_x: int, *, point_up: bool, expand: int = 0):
         e = expand
@@ -241,8 +268,8 @@ def _build_reverse_icon(out_diameter: int) -> pygame.Surface:
                 tip,
                 (col_x + hw // 2, sh_y),
                 (col_x + sw // 2, sh_y),
-                (col_x + sw // 2 - max(0, e // 2), base),
-                (col_x - sw // 2 + max(0, e // 2), base),
+                (col_x + sw // 2, base),
+                (col_x - sw // 2, base),
                 (col_x - sw // 2, sh_y),
                 (col_x - hw // 2, sh_y),
             ]
@@ -254,14 +281,14 @@ def _build_reverse_icon(out_diameter: int) -> pygame.Surface:
                 tip,
                 (col_x - hw // 2, sh_y),
                 (col_x - sw // 2, sh_y),
-                (col_x - sw // 2 + max(0, e // 2), base),
-                (col_x + sw // 2 - max(0, e // 2), base),
+                (col_x - sw // 2, base),
+                (col_x + sw // 2, base),
                 (col_x + sw // 2, sh_y),
                 (col_x + hw // 2, sh_y),
             ]
 
     def _arrow(col_x: int, *, point_up: bool):
-        # ── Outline: dark violet halo + near-black inner edge ────────────
+        # Outline: dark violet halo + near-black inner edge.
         pygame.draw.polygon(
             surf, OUTLINE,
             _silhouette(col_x, point_up=point_up, expand=SS * 2))
@@ -269,14 +296,11 @@ def _build_reverse_icon(out_diameter: int) -> pygame.Surface:
             surf, OUTLINE_2,
             _silhouette(col_x, point_up=point_up, expand=SS))
 
-        # ── Vertical body gradient (scanline-masked) ─────────────────────
+        # Vertical body gradient (scanline-masked).
         body = _silhouette(col_x, point_up=point_up, expand=0)
         body_surf = pygame.Surface((size, size), pygame.SRCALPHA)
         ys = [p[1] for p in body]
         y0, y1 = min(ys), max(ys)
-        # Sharp glossy split: top 35% is BODY_HI → BODY_MID, then a quick
-        # transition into BODY_LO for the lower 65%. Reverse for down-arrow
-        # so the leading tip always reads brightest.
         for y in range(y0, y1 + 1):
             t = (y - y0) / max(1, (y1 - y0))
             if not point_up:
@@ -301,7 +325,7 @@ def _build_reverse_icon(out_diameter: int) -> pygame.Surface:
         body_surf.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
         surf.blit(body_surf, (0, 0))
 
-        # ── Glossy upper sheen — soft band on the top of the arrow ──────
+        # Glossy upper sheen.
         sheen_surf = pygame.Surface((size, size), pygame.SRCALPHA)
         if point_up:
             sheen_y0 = top_y
@@ -319,7 +343,7 @@ def _build_reverse_icon(out_diameter: int) -> pygame.Surface:
         sheen_surf.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
         surf.blit(sheen_surf, (0, 0))
 
-        # ── Crisp specular ribbon along the leading edge ────────────────
+        # Crisp specular ribbon along the leading edge.
         if point_up:
             pygame.draw.line(
                 surf, HL_BRIGHT,
@@ -343,7 +367,7 @@ def _build_reverse_icon(out_diameter: int) -> pygame.Surface:
                 (col_x - shaft_w // 2 + SS, bot_y - head_h - SS // 2),
                 max(2, SS // 2))
 
-        # ── Sparkle dot on the tip ──────────────────────────────────────
+        # Sparkle dot on the tip.
         tip_y = top_y + SS if point_up else bot_y - SS
         pygame.draw.circle(surf, HL_BRIGHT, (col_x, tip_y), SS)
         pygame.draw.circle(surf, (255, 255, 255), (col_x, tip_y), SS // 2)
@@ -354,7 +378,7 @@ def _build_reverse_icon(out_diameter: int) -> pygame.Surface:
     return pygame.transform.smoothscale(surf, (out_diameter, out_diameter))
 
 
-def _get_reverse_icon(diameter: int = (MUSHROOM_R + 8) * 2) -> pygame.Surface:
+def _get_reverse_icon(diameter: int = (MUSHROOM_R + 12) * 2) -> pygame.Surface:
     cached = _REVERSE_ICON_CACHE.get(diameter)
     if cached is None:
         cached = _build_reverse_icon(diameter)
