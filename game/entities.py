@@ -85,6 +85,128 @@ def _get_kfc_sprite() -> "pygame.Surface":
     return _kfc_sprite
 
 
+# ── GHOST power-up sprite (procedural, cached on first draw) ────────────────
+# Holographic foil body (diagonal pearl-pink → cyan → mint → ivory) inside a
+# 2-px premium navy outline ring + crisp eyes + soft sheen.
+_ghost_sprite: "pygame.Surface | None" = None
+_GHOST_HEAD_OFFSET_X = 16   # head-circle centre x in the sprite
+_GHOST_HEAD_OFFSET_Y = 14   # head-circle centre y in the sprite
+
+
+def _get_ghost_sprite() -> "pygame.Surface":
+    global _ghost_sprite
+    if _ghost_sprite is not None:
+        return _ghost_sprite
+
+    SS = 4
+    PAD = 2
+    GW, GH = (28 + PAD * 2), (36 + PAD * 2)   # 32 × 40 final-px
+    sw, sh = GW * SS, GH * SS
+    big = pygame.Surface((sw, sh), pygame.SRCALPHA)
+
+    # Geometry in supersampled units
+    gcx = (14 + PAD) * SS
+    gcy = (12 + PAD) * SS
+    hr  = 12 * SS
+    body_y2 = (26 + PAD) * SS
+    body_rect = pygame.Rect((1 + PAD) * SS, gcy,
+                            (28 - 2) * SS, body_y2 - gcy)
+    scallop = [
+        ((1 + PAD) * SS,         body_y2),
+        ((6 + PAD) * SS,         (GH - 4) * SS),
+        ((11 + PAD) * SS,        body_y2 + 4 * SS),
+        ((14 + PAD) * SS,        (GH - 4) * SS),
+        ((28 - 12 + PAD) * SS,   body_y2 + 4 * SS),
+        ((28 - 7 + PAD) * SS,    (GH - 4) * SS),
+        ((28 - 2 + PAD) * SS,    body_y2),
+    ]
+
+    OUTLINE_COLOR = (40, 50, 90)
+    THICKNESS_PX  = 2
+
+    # 1) Outline ring — stack the silhouette in OUTLINE_COLOR at every
+    #    offset within a circle of radius `THICKNESS_PX*SS` so the ring
+    #    is uniformly thick around the entire silhouette.
+    sil = pygame.Surface((sw, sh), pygame.SRCALPHA)
+    pygame.draw.circle(sil, OUTLINE_COLOR, (gcx, gcy), hr)
+    pygame.draw.rect(sil, OUTLINE_COLOR, body_rect)
+    pygame.draw.polygon(sil, OUTLINE_COLOR, scallop)
+    t_big = THICKNESS_PX * SS
+    step = max(1, SS // 2)
+    for dx in range(-t_big, t_big + 1, step):
+        for dy in range(-t_big, t_big + 1, step):
+            if dx * dx + dy * dy <= t_big * t_big:
+                big.blit(sil, (dx, dy))
+
+    # 2) Silhouette mask (used to clip both the body gradient and the sheen).
+    mask = pygame.Surface((sw, sh), pygame.SRCALPHA)
+    pygame.draw.circle(mask, (255, 255, 255, 255), (gcx, gcy), hr)
+    pygame.draw.rect(mask, (255, 255, 255, 255), body_rect)
+    pygame.draw.polygon(mask, (255, 255, 255, 255), scallop)
+
+    # 3) Holographic foil body — diagonal multi-stop gradient.
+    stops = [
+        (0.00, (240, 215, 255)),  # pale lavender
+        (0.30, (255, 220, 240)),  # pearl pink
+        (0.55, (220, 240, 255)),  # cyan
+        (0.80, (215, 255, 235)),  # mint
+        (1.00, (245, 245, 220)),  # warm ivory
+    ]
+    grad = pygame.Surface((sw, sh), pygame.SRCALPHA)
+    diag = sw + sh
+    for yy in range(sh):
+        for xx in range(sw):
+            t = (xx + yy) / max(1, diag)
+            if t <= stops[0][0]:
+                col = stops[0][1]
+            elif t >= stops[-1][0]:
+                col = stops[-1][1]
+            else:
+                col = stops[-1][1]
+                for i in range(len(stops) - 1):
+                    a_pos, a_col = stops[i]
+                    b_pos, b_col = stops[i + 1]
+                    if a_pos <= t <= b_pos:
+                        u = (t - a_pos) / max(1e-6, b_pos - a_pos)
+                        col = (
+                            int(a_col[0] + (b_col[0] - a_col[0]) * u),
+                            int(a_col[1] + (b_col[1] - a_col[1]) * u),
+                            int(a_col[2] + (b_col[2] - a_col[2]) * u),
+                        )
+                        break
+            grad.set_at((xx, yy), col + (245,))
+    grad.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    big.blit(grad, (0, 0))
+
+    # 4) Soft white sheen on the upper portion for the foil shimmer.
+    sheen = pygame.Surface((sw, sh), pygame.SRCALPHA)
+    sy0 = gcy - hr
+    sy1 = gcy + int(hr * 0.5)
+    for yy in range(sy0, sy1):
+        t = (yy - sy0) / max(1, sy1 - sy0)
+        a = int(150 * (1.0 - t) ** 1.5)
+        if a > 0:
+            pygame.draw.line(sheen, (255, 255, 255, a), (0, yy), (sw, yy))
+    sheen.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    big.blit(sheen, (0, 0))
+
+    # 5) Eyes
+    EYE_W    = (252, 254, 255, 255)
+    EYE_IRIS = (50, 110, 220, 255)
+    EYE_PUP  = (12,  18,  60, 255)
+    for ex_off in (-5, 5):
+        ex = gcx + ex_off * SS
+        ey = gcy - 1 * SS
+        pygame.draw.circle(big, EYE_W,    (ex,         ey        ), int(3.5 * SS))
+        pygame.draw.circle(big, EYE_IRIS, (ex + SS,    ey + SS    ), int(2.5 * SS))
+        pygame.draw.circle(big, EYE_PUP,  (ex + SS,    ey + SS    ), max(1, SS))
+        pygame.draw.circle(big, (255, 255, 255, 220),
+                           (ex - SS, ey - 2 * SS), max(1, SS // 2))
+
+    _ghost_sprite = pygame.transform.smoothscale(big, (GW, GH))
+    return _ghost_sprite
+
+
 # Default pillar palette (fallback when no biome provided).
 _DEFAULT_PILLAR = {
     'stone_light':     (225, 195, 155),
@@ -850,70 +972,11 @@ class PowerUp:
         # Supernatural wafting bob: two overlaid frequencies
         cy = int(self.y + math.sin(self.pulse * 0.9) * 4
                         + math.sin(self.pulse * 1.8) * 1.5)
-
-        # Premium midnight-indigo outline (deeper + slight violet shift
-        # vs the previous muted navy) and a 2-px ring for a more
-        # confident silhouette on bright skies.
-        DARK     = (18,  22,  75, 255)
-        BODY     = (205, 228, 255, 235)
-        EYE_W    = (252, 254, 255, 255)
-        EYE_IRIS = (50,  110, 220, 255)
-        EYE_PUP  = (12,  18,  60,  255)
-
-        # ── Classic ghost silhouette on scratch SRCALPHA surface ──────────────
-        # Canvas grows by 2 px on every side so the bolder outline doesn't
-        # clip; head centre lands at the same world coords via the blit
-        # offset below.
-        PAD      = 2
-        GW, GH   = 28 + PAD * 2, 36 + PAD * 2
-        gcx      = 14 + PAD       # head centre x in canvas
-        gcy      = 12 + PAD       # head circle centre y
-        hr       = 12             # head radius
-        body_y2  = 26 + PAD       # y where straight sides end, scallop starts
-
-        # Scalloped-skirt polygon: 3 hanging bumps with 2 concave indents.
-        scallop = [
-            (1 + PAD,            body_y2),
-            (6 + PAD,             GH - 4 - PAD),   # left bump
-            (11 + PAD,            body_y2 + 4),    # indent 1
-            (gcx,                 GH - 4 - PAD),   # centre bump
-            (28 - 12 + PAD,       body_y2 + 4),    # indent 2
-            (28 - 7 + PAD,        GH - 4 - PAD),   # right bump
-            (28 - 2 + PAD,        body_y2),
-        ]
-        # Expanded by 2 px in every outward direction for the bolder outline.
-        scallop_o = [
-            (-1 + PAD,            body_y2),
-            (6 + PAD,             GH - 2 - PAD),
-            (9 + PAD,             body_y2 + 4),
-            (gcx,                 GH - 2 - PAD),
-            (28 - 10 + PAD,       body_y2 + 4),
-            (28 - 7 + PAD,        GH - 2 - PAD),
-            (28 + 1 + PAD,        body_y2),
-        ]
-
-        g = pygame.Surface((GW, GH), pygame.SRCALPHA)
-
-        # Outline pass — 2 px ring (was 1 px)
-        pygame.draw.circle(g, DARK, (gcx, gcy), hr + 2)
-        pygame.draw.rect(g, DARK, (-1 + PAD, gcy, 28 + 2, body_y2 - gcy + 2))
-        pygame.draw.polygon(g, DARK, scallop_o)
-
-        # Body fill (unchanged size — the 2-px ring is the bolder outline).
-        pygame.draw.circle(g, BODY, (gcx, gcy), hr)
-        pygame.draw.rect(g, BODY, (1 + PAD, gcy, 28 - 2, body_y2 - gcy))
-        pygame.draw.polygon(g, BODY, scallop)
-
-        # Eyes: white → iris → pupil → specular dot
-        for ex in (gcx - 5, gcx + 5):
-            ey = gcy - 1
-            pygame.draw.circle(g, EYE_W,    (ex,     ey    ), 4)
-            pygame.draw.circle(g, EYE_IRIS, (ex + 1, ey + 1), 3)
-            pygame.draw.circle(g, EYE_PUP,  (ex + 1, ey + 1), 1)
-            pygame.draw.circle(g, (255, 255, 255, 200), (ex - 1, ey - 2), 1)
-
-        # Blit: head-circle centre aligns with (cx, cy)
-        surf.blit(g, (cx - gcx, cy - gcy))
+        sprite = _get_ghost_sprite()
+        # Sprite was built so the head-circle centre sits at sprite-local
+        # (_GHOST_HEAD_OFFSET_X, _GHOST_HEAD_OFFSET_Y); align it to (cx, cy).
+        surf.blit(sprite,
+                  (cx - _GHOST_HEAD_OFFSET_X, cy - _GHOST_HEAD_OFFSET_Y))
 
 
     def _draw_grow(self, surf):
