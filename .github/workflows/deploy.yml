@@ -2,7 +2,7 @@ name: Deploy to Netlify
 
 on:
   push:
-    branches: [main, v3_skybit_loading]
+    branches: [main]
   pull_request:
     branches: [main]
 
