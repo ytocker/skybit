@@ -6,6 +6,7 @@ Post-process pygbag's generated build/web/index.html to inject:
 """
 import os
 import re
+import sys
 from pathlib import Path
 
 src = Path("build/web/index.html")
@@ -17,8 +18,26 @@ html = src.read_text(encoding="utf-8")
 _SB_URL = os.environ.get("SUPABASE_URL", "")
 _SB_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 
+# Track how many color/background replacements actually matched. Used by the
+# post-write assertions below: a deploy where NONE of the loader colours
+# were patched almost certainly means pygbag changed its template and the
+# user will see the unthemed default progress bar (green rectangle, blue
+# text) — which has been observed in production as a stuck-loading state.
+_color_subs = 0
+
+def _patch_re(pattern, replacement, html_in):
+    global _color_subs
+    new, n = re.subn(pattern, replacement, html_in)
+    _color_subs += n
+    return new
+
+def _patch_str(needle, replacement, html_in):
+    global _color_subs
+    _color_subs += html_in.count(needle)
+    return html_in.replace(needle, replacement)
+
 # ── 1. Dark body + canvas background (CSS) ───────────────────────────────────
-html = html.replace("background-color:powderblue", "background-color:#0d0820")
+html = _patch_str("background-color:powderblue", "background-color:#0d0820", html)
 # Inline style on <canvas> if present
 html = re.sub(
     r'(<canvas\b[^>]*style=["\'])([^"\']*)',
@@ -29,13 +48,13 @@ html = re.sub(
 # ── 2. Patch embedded Python progress-bar colors ──────────────────────────────
 # pygbag embeds custom_site() Python code as a comment inside a <script> tag.
 # Use regex so spaces inside tuples don't break the match.
-html = html.replace('"#7f7f7f"', '"#0d0820"')                        # bg: gray → dark purple
-html = re.sub(r'\(\s*0\s*,\s*255\s*,\s*0\s*\)', '(240,192,64)', html)   # bar: green → gold
-html = re.sub(r'\(\s*10\s*,\s*10\s*,\s*10\s*\)', '(20,12,48)', html)    # track: near-black → deep purple
-html = re.sub(r',\s*True\s*,\s*"blue"\)', ', True, (240,192,64))', html)  # text: blue → gold
+html = _patch_str('"#7f7f7f"', '"#0d0820"', html)                        # bg: gray → dark purple
+html = _patch_re(r'\(\s*0\s*,\s*255\s*,\s*0\s*\)', '(240,192,64)', html)   # bar: green → gold
+html = _patch_re(r'\(\s*10\s*,\s*10\s*,\s*10\s*\)', '(20,12,48)', html)    # track: near-black → deep purple
+html = _patch_re(r',\s*True\s*,\s*"blue"\)', ', True, (240,192,64))', html)  # text: blue → gold
 # Some pygbag versions name the bg color differently
-html = html.replace('"powderblue"', '"#0d0820"')
-html = html.replace("'powderblue'", "'#0d0820'")
+html = _patch_str('"powderblue"', '"#0d0820"', html)
+html = _patch_str("'powderblue'", "'#0d0820'", html)
 
 # ── 2. Loading overlay HTML (injected right after <body>) ─────────────────────
 OVERLAY = """
@@ -816,7 +835,48 @@ html = html.replace("__SB_URL__", _SB_URL)
 html = html.replace("__SB_KEY__", _SB_KEY)
 
 src.write_text(html, encoding="utf-8")
+
+# ── 3. Post-write assertions ────────────────────────────────────────────────
+# This script previously silently no-op'd when pygbag's template changed
+# format: the .replace("<body>", ...) and re.sub(...) calls just didn't
+# match, the file was written unchanged, and Netlify happily deployed an
+# unthemed pygbag default that hung at a green loading bar. Fail the build
+# loudly here so Netlify keeps the previous good deploy instead.
+_problems = []
+if "skybit-loading" not in html:
+    _problems.append(
+        "OVERLAY HTML (id=skybit-loading) was not injected — pygbag's HTML "
+        "probably no longer contains a literal '<body>' tag. inject_theme.py "
+        "needs updating to match pygbag's new template."
+    )
+if "pygbagReady" not in html:
+    _problems.append(
+        "Watchdog state machine (pygbagReady) was not injected — pygbag's "
+        "HTML probably no longer contains a literal '</body>' tag."
+    )
+if _color_subs == 0:
+    _problems.append(
+        "None of the loading-bar color replacements matched — pygbag has "
+        "almost certainly changed its loader template. Users will see the "
+        "unthemed green/blue default progress bar."
+    )
+if "powderblue" in html:
+    _problems.append(
+        "'powderblue' still present in output — background-color "
+        "replacements did not run as expected."
+    )
+if _problems:
+    print("✗ inject_theme.py post-write assertions failed:", file=sys.stderr)
+    for p in _problems:
+        print("  - " + p, file=sys.stderr)
+    print(
+        "Aborting non-zero so Netlify retains the previous good deploy.",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
+
 print("✓ Skybit theme injected into build/web/index.html")
+print(f"  ({_color_subs} color replacements matched)")
 if _SB_URL:
     print(f"✓ Supabase URL set: {_SB_URL[:40]}...")
 else:
