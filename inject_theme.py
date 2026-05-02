@@ -970,17 +970,27 @@ body   { background: #0d0820 !important; }
             if (!pygbagReady) { pulseBtn(); return; }
 
             clearInterval(pollId);
-            /* Pygbag's interpreter waits for a real DOM click on the
-               canvas before kicking off the asyncio loop; setting
-               MM.UME alone is NOT enough on emscripten 0.9.x, the
-               interpreter pins forever. So we dispatch a synthetic
-               click below in addition to setting MM.UME.
-               That synthetic click also ends up in pygame's event
-               queue as MOUSEBUTTONDOWN, but the STATE_INTRO branch
-               of game/scenes.py:_flap_input now gates on _cooldown_t
-               (initialised to 0.6 s when async_run starts), so the
-               leaked click is harmlessly dropped instead of skipping
-               the cinematic. See game/scenes.py async_run init. */
+            /* Two distinct gates need to release here:
+                 1. Pygbag's UME gate — set MM.UME = true.
+                 2. Pygbag's interpreter waits for a real DOM click on
+                    the canvas before kicking off the asyncio loop;
+                    setting MM.UME alone is NOT enough on emscripten
+                    builds, the interpreter pins forever. So we
+                    dispatch a synthetic click below.
+               That synthetic click ALSO ends up in pygame's event
+               queue as MOUSEBUTTONDOWN. Game-side, scenes.App's first
+               frame consumes mouse/touch events arriving in that
+               frame — the synthetic click is exactly what fires there,
+               so the intro renders from beat-1 instead of getting
+               instantly skipped. */
+            /* Defence in depth: tell the Python event loop to drop any
+               mouse/touch event that arrives over the next 1.5 s. The
+               overlay's stopBubble listeners (registered below) prevent
+               most leaks, but if SDL has a capture-phase listener on
+               window/document it could still get past us. The synthetic
+               canvas click we dispatch immediately after this also
+               benefits from the same window. */
+            try { window.skybitConsumeMouseUntil = Date.now() + 1500; } catch (_) {}
             try { if (window.MM) window.MM.UME = true; } catch (_) {}
             var cv = document.getElementById('canvas');
             if (cv) {
@@ -1019,6 +1029,28 @@ body   { background: #0d0820 !important; }
         ov.addEventListener('click',      dismiss);
         ov.addEventListener('touchstart', dismiss);
         ov.addEventListener('touchend',   dismiss);
+
+        /* Stop overlay-targeted gestures from bubbling to document.
+           SDL's emscripten port appears to attach a document-level
+           mouse listener that filters by `isTrusted`: Playwright's
+           synthetic clicks get dropped (CI never sees a pygame event)
+           but a real user's `isTrusted=true` click bubbles through
+           and queues a MOUSEBUTTONDOWN that reaches pygame in some
+           later frame, after `consume_first` has already turned off,
+           and the STATE_INTRO branch of `_flap_input` skips the
+           cinematic.
+           These permanent stop-propagation listeners on the overlay
+           run in the target phase for any tap on the overlay -- both
+           the dismiss tap and any subsequent taps after dismiss has
+           torn its own listeners down -- and prevent the bubble from
+           ever reaching document. */
+        function stopBubble(e) { try { e.stopPropagation(); } catch (_) {} }
+        var _STOP_TYPES = ['click','mousedown','mouseup',
+                           'touchstart','touchend',
+                           'pointerdown','pointerup'];
+        for (var i = 0; i < _STOP_TYPES.length; i++) {
+            ov.addEventListener(_STOP_TYPES[i], stopBubble);
+        }
     }
 }());
 </script>
