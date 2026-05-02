@@ -199,10 +199,8 @@ class App:
 
     async def async_run(self):
         import asyncio
-        import sys as _sys
         self._cooldown_t = 0.0
         self._start_name_entry = False
-        first_frame_done = False
         while self._running:
             dt = min(self.clock.tick(FPS) / 1000.0, 1 / 20.0)
             for e in pygame.event.get():
@@ -210,20 +208,6 @@ class App:
             self._update(dt)
             self._render()
             pygame.display.flip()
-            if not first_frame_done:
-                first_frame_done = True
-                # Signal to the JS overlay (inject_theme.py's dismiss()
-                # waits on this) that the canvas now has a real Skybit
-                # frame on it. Without this, the overlay would fade off
-                # while pygbag's bare progress display was still visible
-                # underneath -- the "separate screen" the user reported
-                # between Skybit splash and the rendered intro.
-                if _sys.platform == "emscripten":
-                    try:
-                        import js  # type: ignore
-                        js.window.skybitGameReady = True
-                    except Exception:
-                        pass
             if self._start_name_entry:
                 self._start_name_entry = False
                 # create_task keeps the game loop running every frame while the

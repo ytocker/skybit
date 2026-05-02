@@ -973,37 +973,16 @@ body   { background: #0d0820 !important; }
             if (cv) {
                 try { cv.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true})); } catch (_) {}
             }
+            /* Make overlay click-through during the fade so subsequent taps
+               reach <canvas> directly (iOS Safari rejects synthetic gestures
+               for audio unlock; the canvas tap path remains the safety net). */
+            ov.style.pointerEvents = 'none';
+            ov.style.transition = 'opacity 0.45s ease';
+            ov.style.opacity = '0';
+            setTimeout(function () { ov.style.display = 'none'; }, 480);
             ov.removeEventListener('click',      dismiss);
             ov.removeEventListener('touchstart', dismiss);
             ov.removeEventListener('touchend',   dismiss);
-            /* Stay visible (over the canvas) until Python signals first
-               frame is rendered. Pygbag's UME gate satisfaction kicks
-               off interpreter boot + asset extraction + App.__init__,
-               which on a cold load takes a couple of seconds. Without
-               this wait the user sees pygbag's own bare progress bar
-               between Skybit overlay and the rendered intro -- the
-               "separate screen" the user reported. */
-            if (btn) btn.textContent = 'STARTING…';
-            if (status) status.textContent = '';
-            ov.style.pointerEvents = 'none';
-
-            function fade() {
-                ov.style.transition = 'opacity 0.45s ease';
-                ov.style.opacity = '0';
-                setTimeout(function () { ov.style.display = 'none'; }, 480);
-            }
-            /* Poll at 60 fps for the Python-side ready flag (set by
-               game/scenes.py async_run after the first display.flip).
-               Hard cap at 12 s so a stuck boot still hands the page
-               over to the user instead of pinning forever. */
-            var holdT0 = Date.now();
-            var holdId = setInterval(function () {
-                if (window.skybitGameReady === true ||
-                    Date.now() - holdT0 > 12000) {
-                    clearInterval(holdId);
-                    fade();
-                }
-            }, 16);
         }
         ov.addEventListener('click',      dismiss);
         ov.addEventListener('touchstart', dismiss);
