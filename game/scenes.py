@@ -165,11 +165,19 @@ class App:
 
     def _finish_intro(self):
         """Hand off to the menu. Called on auto-completion or skip. The
-        intro is dropped so this session won't render it again."""
+        intro is dropped so this session won't render it again.
+
+        Sets a brief cooldown so the same physical tap that triggered the
+        skip can't echo into the now-MENU state and immediately call
+        ``_start_play``. Without this, the user reports the cinematic
+        "skips" but the menu is invisible — they actually saw it for
+        one frame before the second event in the same gesture started
+        the game. Mirror of the STATE_LEADERBOARD → MENU pattern."""
         if self.intro is not None:
             self.intro.skip()
         self.intro = None
         self.state = STATE_MENU
+        self._cooldown_t = 0.4
 
     def _restart(self):
         # Same contract as `_start_play`: the tap that triggered the
