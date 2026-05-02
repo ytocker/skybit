@@ -36,6 +36,16 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: python inject_theme.py
 
+      # GitHub Pages serves through Jekyll by default, which silently
+      # skips files/directories whose names start with `_`. Pygbag emits
+      # `_pythons.js`, `_packages/`, etc. — without this marker the game
+      # 404s on its core runtime and the menu never renders.
+      - name: Disable Jekyll (.nojekyll)
+        run: touch build/web/.nojekyll
+
+      - name: List build artifacts
+        run: ls -la build/web && echo "---" && find build/web -maxdepth 2 -type f | head -40
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
