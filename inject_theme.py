@@ -428,6 +428,45 @@ body   { background: #0d0820 !important; }
     var a = "__SB_URL__";
     var b = "__SB_KEY__";
 
+    /* Surface the build-time substitution result before any fetch runs.
+       Top-10 has been silently empty on deploys where the build env
+       didn't carry the secrets — this prints exactly what landed in
+       the HTML so it's obvious in DevTools whether the value reached
+       the page. The anon key is intentionally truncated so we can
+       confirm presence + length without leaking the whole token to
+       a casual screenshot. */
+    try {
+        var urlOk = !!(a && a.indexOf('supabase') >= 0 && a.indexOf('__SB_') < 0);
+        console.log('[skybit/lb] build-time substitution:',
+            'url=', urlOk ? a : '(not substituted: "' + a + '")',
+            'key=', (b && b.indexOf('__SB_') < 0)
+                ? (b.slice(0, 12) + '… len=' + b.length)
+                : '(not substituted)');
+    } catch (_) {}
+
+    /* Sanity ping: fire a minimal fetch on page load, independent of
+       the game's bridge / Python timing, so we can see whether the
+       Supabase REST path works at all from this origin. Result is
+       logged but never used — the real fetch path goes through
+       doFetch() below. Skipped silently if substitution failed. */
+    try {
+        if (a && b && a.indexOf('__SB_') < 0 && b.indexOf('__SB_') < 0) {
+            setTimeout(function () {
+                fetch(a + '/rest/v1/scores?select=name,score&order=score.desc&limit=1', {
+                    headers: {'apikey': b, 'Authorization': 'Bearer ' + b}
+                }).then(function (r) {
+                    console.log('[skybit/lb] sanity-ping status:', r.status, r.statusText);
+                    return r.ok ? r.json() : r.text();
+                }).then(function (body) {
+                    console.log('[skybit/lb] sanity-ping body:',
+                        typeof body === 'string' ? body.slice(0, 300) : body);
+                }).catch(function (e) {
+                    console.error('[skybit/lb] sanity-ping network error:', e && e.message || e);
+                });
+            }, 500);
+        }
+    } catch (_) {}
+
     /* Internal result slots — never on window. Polled via __sk('*_done'). */
     var rSubmit = null;
     var rFetch  = null;
