@@ -23,7 +23,11 @@ import sys
 DEPLOYED_URL = os.environ.get(
     "DEPLOYED_URL", "https://ytocker.github.io/skybit/"
 )
-WAIT_BOOT_S = 30
+# Pygbag waits on its UME (User-Media-Engagement) gate before starting
+# the Python interpreter, so a headless visit alone never executes any
+# Python. We satisfy the gate explicitly below, then wait long enough
+# for `main.py` to import and the startup leaderboard probe to fire.
+WAIT_BOOT_S = 45
 BRIDGE_POLL_S = 15
 
 
@@ -46,7 +50,30 @@ async def main() -> int:
 
         await page.goto(DEPLOYED_URL, wait_until="domcontentloaded", timeout=30_000)
 
-        # Give pygbag time to boot and the bridge IIFE to run.
+        # Wait briefly for the bridge IIFE + overlay to render.
+        await page.wait_for_timeout(3_000)
+
+        # Satisfy pygbag's UME gate so the Python interpreter actually
+        # starts. Two paths, run both in case the overlay isn't ready:
+        #   1. set window.MM.UME = true (the documented escape)
+        #   2. dispatch a real click on the overlay to fire its
+        #      dismiss handler, which also sets MM.UME and forwards a
+        #      click to the canvas.
+        try:
+            await page.evaluate(
+                """() => {
+                    try { if (window.MM) window.MM.UME = true; } catch (_) {}
+                    const ov = document.getElementById('skybit-loading');
+                    if (ov) ov.click();
+                    const cv = document.getElementById('canvas');
+                    if (cv) cv.dispatchEvent(new MouseEvent('click', {bubbles:true,cancelable:true}));
+                }"""
+            )
+        except Exception as e:
+            print(f"- UME-unlock attempt threw: `{e}`")
+
+        # Now wait for pygbag to finish loading + Python main.py to run
+        # the App init + the startup leaderboard probe to log.
         await page.wait_for_timeout(WAIT_BOOT_S * 1000)
 
         # Inspect the bridge state.
