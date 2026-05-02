@@ -5,12 +5,13 @@ on:
   # the diagnostic itself. The job below polls the live site until the
   # Pages deploy of this same commit lands, then runs the diagnostic.
   push:
-    branches: [v3_skybit_loading]
+    branches: [v3_skybit]
     paths:
       - "tools/diagnose_supabase.py"
       - "tools/diagnose_browser.py"
       - ".github/workflows/diagnose_supabase.yml"
       - "game/leaderboard.py"
+      - "game/scenes.py"
       - "main.py"
       - "inject_theme.py"
   workflow_dispatch:
