@@ -11,7 +11,35 @@ import traceback
 
 async def _run_game():
     from game.scenes import App
+    if sys.platform == "emscripten":
+        # One-time leaderboard probe at startup. Exercises the Python ↔ JS
+        # bridge handshake (`window.__sk('fetch')`) before the player
+        # reaches the top-10 view, so a regression in the bridge shows up
+        # in the browser console immediately on page load rather than
+        # being silent until the first death. Fires as an async task so
+        # it doesn't block the game loop.
+        try:
+            from game import leaderboard as _lb
+            asyncio.create_task(_probe_leaderboard(_lb))
+        except Exception:
+            pass
     await App().async_run()
+
+
+async def _probe_leaderboard(lb_module) -> None:
+    try:
+        rows = await lb_module.fetch_top10()
+        try:
+            import js  # type: ignore
+            js.console.log(
+                "[skybit/py/main] startup leaderboard probe → ",
+                len(rows), " rows; last_fetch_error=",
+                lb_module.last_fetch_error() or "(none)",
+            )
+        except Exception:
+            pass
+    except Exception:
+        pass
 
 
 async def _show_error(tb_text: str):
