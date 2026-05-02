@@ -110,11 +110,12 @@ HAT_PALETTE_GHOST = {
     "dark":    ( 55, 105, 155),
     "band_dk": ( 25,  55,  95),
     "band_hi": ( 90, 140, 180),
-    # Pure white `$` reads cleanly against the cyan hat body. Cool dark
-    # cyan outline anchors it without going green.
-    "dollar":    (255, 255, 255),
-    "dollar_dk": ( 35,  75, 120),
-    "dollar_hi": (180, 220, 250),
+    # Strong cyan-blue `$` that sits firmly in the ghost palette. Pure
+    # white was reading as a separate stamp; this anchors the glyph to
+    # the spectral theme.
+    "dollar":    ( 35, 115, 200),
+    "dollar_dk": ( 10,  40,  90),
+    "dollar_hi": (140, 210, 250),
     "spot":      None,   # ghost hat has no fried texture
     "spot_hi":   None,
 }
