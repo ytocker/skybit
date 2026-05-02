@@ -203,10 +203,27 @@ class App:
         self._cooldown_t = 0.0
         self._start_name_entry = False
         first_frame_done = False
+        # Browser only: the loading-overlay's dismiss handler dispatches a
+        # synthetic click on the canvas to satisfy pygbag's UME gate, and
+        # that click queues as a MOUSEBUTTONDOWN in pygame's event queue
+        # before this loop has had a chance to render anything. If we let
+        # `_handle_event` route it to `_flap_input` it would skip the
+        # intro before its first frame is ever shown. Drop mouse/touch
+        # events that arrive in the first frame's `pygame.event.get()`;
+        # the user's real subsequent taps land in later frames and
+        # behave normally.
+        consume_first = (_sys.platform == "emscripten")
+        _SYNTHETIC_TYPES = (
+            pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP,
+            pygame.FINGERDOWN, pygame.FINGERUP,
+        )
         while self._running:
             dt = min(self.clock.tick(FPS) / 1000.0, 1 / 20.0)
             for e in pygame.event.get():
+                if consume_first and e.type in _SYNTHETIC_TYPES:
+                    continue
                 self._handle_event(e)
+            consume_first = False
             self._update(dt)
             self._render()
             pygame.display.flip()

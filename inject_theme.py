@@ -970,14 +970,24 @@ body   { background: #0d0820 !important; }
             if (!pygbagReady) { pulseBtn(); return; }
 
             clearInterval(pollId);
-            /* Setting MM.UME alone unblocks pygbag's asyncio main loop.
-               An earlier version also dispatched a synthetic click on
-               the canvas to "make sure," but that click ends up in
-               pygame's event queue as a MOUSEBUTTONDOWN that the game
-               processes as a real input — landing in STATE_INTRO it
-               skips the cinematic, which the user reported as the
-               first tap bypassing the intro. */
+            /* Two distinct gates need to release here:
+                 1. Pygbag's UME gate — set MM.UME = true.
+                 2. Pygbag's interpreter waits for a real DOM click on
+                    the canvas before kicking off the asyncio loop;
+                    setting MM.UME alone is NOT enough on emscripten
+                    builds, the interpreter pins forever. So we
+                    dispatch a synthetic click below.
+               That synthetic click ALSO ends up in pygame's event
+               queue as MOUSEBUTTONDOWN. Game-side, scenes.App's first
+               frame consumes mouse/touch events arriving in that
+               frame — the synthetic click is exactly what fires there,
+               so the intro renders from beat-1 instead of getting
+               instantly skipped. */
             try { if (window.MM) window.MM.UME = true; } catch (_) {}
+            var cv = document.getElementById('canvas');
+            if (cv) {
+                try { cv.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true})); } catch (_) {}
+            }
             ov.removeEventListener('click',      dismiss);
             ov.removeEventListener('touchstart', dismiss);
             ov.removeEventListener('touchend',   dismiss);
