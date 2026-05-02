@@ -60,21 +60,130 @@ def _cyan_tint_in_place(sprite, tint=(170, 230, 255), strength=0.55):
     sw, sh = sprite.get_size()
     overlay = pygame.Surface((sw, sh), pygame.SRCALPHA)
     overlay.fill((*tint, int(255 * strength)))
-    # Mask the overlay to the sprite's silhouette so we don't leak cyan
-    # into transparent regions.
     overlay.blit(sprite, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
     sprite.blit(overlay, (0, 0))
 
 
+# ── Themed hat palettes ────────────────────────────────────────────────────
+# Hats need to match the bird underneath. The default palette in
+# game.dollar_parrot_hat is gold-on-dark-band; we override per combo so
+# the hat reads as part of the fried/spectral/etc. theme instead of a
+# floating gold artefact.
+HAT_PALETTE_DEFAULT = {
+    "bright":  (255, 240, 130),  # GOLD_LT
+    "main":    (255, 200,  50),  # GOLD
+    "mid":     (220, 165,  35),  # GOLD_MID
+    "dark":    (160, 100,  20),  # GOLD_DK
+    "band_dk": ( 35,  20,   8),
+    "band_hi": ( 85,  55,  20),
+    "dollar":  ( 75, 165, 105),  # BILL_GREEN
+    "dollar_dk": ( 40, 110,  70),
+}
+HAT_PALETTE_KFC = {
+    # Crispy fried-chicken tones — warm oranges/browns that match the
+    # KFC bird's batter colours.
+    "bright":  (245, 195, 110),
+    "main":    (215, 145,  55),
+    "mid":     (180, 110,  35),
+    "dark":    (120,  70,  20),
+    "band_dk": ( 65,  35,  10),
+    "band_hi": (130,  80,  25),
+    "dollar":  ( 75, 165, 105),  # green $ stays — universal currency cue
+    "dollar_dk": ( 40, 110,  70),
+}
+HAT_PALETTE_GHOST = {
+    # Spectral cyans that match the ghost bird's body palette.
+    "bright":  (220, 245, 255),
+    "main":    (140, 200, 230),
+    "mid":     (100, 170, 210),
+    "dark":    ( 55, 105, 155),
+    "band_dk": ( 25,  55,  95),
+    "band_hi": ( 90, 140, 180),
+    "dollar":  ( 75, 165, 105),  # green $ kept for currency cue + contrast
+    "dollar_dk": ( 40, 110,  70),
+}
+
+
+def _draw_brim_themed(surf, hx, hy, half_w, P):
+    """Themed version of game.dollar_parrot_hat._draw_brim — same geometry,
+    palette swapped per combo."""
+    sh = pygame.Surface((half_w * 2 + 8, 8), pygame.SRCALPHA)
+    pygame.draw.ellipse(sh, (0, 0, 0, 130), sh.get_rect())
+    surf.blit(sh, (hx - half_w - 4, hy + 1))
+    pygame.draw.ellipse(surf, P["band_dk"],
+                        (hx - half_w - 1, hy, (half_w + 1) * 2, 7))
+    pygame.draw.ellipse(surf, P["dark"],
+                        (hx - half_w, hy - 1, half_w * 2, 6))
+    pygame.draw.ellipse(surf, P["main"],
+                        (hx - half_w + 1, hy, half_w * 2 - 2, 4))
+    pygame.draw.line(surf, P["bright"],
+                     (hx - half_w + 3, hy + 1), (hx + half_w - 3, hy + 1), 1)
+
+
+def _draw_crown_cylinder_themed(surf, hx, hy, half_w, height, P):
+    """Themed version of _draw_crown_cylinder."""
+    top_y = hy - height
+    left_x = hx - half_w
+    w = half_w * 2
+
+    pygame.draw.rect(surf, P["dark"], (left_x - 1, top_y + 1, w + 2, height - 2))
+    pygame.draw.rect(surf, P["main"], (left_x, top_y + 2, w, height - 4))
+    pygame.draw.rect(surf, P["bright"], (left_x + 2, top_y + 3, 2, height - 8))
+    pygame.draw.rect(surf, P["mid"], (left_x + w - 3, top_y + 3, 2, height - 8))
+
+    pygame.draw.ellipse(surf, P["dark"], (left_x - 1, hy - 4, w + 2, 7))
+    pygame.draw.ellipse(surf, P["main"], (left_x, hy - 3, w, 5))
+
+    pygame.draw.ellipse(surf, P["dark"], (left_x - 1, top_y - 1, w + 2, 6))
+    pygame.draw.ellipse(surf, P["main"], (left_x + 1, top_y, w - 2, 4))
+    pygame.draw.ellipse(surf, P["bright"], (left_x + 3, top_y + 1, w - 6, 1))
+
+    band_h = max(3, height // 7)
+    pygame.draw.rect(surf, P["band_dk"], (left_x, hy - band_h - 1, w, band_h))
+    pygame.draw.line(surf, P["band_hi"],
+                     (left_x + 1, hy - band_h - 1),
+                     (left_x + w - 2, hy - band_h - 1), 1)
+
+
+def _draw_stovepipe_themed(surf, hx, hy, P):
+    """Themed stovepipe — same geometry as game.dollar_parrot_hat.draw_stovepipe."""
+    crown_half = 9
+    crown_h = 28
+    _draw_crown_cylinder_themed(surf, hx, hy, crown_half, crown_h, P)
+    _draw_brim_themed(surf, hx, hy, half_w=17, P=P)
+
+    # `$` glyph on the crown — themed colour per palette.
+    import pathlib as _pl
+    fpath = str(_pl.Path(__file__).resolve().parent.parent
+                / "game" / "assets" / "LiberationSans-Bold.ttf")
+    f = pygame.font.Font(fpath, 18)
+    body = f.render("$", True, P["dollar"])
+    edge = f.render("$", True, P["dollar_dk"])
+    cy = hy - crown_h // 2 - 1
+    rect = body.get_rect(center=(hx, cy))
+    for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1),
+                   (-1, -1), (1, -1), (-1, 1), (1, 1)):
+        surf.blit(edge, (rect.x + dx, rect.y + dy))
+    surf.blit(body, rect.topleft)
+
+
+def _stovepipe_kfc(surf, hx, hy):
+    _draw_stovepipe_themed(surf, hx, hy, HAT_PALETTE_KFC)
+
+
+def _stovepipe_ghost(surf, hx, hy):
+    _draw_stovepipe_themed(surf, hx, hy, HAT_PALETTE_GHOST)
+
+
 def build_kfc_hat_frames():
-    """KFC fried parrot wearing the gold stovepipe hat."""
+    """KFC fried parrot wearing a CRISPY hat (golden-brown palette)."""
     from game import parrot
     from game.dollar_parrot_hat import (
-        COMPOSITE_W, COMPOSITE_H, PARROT_DY, HAT_HX, HAT_HY, draw_stovepipe,
+        COMPOSITE_W, COMPOSITE_H, PARROT_DY, HAT_HX, HAT_HY,
     )
     return [
         parrot._add_outline(_hatted_composite(
-            parrot._build_fried_frame(a), draw_stovepipe,
+            parrot._build_fried_frame(a), _stovepipe_kfc,
             PARROT_DY, HAT_HX, HAT_HY, COMPOSITE_W, COMPOSITE_H,
         ))
         for a in parrot._WING_ANGLES
@@ -82,15 +191,15 @@ def build_kfc_hat_frames():
 
 
 def build_ghost_hat_frames():
-    """Ghost (spectral cyan) parrot wearing the gold stovepipe hat."""
+    """Ghost (spectral cyan) parrot wearing a SPECTRAL hat (cyan palette)."""
     from game import parrot
     from game.dollar_parrot_ghost import build_spectral_frame
     from game.dollar_parrot_hat import (
-        COMPOSITE_W, COMPOSITE_H, PARROT_DY, HAT_HX, HAT_HY, draw_stovepipe,
+        COMPOSITE_W, COMPOSITE_H, PARROT_DY, HAT_HX, HAT_HY,
     )
     return [
         parrot._add_outline(_hatted_composite(
-            build_spectral_frame(a), draw_stovepipe,
+            build_spectral_frame(a), _stovepipe_ghost,
             PARROT_DY, HAT_HX, HAT_HY, COMPOSITE_W, COMPOSITE_H,
         ))
         for a in parrot._WING_ANGLES
@@ -98,9 +207,7 @@ def build_ghost_hat_frames():
 
 
 def build_kfc_ghost_frames():
-    """Fried parrot tinted toward ghost cyan. Cheap derivation: take the
-    KFC frame and shift its RGB toward (170, 230, 255). Reads as 'spectral
-    fried chicken'."""
+    """Fried parrot tinted toward ghost cyan. Cheap derivation."""
     from game import parrot
     frames = []
     for a in parrot._WING_ANGLES:
@@ -111,19 +218,22 @@ def build_kfc_ghost_frames():
 
 
 def build_kfc_ghost_hat_frames():
-    """Spectral fried parrot wearing the stovepipe hat."""
+    """Spectral fried parrot wearing the KFC hat — but the cyan tint is
+    applied to the whole composite (bird + hat) so the hat reads as
+    spectral fried too, matching the bird underneath."""
     from game import parrot
     from game.dollar_parrot_hat import (
-        COMPOSITE_W, COMPOSITE_H, PARROT_DY, HAT_HX, HAT_HY, draw_stovepipe,
+        COMPOSITE_W, COMPOSITE_H, PARROT_DY, HAT_HX, HAT_HY,
     )
     frames = []
     for a in parrot._WING_ANGLES:
-        f = parrot._build_fried_frame(a).copy()
-        _cyan_tint_in_place(f)
+        # Build kfc-themed bird+hat first (warm, fully fried look).
         composite = _hatted_composite(
-            f, draw_stovepipe,
+            parrot._build_fried_frame(a), _stovepipe_kfc,
             PARROT_DY, HAT_HX, HAT_HY, COMPOSITE_W, COMPOSITE_H,
-        )
+        ).copy()
+        # Then cool the entire silhouette to spectral.
+        _cyan_tint_in_place(composite)
         frames.append(parrot._add_outline(composite))
     return frames
 
