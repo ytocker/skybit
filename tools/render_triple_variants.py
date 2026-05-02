@@ -172,32 +172,45 @@ def _draw_v3_treatment(surf, cx, cy, *,
     _blit_centered(surf, grad, (cx, cy + 1))
 
 
-# ── V1 — thin bars, classic cifrão ─────────────────────────────────────────
+# ── V1 — thin bars, close together ─────────────────────────────────────────
 def draw_v1_thin(surf, cx, cy, pulse=0.0):
-    _draw_v3_treatment(surf, cx, cy, bar_w_frac=0.06)
+    _draw_v3_treatment(surf, cx, cy,
+                       bar_w_frac=0.05,
+                       bar_extend_frac=0.05,
+                       bar_offset_frac=-0.08)
 
 
-# ── V2 — medium bars (default cifrão weight) ───────────────────────────────
+# ── V2 — medium bars, close together (default look) ────────────────────────
 def draw_v2_medium(surf, cx, cy, pulse=0.0):
-    _draw_v3_treatment(surf, cx, cy, bar_w_frac=0.09)
+    _draw_v3_treatment(surf, cx, cy,
+                       bar_w_frac=0.08,
+                       bar_extend_frac=0.05,
+                       bar_offset_frac=-0.08)
 
 
-# ── V3 — thick chunky bars ─────────────────────────────────────────────────
+# ── V3 — thick bars, close together ────────────────────────────────────────
 def draw_v3_thick(surf, cx, cy, pulse=0.0):
-    _draw_v3_treatment(surf, cx, cy, bar_w_frac=0.13, bar_extend_frac=0.20)
+    _draw_v3_treatment(surf, cx, cy,
+                       bar_w_frac=0.12,
+                       bar_extend_frac=0.06,
+                       bar_offset_frac=-0.08)
 
 
 # ── V4 — medium bars with bright top caps (3D feel) ────────────────────────
 def draw_v4_capped(surf, cx, cy, pulse=0.0):
     _draw_v3_treatment(surf, cx, cy,
-                       bar_w_frac=0.10, bar_extend_frac=0.18,
+                       bar_w_frac=0.09,
+                       bar_extend_frac=0.06,
+                       bar_offset_frac=-0.08,
                        bar_top_highlight=True)
 
 
-# ── V5 — medium bars, wider apart (sit just inside S edges) ────────────────
-def draw_v5_wide(surf, cx, cy, pulse=0.0):
+# ── V5 — medium bars even closer to centre ─────────────────────────────────
+def draw_v5_tight(surf, cx, cy, pulse=0.0):
     _draw_v3_treatment(surf, cx, cy,
-                       bar_w_frac=0.09, bar_offset_frac=0.06)
+                       bar_w_frac=0.08,
+                       bar_extend_frac=0.05,
+                       bar_offset_frac=-0.12)
 
 
 VARIANTS = {
@@ -205,5 +218,5 @@ VARIANTS = {
     2: ("2 — medium bars",   draw_v2_medium),
     3: ("3 — thick bars",    draw_v3_thick),
     4: ("4 — capped bars",   draw_v4_capped),
-    5: ("5 — wide-set bars", draw_v5_wide),
+    5: ("5 — tight bars",    draw_v5_tight),
 }
