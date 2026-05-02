@@ -226,23 +226,48 @@ class App:
         # events that arrive in the first frame's `pygame.event.get()`;
         # the user's real subsequent taps land in later frames and
         # behave normally.
-        consume_first = (_sys.platform == "emscripten")
+        _IS_BROWSER = (_sys.platform == "emscripten")
         _SYNTHETIC_TYPES = (
             pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP,
             pygame.FINGERDOWN, pygame.FINGERUP,
         )
         # Frame counter exposed on self so _finish_intro can include it.
         self._frame_n = -1
-        self._pylog("async_run start; consume_first=" + str(consume_first))
+        # Cached `js` module reference so we don't re-import every event.
+        _js_mod = None
+        if _IS_BROWSER:
+            try:
+                import js as _js_mod  # type: ignore
+            except Exception:
+                _js_mod = None
+
+        def _within_consume_window() -> bool:
+            """Browser-only: True iff `window.skybitConsumeMouseUntil`
+            (set by inject_theme.py's dismiss handler) hasn't elapsed
+            yet. Drives a JS-coordinated time-window suppression of
+            synthetic / leaked-bubble mouse events that would otherwise
+            land in `_flap_input` while state is STATE_INTRO and skip
+            the cinematic on the very first user tap."""
+            if _js_mod is None:
+                return False
+            try:
+                until = float(getattr(_js_mod.window, 'skybitConsumeMouseUntil', 0) or 0)
+                now = float(_js_mod.Date.now())
+                return now < until
+            except Exception:
+                return False
+
+        self._pylog("async_run start; is_browser=" + str(_IS_BROWSER))
         while self._running:
             self._frame_n += 1
             dt = min(self.clock.tick(FPS) / 1000.0, 1 / 20.0)
             for e in pygame.event.get():
                 if e.type in _SYNTHETIC_TYPES:
-                    if consume_first:
+                    if _IS_BROWSER and _within_consume_window():
                         self._pylog(
                             "frame " + str(self._frame_n) + ": DROPPED " +
-                            pygame.event.event_name(e.type) + " (consume_first)"
+                            pygame.event.event_name(e.type) +
+                            " (within consume window)"
                         )
                         continue
                     if self._frame_n < 6:
@@ -254,7 +279,6 @@ class App:
                             pygame.event.event_name(e.type)
                         )
                 self._handle_event(e)
-            consume_first = False
             self._update(dt)
             self._render()
             pygame.display.flip()
