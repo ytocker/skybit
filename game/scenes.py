@@ -507,8 +507,10 @@ class App:
         self.world.weather.draw(self.screen)
 
         kfc_active = self.world.bird.kfc_active
+        triple_active = self.world.triple_timer > 0
         for c in self.world.coins:
-            c.draw(self.screen, kfc_active=kfc_active)
+            c.draw(self.screen, kfc_active=kfc_active,
+                   triple_active=triple_active)
         for m in self.world.powerups:
             m.draw(self.screen)
 

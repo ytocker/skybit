@@ -403,6 +403,7 @@ class Pipe:
 # ── Coin ─────────────────────────────────────────────────────────────────────
 
 _COIN_FACE_CACHE: "pygame.Surface | None" = None
+_TRIPLE_COIN_FACE_CACHE: "pygame.Surface | None" = None
 
 
 def _get_coin_face() -> pygame.Surface:
@@ -549,6 +550,111 @@ def _get_coin_face() -> pygame.Surface:
     return _COIN_FACE_CACHE
 
 
+def _get_coin_face_triple() -> pygame.Surface:
+    """3X-mode coin face: same rim/body/rope/specular as the standard coin,
+    but the embossed parrot is replaced by a large `$` in the original
+    EMBOSS amber. Reads as struck into the gold body, same recipe the
+    parrot uses (flat amber on gold, no outline, no shadow). Cached
+    identically to _get_coin_face."""
+    global _TRIPLE_COIN_FACE_CACHE
+    if _TRIPLE_COIN_FACE_CACHE is not None:
+        return _TRIPLE_COIN_FACE_CACHE
+    SS = 8
+    DISPLAY_D = COIN_R * 2 + 4
+    CACHE_MUL = 4
+    final_d = DISPLAY_D * CACHE_MUL
+    size = final_d * SS
+    surf = pygame.Surface((size, size), pygame.SRCALPHA)
+    cx = cy = size // 2
+    r_outer = size // 2 - SS
+    r_outline = max(SS * 2, r_outer // 6)
+    r_body = r_outer - r_outline
+
+    GOLD_HI    = (255, 232, 130)
+    GOLD_MID   = (240, 195,  55)
+    GOLD_LO    = (190, 130,  20)
+    OUTLINE_DK = ( 95,  50,   0)
+    OUTLINE_LT = (150,  90,  10)
+    DARK_AMBER = ( 75,  35,   0)
+    LITE_AMBER = (210, 165,  50)
+    EMBOSS     = (130,  80,   0)
+
+    # Layers 1-3 + 5: rim, gradient body, rope rim, specular highlight —
+    # identical to _get_coin_face (parrot section omitted; `$` stamped
+    # post-smoothscale at display resolution for crisp Liberation-Sans
+    # rendering).
+    pygame.draw.circle(surf, OUTLINE_DK, (cx, cy), r_outer)
+    pygame.draw.circle(surf, OUTLINE_LT, (cx, cy), r_outer - SS)
+
+    body_surf = pygame.Surface((size, size), pygame.SRCALPHA)
+    y0, y1 = cy - r_body, cy + r_body
+    for yy in range(y0, y1 + 1):
+        t = (yy - y0) / max(1, (y1 - y0))
+        if t < 0.4:
+            u = t / 0.4
+            col = (
+                int(GOLD_HI[0]  + (GOLD_MID[0] - GOLD_HI[0])  * u),
+                int(GOLD_HI[1]  + (GOLD_MID[1] - GOLD_HI[1])  * u),
+                int(GOLD_HI[2]  + (GOLD_MID[2] - GOLD_HI[2])  * u),
+            )
+        else:
+            u = (t - 0.4) / 0.6
+            col = (
+                int(GOLD_MID[0] + (GOLD_LO[0]  - GOLD_MID[0]) * u),
+                int(GOLD_MID[1] + (GOLD_LO[1]  - GOLD_MID[1]) * u),
+                int(GOLD_MID[2] + (GOLD_LO[2]  - GOLD_MID[2]) * u),
+            )
+        pygame.draw.line(body_surf, col, (0, yy), (size, yy))
+    body_mask = pygame.Surface((size, size), pygame.SRCALPHA)
+    pygame.draw.circle(body_mask, (255, 255, 255, 255), (cx, cy), r_body)
+    body_surf.blit(body_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    surf.blit(body_surf, (0, 0))
+
+    n_segs = 22
+    ring_r = r_outer - r_outline // 2
+    seg_w = max(SS * 3, r_outline + SS)
+    for i in range(n_segs):
+        ang = i * (math.tau / n_segs)
+        ang_next = (i + 1) * (math.tau / n_segs)
+        mid = (ang + ang_next) / 2
+        sx = cx + math.cos(mid) * ring_r
+        sy = cy + math.sin(mid) * ring_r
+        seg_len = int((math.tau / n_segs) * ring_r * 0.95)
+        seg = pygame.Surface((seg_len, seg_w), pygame.SRCALPHA)
+        col       = DARK_AMBER if i % 2 == 0 else LITE_AMBER
+        highlight = LITE_AMBER if i % 2 == 0 else GOLD_HI
+        pygame.draw.ellipse(seg, col, seg.get_rect())
+        pygame.draw.ellipse(seg, highlight, seg.get_rect().inflate(-SS, -SS))
+        rotated = pygame.transform.rotate(seg, -math.degrees(mid))
+        r_rect = rotated.get_rect(center=(int(sx), int(sy)))
+        surf.blit(rotated, r_rect.topleft)
+
+    hl = pygame.Surface((size, size), pygame.SRCALPHA)
+    hl_rect = pygame.Rect(cx - r_body + r_body // 5,
+                          cy - r_body + r_body // 6,
+                          int(r_body * 1.1), int(r_body * 0.5))
+    pygame.draw.ellipse(hl, (255, 255, 235, 110), hl_rect)
+    hl.blit(body_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    surf.blit(hl, (0, 0))
+
+    face = pygame.transform.smoothscale(surf, (final_d, final_d))
+
+    # Stamp `$` at display resolution, 3× super-sampled for crisp edges.
+    import pathlib as _pl
+    glyph_size = 80
+    SS_G = 3
+    fpath = str(_pl.Path(__file__).parent / "assets" / "LiberationSans-Bold.ttf")
+    f = pygame.font.Font(fpath, glyph_size * SS_G)
+    big = f.render("$", True, EMBOSS)
+    bw, bh = big.get_size()
+    glyph = pygame.transform.smoothscale(big, (bw // SS_G, bh // SS_G))
+    fcx = fcy = face.get_width() // 2
+    face.blit(glyph, glyph.get_rect(center=(fcx, fcy + 1)).topleft)
+
+    _TRIPLE_COIN_FACE_CACHE = face
+    return _TRIPLE_COIN_FACE_CACHE
+
+
 class Coin:
     """Spinning gold parrot medallion. Built once at 4x super-sample with a
     bold dark outline + vertical gold gradient + embossed parrot + soft
@@ -571,7 +677,7 @@ class Coin:
         self.spin = (self.spin + dt * self.SPIN_RATE) % math.tau
         self.float_t += dt
 
-    def draw(self, surf, kfc_active=False):
+    def draw(self, surf, kfc_active=False, triple_active=False):
         cx = int(self.x)
         cy = int(self.y + math.sin(self.float_t * 2.2) * 2)
 
@@ -586,14 +692,14 @@ class Coin:
 
         # Spin animation: the cached face is smoothscaled horizontally by
         # |cos(spin)| every frame, so the rope rim, outline, gradient, and
-        # embossed parrot are all preserved across every angle of the
+        # embossed parrot/$ are all preserved across every angle of the
         # rotation — including near-edge-on slivers. A small floor on the
         # squeeze (10% width) keeps the edge-on frame readable instead of
         # collapsing to a 1-px line.
         cos_s = math.cos(self.spin)
         r = COIN_R
         squeeze = max(0.10, abs(cos_s))
-        face = _get_coin_face()
+        face = _get_coin_face_triple() if triple_active else _get_coin_face()
         # Source is 4x display; downsample target is on-screen size, not face size.
         display_h = COIN_R * 2 + 4
         display_w = max(2, int(display_h * squeeze))
