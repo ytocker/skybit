@@ -1,0 +1,45 @@
+name: Diagnose Supabase leaderboard
+
+on:
+  push:
+    branches: [v3_skybit_loading]
+    paths:
+      - "tools/diagnose_supabase.py"
+      - ".github/workflows/diagnose_supabase.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run diagnostic
+        id: diag
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          python tools/diagnose_supabase.py | tee diag.md
+          echo
+          echo "---"
+          echo "(End of diagnostic. Comment posted to issue #2.)"
+
+      - name: Post result as comment on tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "Run: \`${{ github.run_id }}\` on commit \`${{ github.sha }}\`"
+            echo
+            cat diag.md
+          } > comment.md
+          gh issue comment 2 --repo ${{ github.repository }} --body-file comment.md
