@@ -88,8 +88,12 @@ HAT_PALETTE_KFC = {
     "dark":    (120,  70,  20),
     "band_dk": ( 65,  35,  10),
     "band_hi": (130,  80,  25),
-    "dollar":  ( 75, 165, 105),  # green $ stays — universal currency cue
-    "dollar_dk": ( 40, 110,  70),
+    # KFC red `$` instead of green — matches the KFC brand on a fried hat.
+    "dollar":    (220,  35,  30),
+    "dollar_dk": (130,  15,  10),
+    # Spot/bump tones for the fried-batter texture.
+    "spot":      ( 95,  55,  15),
+    "spot_hi":   (240, 195, 110),
 }
 HAT_PALETTE_GHOST = {
     # Spectral cyans that match the ghost bird's body palette.
@@ -99,8 +103,11 @@ HAT_PALETTE_GHOST = {
     "dark":    ( 55, 105, 155),
     "band_dk": ( 25,  55,  95),
     "band_hi": ( 90, 140, 180),
-    "dollar":  ( 75, 165, 105),  # green $ kept for currency cue + contrast
-    "dollar_dk": ( 40, 110,  70),
+    # Spectral cyan-white `$` matching the ghost bird's cool palette.
+    "dollar":    (235, 250, 255),
+    "dollar_dk": ( 60, 110, 155),
+    "spot":      None,   # ghost hat has no fried texture
+    "spot_hi":   None,
 }
 
 
@@ -145,11 +152,34 @@ def _draw_crown_cylinder_themed(surf, hx, hy, half_w, height, P):
                      (left_x + w - 2, hy - band_h - 1), 1)
 
 
+def _draw_fried_bumps(surf, hx, hy, crown_half, crown_h, P):
+    """Two small darker batter spots on the cylinder face — matches the
+    KFC bird's spotty fried-chicken texture. Tiny highlight on each gives
+    the bumps a touch of dimension."""
+    if P.get("spot") is None:
+        return
+    # Bump 1 — top-left of the cylinder, well clear of the `$` zone.
+    b1_cx = hx - crown_half + 3
+    b1_cy = hy - crown_h + 8
+    pygame.draw.ellipse(surf, P["spot"],
+                        (b1_cx - 2, b1_cy - 1, 4, 3))
+    pygame.draw.line(surf, P["spot_hi"], (b1_cx - 1, b1_cy - 1),
+                     (b1_cx, b1_cy - 1), 1)
+    # Bump 2 — bottom-right, just above the band.
+    b2_cx = hx + crown_half - 4
+    b2_cy = hy - 7
+    pygame.draw.ellipse(surf, P["spot"],
+                        (b2_cx - 2, b2_cy - 1, 4, 3))
+    pygame.draw.line(surf, P["spot_hi"], (b2_cx - 1, b2_cy - 1),
+                     (b2_cx, b2_cy - 1), 1)
+
+
 def _draw_stovepipe_themed(surf, hx, hy, P):
     """Themed stovepipe — same geometry as game.dollar_parrot_hat.draw_stovepipe."""
     crown_half = 9
     crown_h = 28
     _draw_crown_cylinder_themed(surf, hx, hy, crown_half, crown_h, P)
+    _draw_fried_bumps(surf, hx, hy, crown_half, crown_h, P)
     _draw_brim_themed(surf, hx, hy, half_w=17, P=P)
 
     # `$` glyph on the crown — themed colour per palette.
