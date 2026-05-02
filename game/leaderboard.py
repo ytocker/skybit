@@ -42,25 +42,55 @@ def last_fetch_error() -> str:
     return _last_fetch_error
 
 
+def _pylog(*args) -> None:
+    """Log to the browser console from Python so the deployed-page
+    diagnostic (and any user with DevTools open) can see what the
+    leaderboard module is doing. Native runs silently no-op."""
+    if not _IS_BROWSER:
+        return
+    try:
+        import js as _js  # type: ignore
+        _js.console.log("[skybit/py/lb]", *args)
+    except Exception:
+        pass
+
+
 def _resolve() -> None:
+    """Detect the JS bridge's readiness.
+
+    Earlier versions used ``hasattr(js, "openNameEntry")`` which was
+    unreliable in pygbag 0.9.x (CPython's `js` proxy doesn't always
+    return False from hasattr the way Pyodide does). Browser-side
+    diagnostic confirmed the bridge IS wired up but ``_dispatcherReady``
+    stayed False, so ``fetch_top10`` returned ``[]`` without ever
+    invoking ``__sk('fetch')``.
+
+    New strategy: pull `platform.window.__sk` via ``getattr`` (no
+    hasattr-style detection) and probe by calling it with an unknown
+    action — the dispatcher returns ``null`` for any action it doesn't
+    know, so a successful return proves the bridge is callable."""
     global _dispatcherReady, _openNameEntry
     if _dispatcherReady:
         return
     try:
-        import js  # type: ignore
-        if hasattr(js, "openNameEntry"):
-            _openNameEntry = js.openNameEntry
-            _dispatcherReady = True
-            return
-    except Exception:
-        pass
-    try:
         import platform as _pgb  # type: ignore
-        if hasattr(_pgb, "window") and hasattr(_pgb.window, "openNameEntry"):
-            _openNameEntry = _pgb.window.openNameEntry
-            _dispatcherReady = True
-    except Exception:
-        pass
+        win = getattr(_pgb, "window", None)
+        if win is None:
+            _pylog("_resolve: platform.window is None")
+            return
+        sk = getattr(win, "__sk", None)
+        if sk is None:
+            _pylog("_resolve: window.__sk not found")
+            return
+        # Probe: dispatch returns null for any unknown action. Reaching
+        # the next line proves __sk is callable from Python.
+        sk("__probe__")
+        _openNameEntry = getattr(win, "openNameEntry", None)
+        _dispatcherReady = True
+        _pylog("_resolve: bridge ready (openNameEntry=" +
+               ("yes" if _openNameEntry is not None else "no") + ")")
+    except Exception as e:
+        _pylog("_resolve: exception: " + type(e).__name__ + ": " + str(e)[:120])
 
 
 def _to_json(payload: dict) -> str:
@@ -212,25 +242,39 @@ async def fetch_top10() -> list:
         _resolve()
         if not _dispatcherReady:
             _last_fetch_error = "bridge"
+            _pylog("fetch_top10: bridge not ready, returning []")
             return []
         try:
             import asyncio, json as _json
             import js as _js  # type: ignore
             import platform as _p  # type: ignore
+            _pylog("fetch_top10: calling __sk('fetch')")
             _p.window.__sk("fetch")
-            while True:
+            tries = 0
+            while tries < 200:  # 200 * 0.05s = 10s timeout
                 v = _p.window.__sk("fetch_done")
                 if v is not None:
-                    data = _json.loads(_js.JSON.stringify(v))
+                    try:
+                        data = _json.loads(_js.JSON.stringify(v))
+                    except Exception as parse_err:
+                        _pylog("fetch_top10: JSON parse failed: " + str(parse_err)[:120])
+                        _last_fetch_error = "parse"
+                        return []
                     try:
                         err = _p.window.__sk("fetch_error")
                         _last_fetch_error = str(err) if err else ""
                     except Exception:
                         _last_fetch_error = ""
+                    _pylog("fetch_top10: got " + str(len(data)) + " rows from JS bridge")
                     return [{"name": str(e["name"]), "score": int(e["score"])} for e in data]
+                tries += 1
                 await asyncio.sleep(0.05)
-        except Exception:
-            _last_fetch_error = "exception"
+            _pylog("fetch_top10: timeout waiting for fetch_done after 10s")
+            _last_fetch_error = "timeout"
+            return []
+        except Exception as e:
+            _pylog("fetch_top10: exception: " + type(e).__name__ + ": " + str(e)[:120])
+            _last_fetch_error = "exception:" + type(e).__name__
             return []
     else:
         return _native_fetch()

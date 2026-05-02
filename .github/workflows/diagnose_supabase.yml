@@ -1,12 +1,13 @@
 name: Diagnose Supabase leaderboard
 
 on:
-  push:
+  # Run AFTER the Pages deploy completes so we test the live deployed site,
+  # not whatever was deployed before our push. workflow_run on a non-default
+  # branch needs explicit `branches:`.
+  workflow_run:
+    workflows: ["Deploy to GitHub Pages"]
+    types: [completed]
     branches: [v3_skybit_loading]
-    paths:
-      - "tools/diagnose_supabase.py"
-      - "tools/diagnose_browser.py"
-      - ".github/workflows/diagnose_supabase.yml"
   workflow_dispatch:
 
 permissions:
