@@ -87,7 +87,7 @@ def _get_kfc_sprite() -> "pygame.Surface":
 
 # ── GHOST power-up sprite (procedural, cached on first draw) ────────────────
 # Holographic foil body (diagonal pearl-pink → cyan → mint → ivory) inside a
-# 2-px premium navy outline ring + crisp eyes + soft sheen.
+# 0.5-px black hairline outline + crisp eyes + soft sheen.
 _ghost_sprite: "pygame.Surface | None" = None
 _GHOST_HEAD_OFFSET_X = 16   # head-circle centre x in the sprite
 _GHOST_HEAD_OFFSET_Y = 14   # head-circle centre y in the sprite
@@ -141,9 +141,13 @@ def _get_ghost_sprite() -> "pygame.Surface":
     # Left side back up to head's leftmost point
     perimeter.append((gcx - hr, gcy))
 
-    OUTLINE_COLOR = (40, 50, 90)
-    THICKNESS_PX  = 2
-    t_big = THICKNESS_PX * SS
+    OUTLINE_COLOR = (0, 0, 0)
+    # 0.5-px hairline. SS=16 means t_big=8 super-pixels = exactly 0.5 final
+    # pixels of visible outline (line stroke runs both sides of the
+    # perimeter; the inner half is covered by the gradient blit below, so
+    # only the outer half is visible).
+    THICKNESS_PX  = 0.5
+    t_big = int(THICKNESS_PX * SS)
 
     # 1) Outline ring — stroke each perimeter edge as a thick line, plus a
     #    circle at every vertex so corners join cleanly without gaps. This
