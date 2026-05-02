@@ -5,6 +5,7 @@ on:
     branches: [v3_skybit_loading]
     paths:
       - "tools/diagnose_supabase.py"
+      - "tools/diagnose_browser.py"
       - ".github/workflows/diagnose_supabase.yml"
   workflow_dispatch:
 
@@ -22,24 +23,33 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Run diagnostic
-        id: diag
+      - name: Run network diagnostic
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          python tools/diagnose_supabase.py | tee diag.md
-          echo
-          echo "---"
-          echo "(End of diagnostic. Comment posted to issue #2.)"
+          python tools/diagnose_supabase.py | tee net.md
 
-      - name: Post result as comment on tracking issue
+      - name: Install Playwright (chromium only)
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Run browser diagnostic
+        run: |
+          python tools/diagnose_browser.py | tee browser.md
+
+      - name: Post combined result as comment on tracking issue
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           {
             echo "Run: \`${{ github.run_id }}\` on commit \`${{ github.sha }}\`"
             echo
-            cat diag.md
+            cat net.md
+            echo
+            echo "---"
+            echo
+            cat browser.md
           } > comment.md
           gh issue comment 2 --repo ${{ github.repository }} --body-file comment.md
