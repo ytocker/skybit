@@ -169,15 +169,17 @@ class App:
 
         Sets a brief cooldown so the same physical tap that triggered the
         skip can't echo into the now-MENU state and immediately call
-        ``_start_play``. Without this, the user reports the cinematic
-        "skips" but the menu is invisible — they actually saw it for
-        one frame before the second event in the same gesture started
-        the game. Mirror of the STATE_LEADERBOARD → MENU pattern."""
+        ``_start_play``. 0.6 s covers:
+          - SDL FINGERDOWN → MOUSEBUTTONDOWN echo (~tens of ms)
+          - browser DOM keydown auto-repeat (first repeat at ~500 ms)
+          - a fast double-tap by an impatient player
+
+        Mirror of the STATE_LEADERBOARD → MENU pattern in ``_flap_input``."""
         if self.intro is not None:
             self.intro.skip()
         self.intro = None
         self.state = STATE_MENU
-        self._cooldown_t = 0.4
+        self._cooldown_t = 0.6
 
     def _restart(self):
         # Same contract as `_start_play`: the tap that triggered the
