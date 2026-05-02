@@ -469,6 +469,11 @@ body   { background: #0d0820 !important; }
     var rSubmit = null;
     var rFetch  = null;
     var rLog    = null;
+    /* Parallel error string for fetch_top10. Empty string = no error
+       (fetch is fine and returned 0 rows OR a populated array). Non-
+       empty = a specific failure mode the Python side can render to the
+       canvas so the user sees something other than a silent empty list. */
+    var rFetchError = '';
 
     /* Replay defense: each run_id can submit exactly once per page load.
        Combined with the per-page-load handshake this means a captured
@@ -575,9 +580,11 @@ body   { background: #0d0820 !important; }
 
     async function doFetch() {
         rFetch = null;
+        rFetchError = '';
         try {
             if (!a || !b) {
                 console.error('[skybit/lb] Supabase URL or KEY is empty — leaderboard cannot fetch.', {hasUrl: !!a, hasKey: !!b});
+                rFetchError = 'config missing';
                 rFetch = []; return;
             }
             /* Pull a wider slice and apply the plausibility ceiling
@@ -592,6 +599,7 @@ body   { background: #0d0820 !important; }
                 var bodyText = '';
                 try { bodyText = await r.text(); } catch (_) {}
                 console.error('[skybit/lb] fetch not ok:', r.status, r.statusText, '-', bodyText.slice(0, 200));
+                rFetchError = 'http ' + r.status;
                 rFetch = []; return;
             }
             var rows = await r.json();
@@ -605,9 +613,18 @@ body   { background: #0d0820 !important; }
                 filtered.push({name: nm, score: sc});
             }
             console.log('[skybit/lb] fetched', rows.length, 'rows;', filtered.length, 'after filter');
+            /* 200 OK with zero rows is the classic RLS-without-policy
+               signature on Supabase — surface it so the leaderboard
+               scene can show "Top-10 unavailable" instead of an empty
+               list (silent empty looked identical to "no scores yet"
+               and made the regression invisible). */
+            if (rows.length === 0) {
+                rFetchError = 'rls or empty';
+            }
             rFetch = filtered;
         } catch (e) {
             console.error('[skybit/lb] fetch threw:', e && e.message || e);
+            rFetchError = 'network';
             rFetch = [];
         }
     }
@@ -651,6 +668,7 @@ body   { background: #0d0820 !important; }
             case 'submit_done':  return rSubmit;
             case 'fetch':        doFetch(); return null;
             case 'fetch_done':   return rFetch;
+            case 'fetch_error':  return rFetchError;
             case 'log':          doLog(payload); return null;
             case 'log_done':     return rLog;
             default:             return null;

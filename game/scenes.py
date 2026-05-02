@@ -91,6 +91,13 @@ class App:
         # Leaderboard state
         self._lb_scores: list = []
         self._lb_player_rank = -1
+        # Last browser-side fetch error code (empty when the fetch
+        # succeeded, even if it returned zero rows from a brand-new
+        # database). Set by _on_name_submitted / _show_leaderboard_native
+        # before flipping to STATE_LEADERBOARD; rendered by the scene
+        # when scores is empty so a network/RLS failure doesn't look
+        # like "no scores yet."
+        self._lb_fetch_error: str = ""
         self._start_name_entry = False
         self._fetch_pending = False
         self._final_score = 0
@@ -368,6 +375,7 @@ class App:
         try:
             from game import leaderboard
             scores = await leaderboard.fetch_top10()
+            self._lb_fetch_error = leaderboard.last_fetch_error()
             if self._qualifies_for_top10(scores, self._final_score):
                 # Now we know they qualify — flip to NAMEENTRY so the
                 # Python-side render and the JS overlay both come up
@@ -378,6 +386,7 @@ class App:
                 if name:
                     await leaderboard.submit(name, self.world)
                     scores = await leaderboard.fetch_top10()
+                    self._lb_fetch_error = leaderboard.last_fetch_error()
                     self._lb_player_rank = next(
                         (i for i, e in enumerate(scores) if e["score"] == self._final_score),
                         -1,
@@ -584,6 +593,7 @@ class App:
                 self.screen, 1 / 60,
                 self._lb_scores, self._lb_player_rank,
                 self._cooldown_t,
+                fetch_error=self._lb_fetch_error,
             )
         else:  # GAMEOVER
             self.hud.draw_gameover(

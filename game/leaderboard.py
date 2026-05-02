@@ -28,6 +28,19 @@ _IS_BROWSER = sys.platform == "emscripten"
 _dispatcherReady = False
 _openNameEntry = None
 
+# Set by fetch_top10() after each browser-side fetch. Empty string means
+# the fetch was successful (whether or not it returned rows). Non-empty
+# means a specific failure mode the leaderboard scene can render to the
+# canvas so the user sees something other than a silent empty list. See
+# inject_theme.py's doFetch() for the values produced ("config missing",
+# "http NNN", "rls or empty", "network").
+_last_fetch_error: str = ""
+
+
+def last_fetch_error() -> str:
+    """Read-only accessor for the last browser fetch's error code."""
+    return _last_fetch_error
+
 
 def _resolve() -> None:
     global _dispatcherReady, _openNameEntry
@@ -187,10 +200,18 @@ async def submit(name: str, world) -> bool:
 
 async def fetch_top10() -> list:
     """GET top-10 scores. Browser: ``__sk('fetch')`` → Supabase fetch +
-    client-side plausibility filter. Native: local JSON."""
+    client-side plausibility filter. Native: local JSON.
+
+    On the browser path, also captures any fetch error code into the
+    module-level ``_last_fetch_error`` so the leaderboard scene can
+    render a "Top-10 unavailable" line instead of a silent empty list
+    when the network/auth/RLS path fails."""
+    global _last_fetch_error
+    _last_fetch_error = ""
     if _IS_BROWSER:
         _resolve()
         if not _dispatcherReady:
+            _last_fetch_error = "bridge"
             return []
         try:
             import asyncio, json as _json
@@ -201,9 +222,15 @@ async def fetch_top10() -> list:
                 v = _p.window.__sk("fetch_done")
                 if v is not None:
                     data = _json.loads(_js.JSON.stringify(v))
+                    try:
+                        err = _p.window.__sk("fetch_error")
+                        _last_fetch_error = str(err) if err else ""
+                    except Exception:
+                        _last_fetch_error = ""
                     return [{"name": str(e["name"]), "score": int(e["score"])} for e in data]
                 await asyncio.sleep(0.05)
         except Exception:
+            _last_fetch_error = "exception"
             return []
     else:
         return _native_fetch()
