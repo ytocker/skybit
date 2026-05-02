@@ -76,8 +76,11 @@ HAT_PALETTE_DEFAULT = {
     "dark":    (160, 100,  20),  # GOLD_DK
     "band_dk": ( 35,  20,   8),
     "band_hi": ( 85,  55,  20),
-    "dollar":  ( 75, 165, 105),  # BILL_GREEN
-    "dollar_dk": ( 40, 110,  70),
+    "dollar":     ( 75, 165, 105),  # BILL_GREEN
+    "dollar_dk":  ( 40, 110,  70),
+    "dollar_hi":  (140, 220, 170),  # subtle inner highlight
+    "spot":       None,
+    "spot_hi":    None,
 }
 HAT_PALETTE_KFC = {
     # Crispy fried-chicken tones — warm oranges/browns that match the
@@ -89,11 +92,15 @@ HAT_PALETTE_KFC = {
     "band_dk": ( 65,  35,  10),
     "band_hi": (130,  80,  25),
     # KFC red `$` instead of green — matches the KFC brand on a fried hat.
-    "dollar":    (220,  35,  30),
-    "dollar_dk": (130,  15,  10),
-    # Spot/bump tones for the fried-batter texture.
-    "spot":      ( 95,  55,  15),
-    "spot_hi":   (240, 195, 110),
+    # Brighter than first attempt so it actually pops against the warm hat
+    # body; deepened outline anchors the rim.
+    "dollar":     (245,  80,  50),
+    "dollar_dk":  (110,  10,   5),
+    "dollar_hi":  (255, 200, 180),
+    # Spot/bump tones for the fried-batter texture — high contrast vs.
+    # the cylinder so they actually read at the 32-px native scale.
+    "spot":       ( 75,  40,   5),
+    "spot_hi":    (245, 200, 130),
 }
 HAT_PALETTE_GHOST = {
     # Spectral cyans that match the ghost bird's body palette.
@@ -103,9 +110,11 @@ HAT_PALETTE_GHOST = {
     "dark":    ( 55, 105, 155),
     "band_dk": ( 25,  55,  95),
     "band_hi": ( 90, 140, 180),
-    # Spectral cyan-white `$` matching the ghost bird's cool palette.
-    "dollar":    (235, 250, 255),
-    "dollar_dk": ( 60, 110, 155),
+    # Pure white `$` reads cleanly against the cyan hat body. Cool dark
+    # cyan outline anchors it without going green.
+    "dollar":    (255, 255, 255),
+    "dollar_dk": ( 35,  75, 120),
+    "dollar_hi": (180, 220, 250),
     "spot":      None,   # ghost hat has no fried texture
     "spot_hi":   None,
 }
@@ -153,25 +162,25 @@ def _draw_crown_cylinder_themed(surf, hx, hy, half_w, height, P):
 
 
 def _draw_fried_bumps(surf, hx, hy, crown_half, crown_h, P):
-    """Two small darker batter spots on the cylinder face — matches the
-    KFC bird's spotty fried-chicken texture. Tiny highlight on each gives
-    the bumps a touch of dimension."""
+    """Two darker batter spots on the cylinder face — matches the KFC
+    bird's spotty fried-chicken texture. Sized 5×4 with a 2×2 highlight
+    so they actually read at the 32-px hat scale."""
     if P.get("spot") is None:
         return
-    # Bump 1 — top-left of the cylinder, well clear of the `$` zone.
-    b1_cx = hx - crown_half + 3
-    b1_cy = hy - crown_h + 8
+    # Bump 1 — top-left of the cylinder, clear of the `$` zone.
+    b1_cx = hx - crown_half + 4
+    b1_cy = hy - crown_h + 9
     pygame.draw.ellipse(surf, P["spot"],
-                        (b1_cx - 2, b1_cy - 1, 4, 3))
-    pygame.draw.line(surf, P["spot_hi"], (b1_cx - 1, b1_cy - 1),
-                     (b1_cx, b1_cy - 1), 1)
+                        (b1_cx - 2, b1_cy - 2, 5, 4))
+    pygame.draw.rect(surf, P["spot_hi"],
+                     (b1_cx - 1, b1_cy - 2, 2, 2))
     # Bump 2 — bottom-right, just above the band.
-    b2_cx = hx + crown_half - 4
-    b2_cy = hy - 7
+    b2_cx = hx + crown_half - 5
+    b2_cy = hy - 8
     pygame.draw.ellipse(surf, P["spot"],
-                        (b2_cx - 2, b2_cy - 1, 4, 3))
-    pygame.draw.line(surf, P["spot_hi"], (b2_cx - 1, b2_cy - 1),
-                     (b2_cx, b2_cy - 1), 1)
+                        (b2_cx - 2, b2_cy - 2, 5, 4))
+    pygame.draw.rect(surf, P["spot_hi"],
+                     (b2_cx - 1, b2_cy - 2, 2, 2))
 
 
 def _draw_stovepipe_themed(surf, hx, hy, P):
@@ -182,19 +191,26 @@ def _draw_stovepipe_themed(surf, hx, hy, P):
     _draw_fried_bumps(surf, hx, hy, crown_half, crown_h, P)
     _draw_brim_themed(surf, hx, hy, half_w=17, P=P)
 
-    # `$` glyph on the crown — themed colour per palette.
+    # `$` glyph on the crown — themed colour per palette. Order:
+    # (1) outline 8-direction stamps,
+    # (2) body fill,
+    # (3) tiny highlight stamp offset up-left so the glyph doesn't
+    #     blend into a similar-tone hat body at native scale.
     import pathlib as _pl
     fpath = str(_pl.Path(__file__).resolve().parent.parent
                 / "game" / "assets" / "LiberationSans-Bold.ttf")
     f = pygame.font.Font(fpath, 18)
     body = f.render("$", True, P["dollar"])
     edge = f.render("$", True, P["dollar_dk"])
+    hi   = f.render("$", True, P["dollar_hi"])
+    hi.set_alpha(160)
     cy = hy - crown_h // 2 - 1
     rect = body.get_rect(center=(hx, cy))
     for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1),
                    (-1, -1), (1, -1), (-1, 1), (1, 1)):
         surf.blit(edge, (rect.x + dx, rect.y + dy))
     surf.blit(body, rect.topleft)
+    surf.blit(hi, (rect.x - 1, rect.y - 1))
 
 
 def _stovepipe_kfc(surf, hx, hy):
