@@ -163,19 +163,6 @@ class App:
         self.world.flap()
         self.state = STATE_PLAY
 
-    def _pylog(self, *args) -> None:
-        """Browser-only console.log helper. Tagged so the Playwright
-        diagnostic in tools/diagnose_browser.py can grep these lines
-        out of the captured console transcript."""
-        try:
-            import sys as _sys
-            if _sys.platform != "emscripten":
-                return
-            import js as _js  # type: ignore
-            _js.console.log("[skybit/py/scenes]", *args)
-        except Exception:
-            pass
-
     def _finish_intro(self):
         """Hand off to the menu. Called on auto-completion or skip. The
         intro is dropped so this session won't render it again.
@@ -188,7 +175,6 @@ class App:
           - a fast double-tap by an impatient player
 
         Mirror of the STATE_LEADERBOARD → MENU pattern in ``_flap_input``."""
-        self._pylog("STATE_INTRO -> STATE_MENU at frame " + str(getattr(self, "_frame_n", -1)))
         if self.intro is not None:
             self.intro.skip()
         self.intro = None
@@ -231,28 +217,11 @@ class App:
             pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP,
             pygame.FINGERDOWN, pygame.FINGERUP,
         )
-        # Frame counter exposed on self so _finish_intro can include it.
-        self._frame_n = -1
-        self._pylog("async_run start; consume_first=" + str(consume_first))
         while self._running:
-            self._frame_n += 1
             dt = min(self.clock.tick(FPS) / 1000.0, 1 / 20.0)
             for e in pygame.event.get():
-                if e.type in _SYNTHETIC_TYPES:
-                    if consume_first:
-                        self._pylog(
-                            "frame " + str(self._frame_n) + ": DROPPED " +
-                            pygame.event.event_name(e.type) + " (consume_first)"
-                        )
-                        continue
-                    if self._frame_n < 6:
-                        # Only log the first handful so the captured console
-                        # stays readable; later events flow silently.
-                        self._pylog(
-                            "frame " + str(self._frame_n) +
-                            " (state=" + str(self.state) + "): processing " +
-                            pygame.event.event_name(e.type)
-                        )
+                if consume_first and e.type in _SYNTHETIC_TYPES:
+                    continue
                 self._handle_event(e)
             consume_first = False
             self._update(dt)
