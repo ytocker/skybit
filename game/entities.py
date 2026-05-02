@@ -412,8 +412,13 @@ def _get_coin_face() -> pygame.Surface:
     if _COIN_FACE_CACHE is not None:
         return _COIN_FACE_CACHE
     SS = 8
-    final_d = COIN_R * 2 + 4
+    # Cache at 4x display so the per-frame spin smoothscale is the AA pass.
+    DISPLAY_D = COIN_R * 2 + 4
+    CACHE_MUL = 4
+    final_d = DISPLAY_D * CACHE_MUL
     size = final_d * SS
+    # U scales the parrot with the cache; SS stays for 1-px AA margins only.
+    U = SS * CACHE_MUL
     surf = pygame.Surface((size, size), pygame.SRCALPHA)
     cx = cy = size // 2
     r_outer = size // 2 - SS
@@ -488,44 +493,44 @@ def _get_coin_face() -> pygame.Surface:
 
     # Body — oval, slightly elongated horizontally.
     pygame.draw.ellipse(surf, EMBOSS,
-                        (cx - 2 * SS, cy - 1 * SS, 7 * SS, 5 * SS))
+                        (cx - 2 * U, cy - 1 * U, 7 * U, 5 * U))
 
     # Tail — tapered fan extending right past the body.
     pygame.draw.polygon(surf, EMBOSS,
-                        [(cx + 4 * SS, cy + 0 * SS),
-                         (cx + 7 * SS, cy + 1 * SS),
-                         (cx + 6 * SS, cy + 3 * SS),
-                         (cx + 4 * SS, cy + 2 * SS)])
+                        [(cx + 4 * U, cy + 0 * U),
+                         (cx + 7 * U, cy + 1 * U),
+                         (cx + 6 * U, cy + 3 * U),
+                         (cx + 4 * U, cy + 2 * U)])
 
     # Wing — darker tucked shape on the body (lower-right of body),
     # suggests a folded wing in flight.
     pygame.draw.polygon(surf, EMBOSS_DK,
-                        [(cx + 0 * SS, cy + 0 * SS),
-                         (cx + 3 * SS, cy + 0 * SS),
-                         (cx + 4 * SS, cy + 2 * SS),
-                         (cx + 1 * SS, cy + 3 * SS)])
+                        [(cx + 0 * U, cy + 0 * U),
+                         (cx + 3 * U, cy + 0 * U),
+                         (cx + 4 * U, cy + 2 * U),
+                         (cx + 1 * U, cy + 3 * U)])
 
     # Head — circle, upper-left.
-    head_cx, head_cy = cx - 1 * SS, cy - 3 * SS
-    pygame.draw.circle(surf, EMBOSS, (head_cx, head_cy), 3 * SS)
+    head_cx, head_cy = cx - 1 * U, cy - 3 * U
+    pygame.draw.circle(surf, EMBOSS, (head_cx, head_cy), 3 * U)
 
     # Beak — main hooked triangle pointing left.
     pygame.draw.polygon(surf, EMBOSS,
-                        [(cx - 3 * SS, cy - 3 * SS),
-                         (cx - 6 * SS, cy - 2 * SS),
-                         (cx - 3 * SS, cy - 1 * SS)])
+                        [(cx - 3 * U, cy - 3 * U),
+                         (cx - 6 * U, cy - 2 * U),
+                         (cx - 3 * U, cy - 1 * U)])
     # Beak shadow — small darker wedge under the hook for curvature.
     pygame.draw.polygon(surf, EMBOSS_DK,
-                        [(cx - 5 * SS, cy - 2 * SS),
-                         (cx - 6 * SS, cy - 2 * SS),
-                         (cx - 4 * SS, cy - 1 * SS)])
+                        [(cx - 5 * U, cy - 2 * U),
+                         (cx - 6 * U, cy - 2 * U),
+                         (cx - 4 * U, cy - 1 * U)])
 
     # Eye — small bright dot on the head (replaces the original
     # floating "highlight" with a positioned eye that gives the bird
     # a face).
     pygame.draw.circle(surf, GOLD_HI,
-                       (head_cx + SS // 2, head_cy - SS // 2),
-                       max(1, SS // 2))
+                       (head_cx + U // 2, head_cy - U // 2),
+                       max(1, U // 2))
 
     # 5) Specular highlight crescent on the upper-left, masked to body.
     hl = pygame.Surface((size, size), pygame.SRCALPHA)
@@ -585,9 +590,10 @@ class Coin:
         r = COIN_R
         squeeze = max(0.10, abs(cos_s))
         face = _get_coin_face()
-        fw, fh = face.get_size()
-        target_w = max(2, int(fw * squeeze))
-        squeezed = pygame.transform.smoothscale(face, (target_w, fh))
+        # Source is 4x display; downsample target is on-screen size, not face size.
+        display_h = COIN_R * 2 + 4
+        display_w = max(2, int(display_h * squeeze))
+        squeezed = pygame.transform.smoothscale(face, (display_w, display_h))
         rect = squeezed.get_rect(center=(cx, cy))
         surf.blit(squeezed, rect.topleft)
 
