@@ -940,10 +940,28 @@ if _problems:
 
 print("✓ Skybit theme injected into build/web/index.html")
 print(f"  ({_color_subs} color replacements matched)")
-if _SB_URL:
+if _SB_URL and _SB_KEY:
     print(f"✓ Supabase URL set: {_SB_URL[:40]}...")
+elif _SB_URL or _SB_KEY:
+    # Half-set is a misconfiguration -- fail the build so the deploy
+    # owner notices, rather than shipping a leaderboard that 401s.
+    missing = "SUPABASE_ANON_KEY" if _SB_URL else "SUPABASE_URL"
+    print(
+        f"✗ {missing} is missing while the other Supabase env var is set. "
+        "Both must be configured as repository secrets for the leaderboard "
+        "to work. Aborting.",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
 else:
-    print("⚠ SUPABASE_URL not set — leaderboard will be disabled")
+    print(
+        "⚠⚠⚠ SUPABASE_URL and SUPABASE_ANON_KEY are both missing.\n"
+        "    The leaderboard will be EMPTY in the deployed site.\n"
+        "    Set them as repository secrets at:\n"
+        "      Settings → Secrets and variables → Actions → New repository secret\n"
+        "    Build is continuing because some deploys (e.g. local previews) intentionally\n"
+        "    skip the leaderboard, but production deploys MUST set these."
+    )
 
 # ── 4. Copy CC0 sound files to build/web/sounds/ for browser fetch ──────────
 # Native pygame.mixer reads them straight from game/assets/sounds/. The
