@@ -62,6 +62,9 @@ OVERLAY = """
   <p class="skybit-title">SKYBIT</p>
   <p class="skybit-sub">Pocket Sky Flyer</p>
   <div id="skybit-btn" class="tap-btn">TAP &nbsp;&middot;&nbsp; CLICK &nbsp;&middot;&nbsp; SPACE</div>
+  <div class="skybit-progress" aria-hidden="true">
+    <div id="skybit-progress-fill" class="skybit-progress-fill"></div>
+  </div>
   <p id="skybit-status" class="skybit-status"></p>
   <svg class="mountains" viewBox="0 0 1440 200" preserveAspectRatio="none"
        xmlns="http://www.w3.org/2000/svg">
@@ -210,6 +213,43 @@ body   { background: #0d0820 !important; }
 @keyframes pulse-btn {
     0%, 100% { opacity: 0.70; transform: scale(1.00); }
     50%       { opacity: 1.00; transform: scale(1.07); }
+}
+
+/* Smooth themed progress bar (replaces pygbag's chunky default).
+   Width is animated via CSS transition so each JS update glides
+   instead of snapping. Time-based ease-out keeps motion alive
+   while WASM downloads, then jumps to 100% on real boot. */
+.skybit-progress {
+    position: relative;
+    width: clamp(180px, 56vw, 340px);
+    height: 4px;
+    margin: 22px 0 0;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 2px;
+    overflow: hidden;
+    pointer-events: none;
+}
+.skybit-progress-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #b88a2e 0%, #f0c040 50%, #fff0b0 100%);
+    border-radius: inherit;
+    transition: width 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+    box-shadow: 0 0 10px rgba(240, 192, 64, 0.55);
+}
+.skybit-progress-fill.skybit-progress-stalled {
+    background: linear-gradient(90deg, #6a3a1a 0%, #a85a2a 100%);
+    box-shadow: 0 0 8px rgba(168, 90, 42, 0.45);
+    animation: stall-shimmer 1.6s ease-in-out infinite;
+}
+@keyframes stall-shimmer {
+    0%, 100% { opacity: 0.55; }
+    50%       { opacity: 1.00; }
+}
+
+/* Hide pygbag's own progress chrome — we draw our own above. */
+#progress, progress, .progress, #status, #transcript {
+    display: none !important;
 }
 
 /* Loading watchdog status line (filled in by JS once stalled) */
@@ -744,11 +784,19 @@ body   { background: #0d0820 !important; }
     if (ov) {
         var btn    = document.getElementById('skybit-btn');
         var status = document.getElementById('skybit-status');
+        var fill   = document.getElementById('skybit-progress-fill');
         var BTN_READY  = 'TAP  ·  CLICK  ·  SPACE';
         var BTN_LOAD   = 'LOADING…';
         var BTN_RELOAD = 'TAP TO RELOAD';
         var STALL_MS   = 25000;
         var INFO_MS    =  8000;
+        /* Asymptote target while WASM is still downloading. We never let
+           the bar reach 100 % from time alone — only a real `window.MM`
+           boot snaps it there. Time-constant chosen so the bar reaches
+           ~63 % at 6 s, ~86 % at 12 s, ~95 % at 18 s. The CSS transition
+           on .skybit-progress-fill smooths each sample into a glide. */
+        var ASYMPTOTE  = 0.92;
+        var TAU_MS     = 6000;
         var t0 = Date.now();
         var pygbagReady = false;
         var stalled = false;
@@ -760,20 +808,35 @@ body   { background: #0d0820 !important; }
             catch (_) { return false; }
         }
 
+        function setFill(pct) {
+            if (!fill) return;
+            if (pct < 0) pct = 0;
+            if (pct > 100) pct = 100;
+            fill.style.width = pct.toFixed(2) + '%';
+        }
+
         var pollId = setInterval(function () {
             if (isReady() && !pygbagReady) {
                 pygbagReady = true;
                 stalled = false;
                 if (btn) btn.textContent = BTN_READY;
                 if (status) status.textContent = '';
+                if (fill) fill.classList.remove('skybit-progress-stalled');
+                setFill(100);
                 return;
             }
             if (pygbagReady) return;
             var elapsed = Date.now() - t0;
+            /* 1 - exp(-t/τ) climbs fast then asymptotes — the bar always
+               looks alive even on slow networks, and the CSS transition
+               glides between samples so updates never snap. */
+            var pct = ASYMPTOTE * (1 - Math.exp(-elapsed / TAU_MS)) * 100;
+            setFill(pct);
             if (elapsed >= STALL_MS && !stalled) {
                 stalled = true;
                 if (btn) btn.textContent = BTN_RELOAD;
                 if (status) status.textContent = 'Loading is stuck. Tap to reload.';
+                if (fill) fill.classList.add('skybit-progress-stalled');
             } else if (elapsed >= INFO_MS && status && !stalled) {
                 status.textContent = 'Loading… ' + Math.floor(elapsed / 1000) + 's';
             }
