@@ -352,13 +352,6 @@ class App:
                 # Defensive: should never happen, but recover gracefully.
                 self._finish_intro()
                 return
-            # Tick the same cooldown the STATE_MENU / STATE_LEADERBOARD
-            # branches below tick. The STATE_INTRO branch of _flap_input
-            # gates on it to ignore the leaked-overlay-tap MOUSEBUTTONDOWN
-            # that lands in the very first frame(s) of async_run; without
-            # this decrement the gate would stay closed for the entire
-            # intro and the user could never tap to skip.
-            self._cooldown_t = max(0.0, self._cooldown_t - dt)
             self.intro.update(dt)
             if self.intro.done:
                 self._finish_intro()
