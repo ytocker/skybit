@@ -851,7 +851,7 @@ class HUD:
             size=18, alpha=255, min_width=200)
 
     def draw_leaderboard(self, surf, dt, scores: list, player_rank: int,
-                         cooldown: float):
+                         cooldown: float, fetch_error: str = ""):
         self.title_t += dt
         dim = pygame.Surface((W, H), pygame.SRCALPHA)
         dim.fill((0, 0, 20, 200))
@@ -873,10 +873,21 @@ class HUD:
 
         n = len(scores)
         if n == 0:
-            _text(surf, "No scores yet!", (W // 2, card_y + 60),
-                  size=18, color=UI_CREAM, shadow=True)
-            _text(surf, "Be the first.", (W // 2, card_y + 94),
-                  size=14, color=UI_CREAM, shadow=False)
+            # Distinguish "table is genuinely empty" from "fetch failed":
+            # an unreachable Supabase / RLS-without-policy looks identical
+            # to a brand-new database without a friendlier message here.
+            if fetch_error:
+                _text(surf, "Top-10 unavailable", (W // 2, card_y + 60),
+                      size=18, color=UI_CREAM, shadow=True)
+                _text(surf, "Check the browser console", (W // 2, card_y + 94),
+                      size=12, color=UI_CREAM, shadow=False)
+                _text(surf, "(" + fetch_error + ")", (W // 2, card_y + 116),
+                      size=11, color=UI_CREAM, shadow=False)
+            else:
+                _text(surf, "No scores yet!", (W // 2, card_y + 60),
+                      size=18, color=UI_CREAM, shadow=True)
+                _text(surf, "Be the first.", (W // 2, card_y + 94),
+                      size=14, color=UI_CREAM, shadow=False)
         else:
             row_h = 46
             card_h = n * row_h + 14
