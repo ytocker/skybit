@@ -961,31 +961,34 @@ body   { background: #0d0820 !important; }
 
         function dismiss() {
             /* Always unlock the shared audio context on any user gesture --
-               this is the same _ctx that skyPlay() uses later. */
+               this is the same _ctx that skyPlay() uses later. Doing it
+               here (inside the click handler) is the only point at which
+               iOS Safari permits AudioContext.resume(). */
             try { getCtx(); } catch (_) {}
 
             if (stalled) { reloadBust(); return; }
             if (!pygbagReady) { pulseBtn(); return; }
 
             clearInterval(pollId);
+            /* Setting MM.UME alone unblocks pygbag's asyncio main loop.
+               An earlier version also dispatched a synthetic click on
+               the canvas to "make sure," but that click ends up in
+               pygame's event queue as a MOUSEBUTTONDOWN that the game
+               processes as a real input — landing in STATE_INTRO it
+               skips the cinematic, which the user reported as the
+               first tap bypassing the intro. */
             try { if (window.MM) window.MM.UME = true; } catch (_) {}
-            var cv = document.getElementById('canvas');
-            if (cv) {
-                try { cv.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true})); } catch (_) {}
-            }
             ov.removeEventListener('click',      dismiss);
             ov.removeEventListener('touchstart', dismiss);
             ov.removeEventListener('touchend',   dismiss);
-            /* Stay visible (over the canvas) until Python signals first
-               frame is rendered. Pygbag's UME gate satisfaction kicks
-               off interpreter boot + asset extraction + App.__init__,
-               which on a cold load takes a couple of seconds. Without
-               this wait the user sees pygbag's own bare progress bar
-               between Skybit overlay and the rendered intro -- the
-               "separate screen" the user reported. */
+            /* Stay visible (pointer-events stays auto so any further taps
+               are captured by the overlay's now-listenerless DOM and
+               cannot reach the canvas) until Python signals first frame
+               is rendered. Without this wait, the overlay would fade off
+               while pygbag's bare progress display was still visible
+               underneath -- the "separate screen" the user reported. */
             if (btn) btn.textContent = 'STARTING…';
             if (status) status.textContent = '';
-            ov.style.pointerEvents = 'none';
 
             function fade() {
                 ov.style.transition = 'opacity 0.45s ease';
