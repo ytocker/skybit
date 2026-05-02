@@ -508,15 +508,24 @@ body   { background: #0d0820 !important; }
     async function doFetch() {
         rFetch = null;
         try {
-            if (!a || !b) { rFetch = []; return; }
+            if (!a || !b) {
+                console.error('[skybit/lb] Supabase URL or KEY is empty — leaderboard cannot fetch.', {hasUrl: !!a, hasKey: !!b});
+                rFetch = []; return;
+            }
             /* Pull a wider slice and apply the plausibility ceiling
                client-side so a row injected by direct curl with score
                999999 doesn't make it onto the visible top-10. */
+            var url = a + '/rest/v1/scores?select=name,score&order=score.desc&limit=200';
             var r = await fetch(
-                a + '/rest/v1/scores?select=name,score&order=score.desc&limit=200',
+                url,
                 { headers: {'apikey': b, 'Authorization': 'Bearer ' + b} }
             );
-            if (!r.ok) { rFetch = []; return; }
+            if (!r.ok) {
+                var bodyText = '';
+                try { bodyText = await r.text(); } catch (_) {}
+                console.error('[skybit/lb] fetch not ok:', r.status, r.statusText, '-', bodyText.slice(0, 200));
+                rFetch = []; return;
+            }
             var rows = await r.json();
             var filtered = [];
             for (var i = 0; i < rows.length && filtered.length < 10; i++) {
@@ -527,8 +536,12 @@ body   { background: #0d0820 !important; }
                 if (sc < 0 || sc > 10000) continue;
                 filtered.push({name: nm, score: sc});
             }
+            console.log('[skybit/lb] fetched', rows.length, 'rows;', filtered.length, 'after filter');
             rFetch = filtered;
-        } catch (e) { rFetch = []; }
+        } catch (e) {
+            console.error('[skybit/lb] fetch threw:', e && e.message || e);
+            rFetch = [];
+        }
     }
 
     async function doLog(rawPayload) {
