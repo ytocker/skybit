@@ -110,11 +110,11 @@ HAT_PALETTE_GHOST = {
     "dark":    ( 55, 105, 155),
     "band_dk": ( 25,  55,  95),
     "band_hi": ( 90, 140, 180),
-    # Strong pure-blue `$` — green channel pulled down so the glyph
-    # doesn't read as cyan/teal-with-yellow against the cyan hat body.
-    "dollar":    ( 25,  60, 230),
-    "dollar_dk": (  5,  15,  95),
-    "dollar_hi": (110, 150, 245),
+    # Sky-blue `$` (user pick from the light-blue picker round) — sits
+    # firmly in the spectral palette without going teal.
+    "dollar":    (115, 175, 230),
+    "dollar_dk": ( 50,  95, 165),
+    "dollar_hi": (185, 215, 250),
     "spot":      None,   # ghost hat has no fried texture
     "spot_hi":   None,
 }
