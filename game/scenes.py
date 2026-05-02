@@ -118,6 +118,19 @@ class App:
             # Any tap during the cinematic skips it and lands on the menu —
             # the menu is where SKYBIT + the description + the click-to-start
             # prompt live. The intro is recorded as seen so it never replays.
+            #
+            # Cooldown gate mirrors the STATE_MENU and STATE_LEADERBOARD
+            # branches below: a leaked overlay-tap MOUSEBUTTONDOWN (the
+            # dismiss handler dispatches a synthetic click on canvas to
+            # release pygbag's UME gate; SDL's document-level listener
+            # may also pick up the user's real bubble click) arrives in
+            # the very first frame(s) of async_run. Without this gate
+            # the leaked event would skip the intro on the same physical
+            # tap that started loading. _cooldown_t is initialised to
+            # 0.6 s in async_run; it ticks down per frame in the
+            # STATE_INTRO branch of the per-frame update.
+            if self._cooldown_t > 0:
+                return
             self._finish_intro()
             return
         if self.state == STATE_MENU:
@@ -214,70 +227,31 @@ class App:
     async def async_run(self):
         import asyncio
         import sys as _sys
-        self._cooldown_t = 0.0
+        # Initialised non-zero so the STATE_INTRO branch of _flap_input
+        # (and the matching STATE_MENU/STATE_LEADERBOARD branches that
+        # already gate on this) ignores the very first MOUSEBUTTONDOWN
+        # that pygame sees. The loading-overlay's dismiss handler
+        # dispatches a synthetic click on the canvas to release pygbag's
+        # UME gate; SDL queues that click as a MOUSEBUTTONDOWN before
+        # this loop renders anything, and SDL's document-level listener
+        # may also pick up the user's real bubble click on the overlay.
+        # 0.6 s = 36 frames at 60 fps -- comfortable margin for delivery
+        # jitter, short enough that a deliberate user skip-tap during
+        # the intro stays responsive. Mirrors _finish_intro's outgoing
+        # cooldown so both directions of INTRO <-> MENU use the same
+        # value.
+        self._cooldown_t = 0.6
         self._start_name_entry = False
         first_frame_done = False
-        # Browser only: the loading-overlay's dismiss handler dispatches a
-        # synthetic click on the canvas to satisfy pygbag's UME gate, and
-        # that click queues as a MOUSEBUTTONDOWN in pygame's event queue
-        # before this loop has had a chance to render anything. If we let
-        # `_handle_event` route it to `_flap_input` it would skip the
-        # intro before its first frame is ever shown. Drop mouse/touch
-        # events that arrive in the first frame's `pygame.event.get()`;
-        # the user's real subsequent taps land in later frames and
-        # behave normally.
-        _IS_BROWSER = (_sys.platform == "emscripten")
-        _SYNTHETIC_TYPES = (
-            pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP,
-            pygame.FINGERDOWN, pygame.FINGERUP,
-        )
-        # Frame counter exposed on self so _finish_intro can include it.
+        # Frame counter exposed on self so _finish_intro can include it
+        # in its [skybit/py/scenes] log line.
         self._frame_n = -1
-        # Cached `js` module reference so we don't re-import every event.
-        _js_mod = None
-        if _IS_BROWSER:
-            try:
-                import js as _js_mod  # type: ignore
-            except Exception:
-                _js_mod = None
-
-        def _within_consume_window() -> bool:
-            """Browser-only: True iff `window.skybitConsumeMouseUntil`
-            (set by inject_theme.py's dismiss handler) hasn't elapsed
-            yet. Drives a JS-coordinated time-window suppression of
-            synthetic / leaked-bubble mouse events that would otherwise
-            land in `_flap_input` while state is STATE_INTRO and skip
-            the cinematic on the very first user tap."""
-            if _js_mod is None:
-                return False
-            try:
-                until = float(getattr(_js_mod.window, 'skybitConsumeMouseUntil', 0) or 0)
-                now = float(_js_mod.Date.now())
-                return now < until
-            except Exception:
-                return False
-
-        self._pylog("async_run start; is_browser=" + str(_IS_BROWSER))
+        self._pylog("async_run start; is_browser=" +
+                    str(_sys.platform == "emscripten"))
         while self._running:
             self._frame_n += 1
             dt = min(self.clock.tick(FPS) / 1000.0, 1 / 20.0)
             for e in pygame.event.get():
-                if e.type in _SYNTHETIC_TYPES:
-                    if _IS_BROWSER and _within_consume_window():
-                        self._pylog(
-                            "frame " + str(self._frame_n) + ": DROPPED " +
-                            pygame.event.event_name(e.type) +
-                            " (within consume window)"
-                        )
-                        continue
-                    if self._frame_n < 6:
-                        # Only log the first handful so the captured console
-                        # stays readable; later events flow silently.
-                        self._pylog(
-                            "frame " + str(self._frame_n) +
-                            " (state=" + str(self.state) + "): processing " +
-                            pygame.event.event_name(e.type)
-                        )
                 self._handle_event(e)
             self._update(dt)
             self._render()
