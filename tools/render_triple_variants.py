@@ -1,31 +1,32 @@
-"""Five `$` variants in the bold-stamp ↔ neon-glow space.
+"""Five double-bar (cifrão-style) `$` variants for the 3× powerup.
 
-User feedback: "something between 2 (bold stamp) and 5 (neon glow) can
-work, kick up the resolution." All variants use the bundled
-LiberationSans-Bold font (game/assets) and 3× super-sampling, then
-smoothscale down — same approach the in-game coin uses for crisp
-edges.
+User picked V3 (gradient + halo) but wants the dollar sign rendered with
+two vertical bars through the S — the cifrão / classic-cartoon-money
+look. Liberation Sans renders a single-bar `$`, so we composite at 3×
+super-sample: render `S`, draw two vertical bars over it, then
+smoothscale down. Anti-aliasing falls out of the smoothscale step.
 
-Each variant is a draw function with the existing signature:
+All five variants share V3's base treatment (vertical green gradient
+body + medium green halo + 1-px dark outline) — only the bar geometry
+varies. Each is the same draw signature as the existing
+`game.dollar_coin_glyphs.draw_coin_font_bold`:
 
     fn(surf, cx, cy, pulse=0.0)
 
-No coin disc — the glyph stands on its own. Imported by
-`tools/render_triple_gameplay.py`. Does NOT modify any game module.
+Imported by `tools/render_triple_gameplay.py`. Does NOT modify any game
+module.
 """
 import math
 import pathlib
 import pygame
 
 
-# ── Palette ─────────────────────────────────────────────────────────────────
+# ── Palette (same as the V3 picker that the user approved) ──────────────────
 BILL_GREEN_LITE = (130, 220, 150)
 BILL_GREEN      = ( 75, 165, 105)
-BILL_GREEN_MID  = ( 55, 135,  85)
 BILL_GREEN_DK   = ( 25,  85,  55)
 BILL_GREEN_DEEP = ( 12,  50,  30)
 NEON_HALO       = (110, 240, 160)
-NEAR_BLACK      = ( 12,  16,  22)
 WHITE           = (255, 255, 255)
 
 
@@ -44,37 +45,61 @@ def _bold_font(size):
     return f
 
 
-# ── Crisp-glyph helpers ─────────────────────────────────────────────────────
-GLYPH_SIZE = 30                # final on-screen height
+GLYPH_SIZE = 30                # final on-screen S height
 SS         = 3                 # super-sample factor for crisp edges
 
 
-def _crisp_glyph(text, size, color):
-    """Render `text` at 3× resolution then smoothscale to `size`. Final
-    glyph is anti-aliased and noticeably sharper than rendering at `size`
-    directly, because the SDL hinter has more sub-pixel grid to work with."""
-    big = _bold_font(size * SS).render(text, True, color)
-    bw, bh = big.get_size()
-    return pygame.transform.smoothscale(big, (bw // SS, bh // SS))
+def _double_bar_dollar(size, color,
+                        bar_w_frac=0.08,
+                        bar_extend_frac=0.16,
+                        bar_offset_frac=0.0,
+                        bar_top_highlight=False):
+    """Render an `S` glyph at 3× SS, then composite two vertical bars
+    over it to make a cifrão-style double-bar dollar sign. Smoothscale to
+    `size`-relative final resolution.
+
+    bar_w_frac        — bar thickness as fraction of S width (0.08 → ~thin)
+    bar_extend_frac   — how far bars extend above/below S, as fraction of S height
+    bar_offset_frac   — +ve = bars wider apart, -ve = bars closer to centre
+    bar_top_highlight — if True, draw a light cap at the top of each bar
+    """
+    big_s = _bold_font(size * SS).render("S", True, color)
+    sw, sh = big_s.get_size()
+
+    bar_w  = max(2, int(sw * bar_w_frac))
+    extend = int(sh * bar_extend_frac)
+    full_h = sh + extend * 2
+
+    out = pygame.Surface((sw, full_h), pygame.SRCALPHA)
+
+    bar1_cx = int(sw * (0.32 - bar_offset_frac))
+    bar2_cx = int(sw * (0.68 + bar_offset_frac))
+
+    # Bars first — S blits on top so the strokes look like they pass
+    # through the bars naturally (where S has ink, S wins).
+    for cx in (bar1_cx, bar2_cx):
+        pygame.draw.rect(out, color,
+                         pygame.Rect(cx - bar_w // 2, 0, bar_w, full_h))
+
+    out.blit(big_s, (0, extend))
+
+    if bar_top_highlight:
+        # 1-px-equivalent bright top cap for a 3D feel.
+        cap_h = max(2, int(extend * 0.35))
+        cap_color = (
+            min(255, color[0] + 60),
+            min(255, color[1] + 60),
+            min(255, color[2] + 60),
+            255,
+        )
+        for cx in (bar1_cx, bar2_cx):
+            pygame.draw.rect(out, cap_color,
+                             pygame.Rect(cx - bar_w // 2, 0, bar_w, cap_h))
+
+    return pygame.transform.smoothscale(out, (sw // SS, full_h // SS))
 
 
-def _crisp_glyph_mask(size):
-    """Same as _crisp_glyph but returns an opaque-white glyph used as a
-    multiply mask for gradient/halo fills."""
-    return _crisp_glyph("$", size, (255, 255, 255))
-
-
-def _blit_centered(surf, glyph, center, dx=0, dy=0):
-    r = glyph.get_rect(center=(center[0] + dx, center[1] + dy))
-    surf.blit(glyph, r.topleft)
-
-
-def _make_halo(color, size, layers=((6, 28), (4, 60), (2, 110))):
-    """Build a per-glyph halo surface: stamp the `$` glyph multiple times
-    in 8 directions at decreasing radii / increasing alpha. Result is a
-    soft outer glow that mostly stays OUTSIDE the glyph silhouette
-    because the centre overlaps and saturates first."""
-    glyph = _crisp_glyph("$", size, color)
+def _make_halo_from_glyph(glyph, layers):
     gw, gh = glyph.get_size()
     pad = max(layer[0] for layer in layers) + 2
     halo = pygame.Surface((gw + pad * 2, gh + pad * 2), pygame.SRCALPHA)
@@ -90,53 +115,34 @@ def _make_halo(color, size, layers=((6, 28), (4, 60), (2, 110))):
     return halo
 
 
-# ── V1 — bold stamp + faint halo ────────────────────────────────────────────
-def draw_v1_faint_halo(surf, cx, cy, pulse=0.0):
-    """V2 (bold stamp) with the softest possible outer halo. Reads as a
-    weighty stamp that's just slightly luminous."""
-    halo = _make_halo(NEON_HALO, GLYPH_SIZE,
-                      layers=((4, 18), (2, 35)))
+def _blit_centered(surf, glyph, center, dx=0, dy=0):
+    r = glyph.get_rect(center=(center[0] + dx, center[1] + dy))
+    surf.blit(glyph, r.topleft)
+
+
+def _draw_v3_treatment(surf, cx, cy, *,
+                       bar_w_frac, bar_extend_frac=0.16,
+                       bar_offset_frac=0.0, bar_top_highlight=False):
+    """Apply V3's gradient + halo + outline to a double-bar `$` whose
+    geometry is parameterised. Variants below all call this with
+    different bar params."""
+    body_kwargs = dict(
+        bar_w_frac=bar_w_frac,
+        bar_extend_frac=bar_extend_frac,
+        bar_offset_frac=bar_offset_frac,
+        bar_top_highlight=bar_top_highlight,
+    )
+
+    # Halo
+    halo_glyph = _double_bar_dollar(GLYPH_SIZE, NEON_HALO, **body_kwargs)
+    halo = _make_halo_from_glyph(halo_glyph,
+                                 layers=((6, 24), (4, 50), (2, 80)))
     _blit_centered(surf, halo, (cx, cy + 1))
 
-    out  = _crisp_glyph("$", GLYPH_SIZE, BILL_GREEN_DEEP)
-    fill = _crisp_glyph("$", GLYPH_SIZE, BILL_GREEN_LITE)
-    for ox, oy in ((-1, 0), (1, 0), (0, -1), (0, 1),
-                   (-1, -1), (1, -1), (-1, 1), (1, 1)):
-        _blit_centered(surf, out, (cx, cy + 1), dx=ox, dy=oy)
-    _blit_centered(surf, fill, (cx, cy + 1))
-
-
-# ── V2 — bold stamp + medium halo ───────────────────────────────────────────
-def draw_v2_medium_halo(surf, cx, cy, pulse=0.0):
-    """Bolder halo — definitely glowing, but the stamp body still reads as
-    an inked banknote stamp, not an arcade neon."""
-    breathe = 0.7 + 0.3 * (0.5 + 0.5 * math.sin(pulse * 1.5))
-    halo = _make_halo(NEON_HALO, GLYPH_SIZE,
-                      layers=((6, int(28 * breathe)),
-                              (4, int(60 * breathe)),
-                              (2, int(95 * breathe))))
-    _blit_centered(surf, halo, (cx, cy + 1))
-
-    out  = _crisp_glyph("$", GLYPH_SIZE, BILL_GREEN_DEEP)
-    fill = _crisp_glyph("$", GLYPH_SIZE, BILL_GREEN_LITE)
-    for ox, oy in ((-1, 0), (1, 0), (0, -1), (0, 1),
-                   (-1, -1), (1, -1), (-1, 1), (1, 1)):
-        _blit_centered(surf, out, (cx, cy + 1), dx=ox, dy=oy)
-    _blit_centered(surf, fill, (cx, cy + 1))
-
-
-# ── V3 — gradient body + halo ───────────────────────────────────────────────
-def draw_v3_gradient_halo(surf, cx, cy, pulse=0.0):
-    """Vertical green gradient (light top → deep bottom) inside a 1-px
-    dark outline, with a medium halo. Adds dimensionality without going
-    full embossed."""
-    halo = _make_halo(NEON_HALO, GLYPH_SIZE,
-                      layers=((6, 24), (4, 50), (2, 80)))
-    _blit_centered(surf, halo, (cx, cy + 1))
-
-    # Gradient body — render mask, multiply against per-row gradient.
-    mask = _crisp_glyph_mask(GLYPH_SIZE)
+    # Mask for gradient body
+    mask = _double_bar_dollar(GLYPH_SIZE, (255, 255, 255), **body_kwargs)
     mw, mh = mask.get_size()
+
     grad = pygame.Surface((mw, mh), pygame.SRCALPHA)
     for yy in range(mh):
         t = yy / max(1, mh - 1)
@@ -159,59 +165,45 @@ def draw_v3_gradient_halo(surf, cx, cy, pulse=0.0):
         pygame.draw.line(grad, col, (0, yy), (mw, yy))
     grad.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
 
-    # Outline behind the gradient
-    out_glyph = _crisp_glyph("$", GLYPH_SIZE, BILL_GREEN_DEEP)
+    # Outline behind the gradient fill
+    out_glyph = _double_bar_dollar(GLYPH_SIZE, BILL_GREEN_DEEP, **body_kwargs)
     for ox, oy in ((-1, 0), (1, 0), (0, -1), (0, 1)):
         _blit_centered(surf, out_glyph, (cx, cy + 1), dx=ox, dy=oy)
     _blit_centered(surf, grad, (cx, cy + 1))
 
 
-# ── V4 — stamp + inner shine (no halo, lit from inside) ────────────────────
-def draw_v4_inner_shine(surf, cx, cy, pulse=0.0):
-    """Bold stamp with a bright inner highlight only — no outer halo. Reads
-    as a stamp catching light, more grounded than the haloed variants."""
-    out  = _crisp_glyph("$", GLYPH_SIZE, BILL_GREEN_DEEP)
-    body = _crisp_glyph("$", GLYPH_SIZE, BILL_GREEN)
-    shine_top = _crisp_glyph("$", GLYPH_SIZE, BILL_GREEN_LITE)
-    sheen = _crisp_glyph("$", GLYPH_SIZE, WHITE)
-    sheen.set_alpha(120)
-
-    # Outline
-    for ox, oy in ((-1, 0), (1, 0), (0, -1), (0, 1),
-                   (-1, -1), (1, -1), (-1, 1), (1, 1)):
-        _blit_centered(surf, out, (cx, cy + 1), dx=ox, dy=oy)
-    # Body
-    _blit_centered(surf, body, (cx, cy + 1))
-    # Highlight offset up-left for "lit from upper-left" feel
-    _blit_centered(surf, shine_top, (cx, cy + 1), dx=-1, dy=-1)
-    # Tiny white sheen blended on top
-    _blit_centered(surf, sheen, (cx, cy + 1), dx=-1, dy=-2)
+# ── V1 — thin bars, classic cifrão ─────────────────────────────────────────
+def draw_v1_thin(surf, cx, cy, pulse=0.0):
+    _draw_v3_treatment(surf, cx, cy, bar_w_frac=0.06)
 
 
-# ── V5 — embossed + halo ───────────────────────────────────────────────────
-def draw_v5_embossed_halo(surf, cx, cy, pulse=0.0):
-    """Three-layer embossed green (dark shadow, body, bright highlight)
-    plus a medium halo. Most dimensional of the five — depth + glow."""
-    halo = _make_halo(NEON_HALO, GLYPH_SIZE,
-                      layers=((5, 22), (3, 50), (2, 80)))
-    _blit_centered(surf, halo, (cx, cy + 1))
+# ── V2 — medium bars (default cifrão weight) ───────────────────────────────
+def draw_v2_medium(surf, cx, cy, pulse=0.0):
+    _draw_v3_treatment(surf, cx, cy, bar_w_frac=0.09)
 
-    shadow = _crisp_glyph("$", GLYPH_SIZE, BILL_GREEN_DEEP)
-    body   = _crisp_glyph("$", GLYPH_SIZE, BILL_GREEN)
-    hi     = _crisp_glyph("$", GLYPH_SIZE, BILL_GREEN_LITE)
-    sheen  = _crisp_glyph("$", GLYPH_SIZE, WHITE)
-    sheen.set_alpha(140)
 
-    _blit_centered(surf, shadow, (cx, cy + 1), dx=2,  dy=2)
-    _blit_centered(surf, body,   (cx, cy + 1))
-    _blit_centered(surf, hi,     (cx, cy + 1), dx=-1, dy=-1)
-    _blit_centered(surf, sheen,  (cx, cy + 1), dx=-1, dy=-2)
+# ── V3 — thick chunky bars ─────────────────────────────────────────────────
+def draw_v3_thick(surf, cx, cy, pulse=0.0):
+    _draw_v3_treatment(surf, cx, cy, bar_w_frac=0.13, bar_extend_frac=0.20)
+
+
+# ── V4 — medium bars with bright top caps (3D feel) ────────────────────────
+def draw_v4_capped(surf, cx, cy, pulse=0.0):
+    _draw_v3_treatment(surf, cx, cy,
+                       bar_w_frac=0.10, bar_extend_frac=0.18,
+                       bar_top_highlight=True)
+
+
+# ── V5 — medium bars, wider apart (sit just inside S edges) ────────────────
+def draw_v5_wide(surf, cx, cy, pulse=0.0):
+    _draw_v3_treatment(surf, cx, cy,
+                       bar_w_frac=0.09, bar_offset_frac=0.06)
 
 
 VARIANTS = {
-    1: ("1 — faint halo",      draw_v1_faint_halo),
-    2: ("2 — medium halo",     draw_v2_medium_halo),
-    3: ("3 — gradient + halo", draw_v3_gradient_halo),
-    4: ("4 — inner shine",     draw_v4_inner_shine),
-    5: ("5 — embossed + halo", draw_v5_embossed_halo),
+    1: ("1 — thin bars",     draw_v1_thin),
+    2: ("2 — medium bars",   draw_v2_medium),
+    3: ("3 — thick bars",    draw_v3_thick),
+    4: ("4 — capped bars",   draw_v4_capped),
+    5: ("5 — wide-set bars", draw_v5_wide),
 }
