@@ -91,12 +91,12 @@ HAT_PALETTE_KFC = {
     "dark":    (120,  70,  20),
     "band_dk": ( 65,  35,  10),
     "band_hi": (130,  80,  25),
-    # KFC red `$` instead of green — matches the KFC brand on a fried hat.
-    # Brighter than first attempt so it actually pops against the warm hat
-    # body; deepened outline anchors the rim.
-    "dollar":     (245,  80,  50),
-    "dollar_dk":  (110,  10,   5),
-    "dollar_hi":  (255, 200, 180),
+    # `$` glyph in the KFC bird's DARKEST batter tone — reads as branded
+    # / burnt into the warm hat body, same colour as the spots/crackles
+    # the bird carries.
+    "dollar":     ( 45,  22,   2),
+    "dollar_dk":  ( 20,  10,   0),
+    "dollar_hi":  (115,  70,  20),
     # Spot/bump tones for the fried-batter texture — high contrast vs.
     # the cylinder so they actually read at the 32-px native scale.
     "spot":       ( 75,  40,   5),
