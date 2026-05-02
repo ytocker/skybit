@@ -172,31 +172,62 @@ def main():
     GAP_X = 30
     LABEL_H = 32
     PAD = 28
+    ROW_GAP = 18
     cells = [REFERENCE] + [VARIANTS[i] for i in (1, 2, 3, 4, 5)]
     n = len(cells)
 
     total_w = SHOW_W * n + GAP_X * (n - 1) + PAD * 2
-    total_h = SHOW_H + LABEL_H + PAD * 2
+    # Two rows: top = sky-blue (in-game context), bottom = checkerboard
+    # (so transparency / outline shape is unambiguous).
+    total_h = (SHOW_H + LABEL_H) * 2 + ROW_GAP + PAD * 2
 
     canvas = pygame.Surface((total_w, total_h), pygame.SRCALPHA)
-    canvas.fill((24, 30, 56, 255))
+    canvas.fill((230, 232, 235, 255))   # light neutral page background
 
-    font = pygame.font.SysFont(None, 22, bold=True)
+    font_label = pygame.font.SysFont(None, 22, bold=True)
+    font_caption = pygame.font.SysFont(None, 18, bold=False)
 
-    for i, cfg in enumerate(cells):
-        spr = build_ghost(cfg)
-        upscaled = pygame.transform.scale(spr, (SHOW_W, SHOW_H))
-        x = PAD + i * (SHOW_W + GAP_X)
-        y = PAD
-        # Per-cell darker plate so the ghost reads the same regardless of
-        # whether it has a halo bleeding into the gap.
-        cell_plate = pygame.Rect(x - 8, y - 8, SHOW_W + 16, SHOW_H + 16)
-        pygame.draw.rect(canvas, (16, 22, 44, 255), cell_plate, border_radius=12)
-        canvas.blit(upscaled, (x, y))
+    SKY_BLUE   = (135, 195, 235, 255)
+    CHECK_LITE = (235, 235, 235, 255)
+    CHECK_DARK = (175, 175, 175, 255)
+    CHECK = 16
 
-        label = font.render(cfg["label"], True, (245, 245, 245))
-        canvas.blit(label, (x + (SHOW_W - label.get_width()) // 2,
-                            y + SHOW_H + 10))
+    for row in (0, 1):
+        row_y = PAD + row * (SHOW_H + LABEL_H + ROW_GAP)
+        for i, cfg in enumerate(cells):
+            x = PAD + i * (SHOW_W + GAP_X)
+            cell_rect = pygame.Rect(x - 8, row_y - 8, SHOW_W + 16, SHOW_H + 16)
+
+            if row == 0:
+                pygame.draw.rect(canvas, SKY_BLUE, cell_rect, border_radius=12)
+            else:
+                pygame.draw.rect(canvas, CHECK_LITE, cell_rect, border_radius=12)
+                # Checkerboard inside cell
+                clip_prev = canvas.get_clip()
+                canvas.set_clip(cell_rect)
+                for cy in range(cell_rect.top, cell_rect.bottom, CHECK):
+                    for cx in range(cell_rect.left, cell_rect.right, CHECK):
+                        if ((cx // CHECK) + (cy // CHECK)) % 2 == 1:
+                            pygame.draw.rect(
+                                canvas, CHECK_DARK,
+                                pygame.Rect(cx, cy, CHECK, CHECK),
+                            )
+                canvas.set_clip(clip_prev)
+
+            spr = build_ghost(cfg)
+            upscaled = pygame.transform.scale(spr, (SHOW_W, SHOW_H))
+            canvas.blit(upscaled, (x, row_y))
+
+            if row == 1:
+                label = font_label.render(cfg["label"], True, (30, 35, 55))
+                canvas.blit(label, (x + (SHOW_W - label.get_width()) // 2,
+                                    row_y + SHOW_H + 10))
+
+    # Row captions on the left
+    cap1 = font_caption.render("on sky blue (in-game)", True, (60, 70, 100))
+    cap2 = font_caption.render("on checkerboard (perimeter detail)", True, (60, 70, 100))
+    canvas.blit(cap1, (PAD, PAD - 22))
+    canvas.blit(cap2, (PAD, PAD + (SHOW_H + LABEL_H + ROW_GAP) - 22))
 
     out = "docs/ghost_variants.png"
     os.makedirs(os.path.dirname(out), exist_ok=True)
