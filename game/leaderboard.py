@@ -245,8 +245,7 @@ async def fetch_top10() -> list:
             _pylog("fetch_top10: bridge not ready, returning []")
             return []
         try:
-            import asyncio, json as _json
-            import js as _js  # type: ignore
+            import asyncio
             import platform as _p  # type: ignore
             _pylog("fetch_top10: calling __sk('fetch')")
             _p.window.__sk("fetch")
@@ -254,19 +253,36 @@ async def fetch_top10() -> list:
             while tries < 200:  # 200 * 0.05s = 10s timeout
                 v = _p.window.__sk("fetch_done")
                 if v is not None:
+                    # v is a JS array proxy. Earlier code went through
+                    # `_js.JSON.stringify(v)` then json.loads, but
+                    # pygbag's CPython 3.12 exposes `js` as a module
+                    # named `__EMSCRIPTEN__` that lacks JSON. Iterate
+                    # the proxy directly via its length property and
+                    # bracket-index access (the same pattern used by
+                    # the dispatcher itself).
+                    rows: list = []
                     try:
-                        data = _json.loads(_js.JSON.stringify(v))
-                    except Exception as parse_err:
-                        _pylog("fetch_top10: JSON parse failed: " + str(parse_err)[:120])
-                        _last_fetch_error = "parse"
-                        return []
+                        length = int(getattr(v, "length", 0) or 0)
+                    except Exception:
+                        length = 0
+                    for i in range(length):
+                        try:
+                            entry = v[i]
+                            rows.append({
+                                "name": str(entry["name"])[:10],
+                                "score": int(entry["score"]),
+                            })
+                        except Exception as row_err:
+                            _pylog("fetch_top10: row " + str(i) + " skipped: " +
+                                   type(row_err).__name__)
+                            continue
                     try:
                         err = _p.window.__sk("fetch_error")
                         _last_fetch_error = str(err) if err else ""
                     except Exception:
                         _last_fetch_error = ""
-                    _pylog("fetch_top10: got " + str(len(data)) + " rows from JS bridge")
-                    return [{"name": str(e["name"]), "score": int(e["score"])} for e in data]
+                    _pylog("fetch_top10: got " + str(len(rows)) + " rows from JS bridge")
+                    return rows
                 tries += 1
                 await asyncio.sleep(0.05)
             _pylog("fetch_top10: timeout waiting for fetch_done after 10s")
