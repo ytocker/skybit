@@ -47,6 +47,11 @@ GROW_DURATION      = 8.0
 GROW_SCALE         = 1.5
 REVERSE_DURATION   = 8.0
 
+# Ghost pickup outline treatment (1-5). See _GHOST_VARIANTS in entities.py.
+# 1 = thin solid navy, 2 = thin + soft halo, 3 = light navy at original width,
+# 4 = no outline, 5 = inset thin (outline drawn inside silhouette).
+GHOST_PICKUP_VARIANT = 1
+
 # Spawn weights for power-up kinds. Must sum to anything — they're
 # normalized at pick time. `surprise` resolves at pickup-time to one of
 # the six "real" kinds chosen at random (see World._on_powerup).

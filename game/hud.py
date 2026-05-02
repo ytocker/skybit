@@ -665,6 +665,18 @@ class HUD:
         for ft in world.float_texts:
             ft.draw(surf)
 
+        # === TEMP: ghost-icon variant picker — remove once user has chosen ===
+        from game.entities import _get_ghost_preview_strip
+        strip = _get_ghost_preview_strip()
+        sw, sh = strip.get_size()
+        plate_pad = 6
+        plate = pygame.Rect((W - sw) // 2 - plate_pad,
+                            H - sh - 12 - plate_pad,
+                            sw + plate_pad * 2,
+                            sh + plate_pad * 2)
+        rounded_rect(surf, plate, 8, (15, 25, 60), 210)
+        surf.blit(strip, ((W - sw) // 2, H - sh - 12))
+
     def draw_stats(self, surf, world, dt, elapsed, show_prompt: bool = True):
         self.title_t += dt
         dim = pygame.Surface((W, H), pygame.SRCALPHA)

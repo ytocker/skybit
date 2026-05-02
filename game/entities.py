@@ -87,16 +87,28 @@ def _get_kfc_sprite() -> "pygame.Surface":
 
 # ── GHOST power-up sprite (procedural, cached on first draw) ────────────────
 # Holographic foil body (diagonal pearl-pink → cyan → mint → ivory) inside a
-# 2-px premium navy outline ring + crisp eyes + soft sheen.
-_ghost_sprite: "pygame.Surface | None" = None
+# variant-controlled outline ring + crisp eyes + soft sheen.
+_ghost_sprite_cache: "dict[int, pygame.Surface]" = {}
 _GHOST_HEAD_OFFSET_X = 16   # head-circle centre x in the sprite
 _GHOST_HEAD_OFFSET_Y = 14   # head-circle centre y in the sprite
 
+# 5 outline treatments — body shape, gradient, sheen, and eyes are identical
+# across all variants. Only the perimeter handling differs. Used by the
+# in-game ghost pickup and by `_get_ghost_preview_strip` so the player can
+# choose which look they prefer.
+_GHOST_VARIANTS = {
+    1: {"thickness": 1.0, "color": ( 40,  50,  90), "mode": "outset", "halo": False},
+    2: {"thickness": 1.0, "color": ( 40,  50,  90), "mode": "outset", "halo": True},
+    3: {"thickness": 2.0, "color": ( 90, 110, 160), "mode": "outset", "halo": False},
+    4: {"thickness": 0.0, "color": ( 40,  50,  90), "mode": "none",   "halo": False},
+    5: {"thickness": 1.0, "color": ( 40,  50,  90), "mode": "inset",  "halo": False},
+}
 
-def _get_ghost_sprite() -> "pygame.Surface":
-    global _ghost_sprite
-    if _ghost_sprite is not None:
-        return _ghost_sprite
+
+def _get_ghost_sprite(variant: int = 1) -> "pygame.Surface":
+    if variant in _ghost_sprite_cache:
+        return _ghost_sprite_cache[variant]
+    cfg = _GHOST_VARIANTS[variant]
 
     SS = 16                                   # high-res super-sample for
                                               # genuinely smooth perimeter
@@ -141,19 +153,37 @@ def _get_ghost_sprite() -> "pygame.Surface":
     # Left side back up to head's leftmost point
     perimeter.append((gcx - hr, gcy))
 
-    OUTLINE_COLOR = (40, 50, 90)
-    THICKNESS_PX  = 2
-    t_big = THICKNESS_PX * SS
+    line_thick = cfg["thickness"]
+    line_color = cfg["color"]
+    mode       = cfg["mode"]
+    do_halo    = cfg["halo"]
+    t_big      = int(line_thick * SS)
 
-    # 1) Outline ring — stroke each perimeter edge as a thick line, plus a
-    #    circle at every vertex so corners join cleanly without gaps. This
-    #    is O(N) in perimeter length, not O(SS²) like the offset-stack.
-    for i in range(len(perimeter)):
-        p1 = perimeter[i]
-        p2 = perimeter[(i + 1) % len(perimeter)]
-        pygame.draw.line(big, OUTLINE_COLOR, p1, p2, t_big * 2)
-    for p in perimeter:
-        pygame.draw.circle(big, OUTLINE_COLOR, p, t_big)
+    # 1a) Optional outer halo — a wider, low-alpha stroke drawn BEFORE the
+    #     solid outline so it shows as a soft glow band outside the silhouette.
+    if do_halo:
+        halo_canvas = pygame.Surface((sw, sh), pygame.SRCALPHA)
+        halo_t = int(2.5 * SS)
+        halo_color = (60, 80, 130, 110)
+        for i in range(len(perimeter)):
+            p1 = perimeter[i]
+            p2 = perimeter[(i + 1) % len(perimeter)]
+            pygame.draw.line(halo_canvas, halo_color, p1, p2, halo_t * 2)
+        for p in perimeter:
+            pygame.draw.circle(halo_canvas, halo_color, p, halo_t)
+        big.blit(halo_canvas, (0, 0))
+
+    # 1b) Outset outline (the default). Inset and "none" skip this — the
+    #     gradient mask is responsible for the silhouette edge in those
+    #     cases, and "inset" re-draws the outline AFTER the body so it sits
+    #     on top, masked to the silhouette interior.
+    if mode == "outset" and t_big > 0:
+        for i in range(len(perimeter)):
+            p1 = perimeter[i]
+            p2 = perimeter[(i + 1) % len(perimeter)]
+            pygame.draw.line(big, line_color, p1, p2, t_big * 2)
+        for p in perimeter:
+            pygame.draw.circle(big, line_color, p, t_big)
 
     # 2) Silhouette mask — single filled polygon traced from the same
     #    perimeter, so it lines up with the outline ring above to the pixel.
@@ -212,6 +242,20 @@ def _get_ghost_sprite() -> "pygame.Surface":
     sheen.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
     big.blit(sheen, (0, 0))
 
+    # 4b) Inset outline — drawn AFTER the body so it sits on top, then
+    #     masked to the silhouette so only the inside-half of the stroke
+    #     remains. Keeps total footprint = silhouette mask exactly.
+    if mode == "inset" and t_big > 0:
+        ink = pygame.Surface((sw, sh), pygame.SRCALPHA)
+        for i in range(len(perimeter)):
+            p1 = perimeter[i]
+            p2 = perimeter[(i + 1) % len(perimeter)]
+            pygame.draw.line(ink, line_color, p1, p2, t_big * 2)
+        for p in perimeter:
+            pygame.draw.circle(ink, line_color, p, t_big)
+        ink.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        big.blit(ink, (0, 0))
+
     # 5) Eyes
     EYE_W    = (252, 254, 255, 255)
     EYE_IRIS = (50, 110, 220, 255)
@@ -225,8 +269,28 @@ def _get_ghost_sprite() -> "pygame.Surface":
         pygame.draw.circle(big, (255, 255, 255, 220),
                            (ex - SS, ey - 2 * SS), max(1, SS // 2))
 
-    _ghost_sprite = pygame.transform.smoothscale(big, (GW, GH))
-    return _ghost_sprite
+    sprite = pygame.transform.smoothscale(big, (GW, GH))
+    _ghost_sprite_cache[variant] = sprite
+    return sprite
+
+
+def _get_ghost_preview_strip() -> "pygame.Surface":
+    """Build a labelled row of all 5 ghost variants for the user to pick from.
+    Temporary debug overlay — remove once the user has chosen."""
+    n = 5
+    GW, GH = 32, 40
+    GAP = 10
+    LABEL_H = 14
+    total_w = GW * n + GAP * (n - 1)
+    strip = pygame.Surface((total_w, GH + LABEL_H + 2), pygame.SRCALPHA)
+    font = pygame.font.SysFont(None, 16, bold=True)
+    for i in range(1, n + 1):
+        x = (i - 1) * (GW + GAP)
+        spr = _get_ghost_sprite(variant=i)
+        strip.blit(spr, (x + (GW - spr.get_width()) // 2, 0))
+        label = font.render(str(i), True, (255, 255, 255))
+        strip.blit(label, (x + (GW - label.get_width()) // 2, GH + 2))
+    return strip
 
 
 # Default pillar palette (fallback when no biome provided).
@@ -1071,11 +1135,12 @@ class PowerUp:
         surf.blit(logo, (cx - logo.get_width() // 2, cy - logo.get_height() // 2))
 
     def _draw_ghost(self, surf):
+        from game.config import GHOST_PICKUP_VARIANT
         cx = int(self.x)
         # Supernatural wafting bob: two overlaid frequencies
         cy = int(self.y + math.sin(self.pulse * 0.9) * 4
                         + math.sin(self.pulse * 1.8) * 1.5)
-        sprite = _get_ghost_sprite()
+        sprite = _get_ghost_sprite(variant=GHOST_PICKUP_VARIANT)
         # Sprite was built so the head-circle centre sits at sprite-local
         # (_GHOST_HEAD_OFFSET_X, _GHOST_HEAD_OFFSET_Y); align it to (cx, cy).
         surf.blit(sprite,
