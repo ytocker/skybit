@@ -25,6 +25,8 @@ OUTLINE_DK      = ( 95,  50,   0)
 OUTLINE_LT      = (150,  90,  10)
 DARK_AMBER      = ( 75,  35,   0)
 LITE_AMBER      = (210, 165,  50)
+EMBOSS          = (130,  80,   0)   # parrot tone in entities._get_coin_face
+EMBOSS_DK       = ( 90,  50,   0)   # darker amber for the V5 drop-shadow
 
 BILL_GREEN_LITE = (130, 220, 150)
 BILL_GREEN      = ( 75, 165, 105)
@@ -235,18 +237,22 @@ def build_v4_medium_halo(coin_r):
     return face
 
 
-def build_v5_dark_contrast(coin_r):
+def build_v5_embossed_amber(coin_r):
+    """User-picked V5 with two adjustments: larger font (58 → 80) and the
+    amber colour the original coin uses for the embossed parrot. The
+    parrot itself is just a flat EMBOSS-colour silhouette on gold — no
+    drop-shadow, no outline — and the `$` follows the same recipe."""
     face = _build_coin_base(coin_r)
     cx = cy = face.get_width() // 2
-    _stamp_dollar(face, cx, cy + 1, font_size=58,
-                  fill_override=BILL_GREEN_DEEP, with_outline=False)
+    _stamp_dollar(face, cx, cy + 1, font_size=80,
+                  fill_override=EMBOSS, with_outline=False)
     return face
 
 
 VARIANTS = {
-    1: ("1 — small $",       build_v1_small),
-    2: ("2 — medium $",      build_v2_medium),
-    3: ("3 — large $",       build_v3_large),
-    4: ("4 — medium + halo", build_v4_medium_halo),
-    5: ("5 — dark contrast", build_v5_dark_contrast),
+    1: ("1 — small $",          build_v1_small),
+    2: ("2 — medium $",         build_v2_medium),
+    3: ("3 — large $",          build_v3_large),
+    4: ("4 — medium + halo",    build_v4_medium_halo),
+    5: ("5 — embossed amber",   build_v5_embossed_amber),
 }
