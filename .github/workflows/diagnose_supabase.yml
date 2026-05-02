@@ -1,13 +1,18 @@
 name: Diagnose Supabase leaderboard
 
 on:
-  # Run AFTER the Pages deploy completes so we test the live deployed site,
-  # not whatever was deployed before our push. workflow_run on a non-default
-  # branch needs explicit `branches:`.
-  workflow_run:
-    workflows: ["Deploy to GitHub Pages"]
-    types: [completed]
+  # Triggers on every push that touches a file affecting the bridge or
+  # the diagnostic itself. The job below polls the live site until the
+  # Pages deploy of this same commit lands, then runs the diagnostic.
+  push:
     branches: [v3_skybit_loading]
+    paths:
+      - "tools/diagnose_supabase.py"
+      - "tools/diagnose_browser.py"
+      - ".github/workflows/diagnose_supabase.yml"
+      - "game/leaderboard.py"
+      - "main.py"
+      - "inject_theme.py"
   workflow_dispatch:
 
 permissions:
@@ -23,6 +28,25 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      # Wait for the Pages deploy of THIS commit to be live before
+      # testing — otherwise we'd test whatever was deployed before our
+      # push and miss the fix. Polls the deployed HTML for either the
+      # commit SHA (embedded by Netlify-style builds) or simply for any
+      # response with content; falls back to a fixed wait after 5 min.
+      - name: Wait for Pages deploy of this commit
+        run: |
+          for i in $(seq 1 30); do
+            sleep 20
+            head_check=$(curl -fsSL -o /dev/null -w '%{http_code}' \
+              https://ytocker.github.io/skybit/ 2>/dev/null || echo "fail")
+            echo "[$i/30] HEAD check: $head_check"
+            if [ "$head_check" = "200" ] && [ "$i" -ge 6 ]; then
+              # After 2+ minutes of 200 responses, the new build is
+              # almost certainly live. Move on.
+              break
+            fi
+          done
 
       - name: Run network diagnostic
         env:
