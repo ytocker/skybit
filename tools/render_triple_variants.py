@@ -50,18 +50,24 @@ SS         = 3                 # super-sample factor for crisp edges
 
 
 def _double_bar_dollar(size, color,
-                        bar_w_frac=0.08,
-                        bar_extend_frac=0.16,
-                        bar_offset_frac=0.0,
+                        bar_w_frac=0.07,
+                        bar_extend_frac=0.10,
+                        bar_centre_gap_frac=0.08,
                         bar_top_highlight=False):
     """Render an `S` glyph at 3× SS, then composite two vertical bars
-    over it to make a cifrão-style double-bar dollar sign. Smoothscale to
-    `size`-relative final resolution.
+    near the CENTRE of the S to make a cifrão-style double-bar dollar
+    sign. Smoothscale to final resolution.
 
-    bar_w_frac        — bar thickness as fraction of S width (0.08 → ~thin)
-    bar_extend_frac   — how far bars extend above/below S, as fraction of S height
-    bar_offset_frac   — +ve = bars wider apart, -ve = bars closer to centre
-    bar_top_highlight — if True, draw a light cap at the top of each bar
+    Geometry follows real cifrão references: the two bars sit where the
+    single bar of a regular `$` would be — straddling the S centre line
+    by ±(bar_centre_gap_frac/2) of S width. They do NOT split the S into
+    thirds. They DO extend a small distance above and below the S
+    (matching the single-bar `$` overshoot in Liberation Sans).
+
+    bar_w_frac          — bar thickness as fraction of S width
+    bar_extend_frac     — how far bars extend above/below the S
+    bar_centre_gap_frac — distance between bar CENTRES, as fraction of S width
+    bar_top_highlight   — if True, paint a bright cap at the top of each bar
     """
     big_s = _bold_font(size * SS).render("S", True, color)
     sw, sh = big_s.get_size()
@@ -72,19 +78,19 @@ def _double_bar_dollar(size, color,
 
     out = pygame.Surface((sw, full_h), pygame.SRCALPHA)
 
-    bar1_cx = int(sw * (0.32 - bar_offset_frac))
-    bar2_cx = int(sw * (0.68 + bar_offset_frac))
+    half_gap = (sw * bar_centre_gap_frac) / 2.0
+    bar1_cx = int(sw / 2 - half_gap)
+    bar2_cx = int(sw / 2 + half_gap)
 
     # Bars first — S blits on top so the strokes look like they pass
     # through the bars naturally (where S has ink, S wins).
-    for cx in (bar1_cx, bar2_cx):
+    for cx_b in (bar1_cx, bar2_cx):
         pygame.draw.rect(out, color,
-                         pygame.Rect(cx - bar_w // 2, 0, bar_w, full_h))
+                         pygame.Rect(cx_b - bar_w // 2, 0, bar_w, full_h))
 
     out.blit(big_s, (0, extend))
 
     if bar_top_highlight:
-        # 1-px-equivalent bright top cap for a 3D feel.
         cap_h = max(2, int(extend * 0.35))
         cap_color = (
             min(255, color[0] + 60),
@@ -92,9 +98,9 @@ def _double_bar_dollar(size, color,
             min(255, color[2] + 60),
             255,
         )
-        for cx in (bar1_cx, bar2_cx):
+        for cx_b in (bar1_cx, bar2_cx):
             pygame.draw.rect(out, cap_color,
-                             pygame.Rect(cx - bar_w // 2, 0, bar_w, cap_h))
+                             pygame.Rect(cx_b - bar_w // 2, 0, bar_w, cap_h))
 
     return pygame.transform.smoothscale(out, (sw // SS, full_h // SS))
 
@@ -121,15 +127,16 @@ def _blit_centered(surf, glyph, center, dx=0, dy=0):
 
 
 def _draw_v3_treatment(surf, cx, cy, *,
-                       bar_w_frac, bar_extend_frac=0.16,
-                       bar_offset_frac=0.0, bar_top_highlight=False):
+                       bar_w_frac, bar_extend_frac=0.08,
+                       bar_centre_gap_frac=0.10,
+                       bar_top_highlight=False):
     """Apply V3's gradient + halo + outline to a double-bar `$` whose
     geometry is parameterised. Variants below all call this with
     different bar params."""
     body_kwargs = dict(
         bar_w_frac=bar_w_frac,
         bar_extend_frac=bar_extend_frac,
-        bar_offset_frac=bar_offset_frac,
+        bar_centre_gap_frac=bar_centre_gap_frac,
         bar_top_highlight=bar_top_highlight,
     )
 
@@ -172,51 +179,51 @@ def _draw_v3_treatment(surf, cx, cy, *,
     _blit_centered(surf, grad, (cx, cy + 1))
 
 
-# ── V1 — thin bars, close together ─────────────────────────────────────────
-def draw_v1_thin(surf, cx, cy, pulse=0.0):
+# ── V1 — touching: bars almost merged at centre ─────────────────────────────
+def draw_v1_touching(surf, cx, cy, pulse=0.0):
     _draw_v3_treatment(surf, cx, cy,
-                       bar_w_frac=0.05,
-                       bar_extend_frac=0.05,
-                       bar_offset_frac=-0.08)
+                       bar_w_frac=0.06,
+                       bar_extend_frac=0.08,
+                       bar_centre_gap_frac=0.07)
 
 
-# ── V2 — medium bars, close together (default look) ────────────────────────
-def draw_v2_medium(surf, cx, cy, pulse=0.0):
+# ── V2 — narrow gap (classic cifrão weight) ────────────────────────────────
+def draw_v2_narrow(surf, cx, cy, pulse=0.0):
     _draw_v3_treatment(surf, cx, cy,
-                       bar_w_frac=0.08,
-                       bar_extend_frac=0.05,
-                       bar_offset_frac=-0.08)
+                       bar_w_frac=0.06,
+                       bar_extend_frac=0.08,
+                       bar_centre_gap_frac=0.10)
 
 
-# ── V3 — thick bars, close together ────────────────────────────────────────
-def draw_v3_thick(surf, cx, cy, pulse=0.0):
+# ── V3 — clear gap (bit more breathing room) ───────────────────────────────
+def draw_v3_clear(surf, cx, cy, pulse=0.0):
     _draw_v3_treatment(surf, cx, cy,
-                       bar_w_frac=0.12,
-                       bar_extend_frac=0.06,
-                       bar_offset_frac=-0.08)
+                       bar_w_frac=0.06,
+                       bar_extend_frac=0.08,
+                       bar_centre_gap_frac=0.13)
 
 
-# ── V4 — medium bars with bright top caps (3D feel) ────────────────────────
-def draw_v4_capped(surf, cx, cy, pulse=0.0):
+# ── V4 — bold narrow (cartoon-money weight) ────────────────────────────────
+def draw_v4_bold(surf, cx, cy, pulse=0.0):
     _draw_v3_treatment(surf, cx, cy,
                        bar_w_frac=0.09,
-                       bar_extend_frac=0.06,
-                       bar_offset_frac=-0.08,
+                       bar_extend_frac=0.08,
+                       bar_centre_gap_frac=0.10)
+
+
+# ── V5 — bold + bright top caps (3D feel) ──────────────────────────────────
+def draw_v5_capped(surf, cx, cy, pulse=0.0):
+    _draw_v3_treatment(surf, cx, cy,
+                       bar_w_frac=0.09,
+                       bar_extend_frac=0.08,
+                       bar_centre_gap_frac=0.10,
                        bar_top_highlight=True)
 
 
-# ── V5 — medium bars even closer to centre ─────────────────────────────────
-def draw_v5_tight(surf, cx, cy, pulse=0.0):
-    _draw_v3_treatment(surf, cx, cy,
-                       bar_w_frac=0.08,
-                       bar_extend_frac=0.05,
-                       bar_offset_frac=-0.12)
-
-
 VARIANTS = {
-    1: ("1 — thin bars",     draw_v1_thin),
-    2: ("2 — medium bars",   draw_v2_medium),
-    3: ("3 — thick bars",    draw_v3_thick),
-    4: ("4 — capped bars",   draw_v4_capped),
-    5: ("5 — tight bars",    draw_v5_tight),
+    1: ("1 — touching",   draw_v1_touching),
+    2: ("2 — narrow gap", draw_v2_narrow),
+    3: ("3 — clear gap",  draw_v3_clear),
+    4: ("4 — bold narrow", draw_v4_bold),
+    5: ("5 — bold + caps", draw_v5_capped),
 }
