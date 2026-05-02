@@ -127,21 +127,29 @@ INJECTION = """
 canvas { background: #0d0820 !important; }
 body   { background: #0d0820 !important; }
 
-/* ── Loading overlay ───────────────────────────────── */
+/* ── Loading overlay ─────────────────────────────────
+   Hardened: every pygbag template version has at one point shipped a
+   `<div id="status">` or canvas at a high z-index that ends up over
+   the user-facing splash. Force the Skybit overlay to win every
+   stacking-context fight by pinning to the maximum reachable z-index
+   and !important-ing display so a sibling rule can't toggle it off. */
 #skybit-loading {
-    position: fixed;
-    inset: 0;
-    z-index: 100;
-    background: linear-gradient(180deg, #060115 0%, #12082a 45%, #0c1022 100%);
-    display: flex;
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 2147483647 !important;
+    background: linear-gradient(180deg, #060115 0%, #12082a 45%, #0c1022 100%) !important;
+    display: flex !important;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     user-select: none;
     overflow: hidden;
+    visibility: visible !important;
+    opacity: 1;
     -webkit-tap-highlight-color: transparent;
 }
+.skybit-title { visibility: visible !important; opacity: 1 !important; }
 
 /* Twinkling stars (added by JS) */
 .star {
@@ -247,10 +255,9 @@ body   { background: #0d0820 !important; }
     50%       { opacity: 1.00; }
 }
 
-/* Hide pygbag's own progress chrome — we draw our own above. */
-#progress, progress, .progress, #status, #transcript {
-    display: none !important;
-}
+/* Pygbag's progress chrome lives behind our z-index:100 overlay so the
+   user never sees it; no hide rule needed. (Earlier `display:none`
+   broke other things by removing elements pygbag's runtime expected.) */
 
 /* Loading watchdog status line (filled in by JS once stalled) */
 .skybit-status {
@@ -383,6 +390,28 @@ body   { background: #0d0820 !important; }
     margin-top: 14px;
 }
 </style>
+
+<script>
+/* Boot diagnostics — surface whether the overlay HTML reached the DOM
+   and whether the build-time secret substitution was successful. Both
+   are silent failure modes today; this gives us visibility without
+   needing the user to dump page source. */
+(function () {
+    function once() {
+        try {
+            var ov = document.getElementById('skybit-loading');
+            console.log('[skybit/boot] overlay in DOM:', !!ov,
+                ov ? '(z-index=' + getComputedStyle(ov).zIndex +
+                ', display=' + getComputedStyle(ov).display + ')' : '');
+        } catch (_) {}
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', once);
+    } else {
+        once();
+    }
+})();
+</script>
 
 <script>
 /* ── Skybit bridge (closure-private; no global submit API) ──────────────
