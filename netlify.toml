@@ -1,58 +1,47 @@
 [build]
-  command = "pip install 'pygbag==0.9.2' && python -m pygbag --build main.py && python inject_theme.py"
-  publish = "build/web"
+  base = "web"
+  command = "npm ci && npm run build"
+  publish = "web/dist"
 
 [build.environment]
-  PYTHON_VERSION = "3.11"
+  NODE_VERSION = "20"
 
-# Loading on mobile:
+# Skybit v3: TypeScript + HTML5 Canvas2D. The previous pygbag/Pyodide
+# build shipped a ~4-6 MB CPython interpreter on cold start; the v3
+# bundle is ~21 KB gzipped (HTML + JS) with assets streamed lazily.
+# Loading is now effectively instant on any connection.
 #
-# Previously this site set Cross-Origin-Embedder-Policy: credentialless to
-# enable SharedArrayBuffer (used by pygbag's threaded audio path). But:
-#   * iOS / mobile Safari does NOT implement COEP: credentialless. Loading
-#     hung forever — pygbag's runtime waited for cross-origin isolation
-#     that never arrived, and the user never reached "Ready to start".
-#   * This codebase doesn't use pygame.mixer in the browser anyway:
-#     game/audio.py routes browser playback through window.skyPlay,
-#     a Web Audio API path that doesn't need SAB.
-#
-# So we drop COEP entirely (single-threaded pygbag is fine for this game)
-# and keep only COOP for window-isolation hardening. SharedArrayBuffer
-# becomes unavailable, which has no impact on Skybit's audio.
-#
-# Content-Security-Policy is kept narrow (only Supabase + pygbag CDN are
-# whitelisted), with 'unsafe-inline' / 'unsafe-eval' for the Pyodide
-# bootstrap and the inline bridge IIFE.
+# CSP: only Supabase REST is needed for the leaderboard. Fonts ship from
+# self via @font-face, sounds from /sounds/*.ogg fetched by audio.ts.
 [[headers]]
   for = "/*"
   [headers.values]
-    Cross-Origin-Opener-Policy   = "same-origin"
-    Content-Security-Policy      = "default-src 'self'; connect-src 'self' https://*.supabase.co https://pygame-web.github.io; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://pygame-web.github.io; worker-src 'self' blob:; img-src 'self' data: blob:; media-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+    Cross-Origin-Opener-Policy = "same-origin"
+    Content-Security-Policy    = "default-src 'self'; connect-src 'self' https://*.supabase.co; script-src 'self'; img-src 'self' data: blob:; media-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 
-# Always revalidate index.html and the bundle artifacts. The previous
-# stuck-loading reports on Android also matched the classic stale-cache
-# pattern: an old broken version of skybit.apk / skybit.tar.gz lived in
-# the browser cache and was served back even after we redeployed. With
-# no-cache the browser must check freshness on every load, so a redeploy
-# (or the watchdog's "TAP TO RELOAD" cache-bust) actually replaces the
-# bad artifact. WASM/pygbag prebuilts are immutable per release and can
-# still be cached aggressively by the browser default.
+# Always revalidate index.html and the entry JS bundle so a redeploy
+# replaces the active build straight away. Vite's hashed asset filenames
+# (assets/index-<hash>.js) are immutable per build and can be cached
+# aggressively by browser defaults.
 [[headers]]
   for = "/index.html"
   [headers.values]
     Cache-Control = "no-cache, must-revalidate"
 
+# Hashed bundles are content-addressed; cache hard.
 [[headers]]
-  for = "/*.apk"
+  for = "/assets/*"
   [headers.values]
-    Cache-Control = "no-cache, must-revalidate"
+    Cache-Control = "public, max-age=31536000, immutable"
 
+# Fonts: same content per build, cache hard.
 [[headers]]
-  for = "/*.tar.gz"
+  for = "/fonts/*"
   [headers.values]
-    Cache-Control = "no-cache, must-revalidate"
+    Cache-Control = "public, max-age=31536000, immutable"
 
+# Sounds: same.
 [[headers]]
-  for = "/*.wasm"
+  for = "/sounds/*"
   [headers.values]
-    Content-Type = "application/wasm"
+    Cache-Control = "public, max-age=31536000, immutable"
