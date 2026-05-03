@@ -1,15 +1,13 @@
-"""Five WILD grow-powerup concepts — high-detail, supersampled, visually
-mind-blowing variants that abandon the standard Mario silhouette.
+"""Five wild-but-still-mushroom grow-powerup variants — round 3.
 
-User feedback round 2: previous variants were too similar to the
-original. This round goes wild — different shapes, different palettes,
-different effects.
+Round 1 (committed 01a9281) — too similar to current Mario design.
+Round 2 (committed 09d67c4) — abandoned the mushroom shape entirely.
+Round 3 — keeps the wild round-2 themes but applies each to a CLEAR
+mushroom silhouette: dome cap + stem + 4 canonical spots (theme-translated).
 
 Each function has the same signature as `PowerUp._draw_mushroom`:
 
     fn(surf, cx, cy, pulse=0.0)
-
-Centred on (cx, cy). Footprint roughly ±18 px from centre.
 
 Imported by `tools/render_grow_gameplay.py`. Does NOT modify game code.
 """
@@ -19,15 +17,30 @@ import pygame
 
 SS = 3  # supersample factor for smooth curves
 
+# ── Canonical mushroom geometry ────────────────────────────────────────────
+# Match `game/entities.py:_draw_mushroom` so each variant reads as a mushroom
+# with the same proportions as the current icon.
+POWERUP_R = 14
+CAP_W = (POWERUP_R + 1) * 2          # 30
+CAP_H = POWERUP_R + 5                 # 19
+CAP_DY = -POWERUP_R + 2               # cap_rect.y offset from cy → -12
+STEM_W = 14
+STEM_H = 13
+
+# Same 4 spots as `_draw_mushroom`: (dx, dy, r). Preserving these is what
+# anchors "this is a mushroom" — round 2 lost them.
+CANONICAL_SPOTS = [(-7, -5, 3), (+6, -7, 4), (+2, +1, 3), (-3, +2, 2)]
+
+# Default tan stem palette (mirrors game/draw.py MUSH_*).
+MUSH_STEM_BODY = (245, 225, 195)
+MUSH_STEM_HI   = (255, 255, 230)
+MUSH_STEM_SH   = (200, 180, 145)
+
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 def _hsv_to_rgb(h, s, v):
-    """h in [0,1], s,v in [0,1] → (r,g,b) ints 0-255."""
-    i = int(h * 6)
-    f = h * 6 - i
-    p = v * (1 - s)
-    q = v * (1 - f * s)
-    t = v * (1 - (1 - f) * s)
+    i = int(h * 6); f = h * 6 - i
+    p = v * (1 - s); q = v * (1 - f * s); t = v * (1 - (1 - f) * s)
     i %= 6
     if   i == 0: r, g, b = v, t, p
     elif i == 1: r, g, b = q, v, p
@@ -43,559 +56,462 @@ def _ss_surface(w, h):
 
 
 def _ss_blit(src_big, dst, x, y, w, h):
-    small = pygame.transform.smoothscale(src_big, (w, h))
-    dst.blit(small, (x, y))
+    dst.blit(pygame.transform.smoothscale(src_big, (w, h)), (x, y))
 
 
-# ── V1 — CRYSTAL PRISM GEM ─────────────────────────────────────────────────
+def _cap_rect(cx, cy):
+    """Canonical horizontal-oval dome rect — matches the current icon."""
+    return pygame.Rect(cx - POWERUP_R - 1, cy + CAP_DY, CAP_W, CAP_H)
+
+
+def _draw_standard_stem(surf, cx, cy,
+                        body=MUSH_STEM_BODY, hi=MUSH_STEM_HI, sh=MUSH_STEM_SH):
+    stem = pygame.Rect(cx - STEM_W // 2, cy, STEM_W, STEM_H)
+    pygame.draw.rect(surf, body, stem, border_radius=5)
+    pygame.draw.line(surf, hi, (cx - 4, cy + 2), (cx - 4, cy + 11), 2)
+    pygame.draw.line(surf, sh, (cx + 3, cy + 2), (cx + 3, cy + 11), 1)
+
+
+def _draw_canonical_spots(surf, cx, cy, fill, halo=None):
+    """Stamp the 4 canonical mushroom spots in the requested fill colour
+    (with an optional 1-px halo ring underneath for contrast)."""
+    for dx, dy, r in CANONICAL_SPOTS:
+        if halo is not None:
+            pygame.draw.circle(surf, halo, (cx + dx, cy + dy), r + 1)
+        pygame.draw.circle(surf, fill, (cx + dx, cy + dy), r)
+
+
+# ── V1 — CRYSTAL MUSHROOM ──────────────────────────────────────────────────
 def draw_v1_crystal(surf, cx, cy, pulse=0.0):
-    """Faceted hexagonal crystal cap with prismatic rainbow facets and a
-    bright internal glow. Stem is a stack of crystalline rhombuses. No
-    spots — replaced by sharp specular highlights on each facet edge."""
+    """Mushroom dome cap with prismatic facets painted across the ellipse
+    surface. Spots → bright crystalline starburst shines."""
     glow_t = 0.5 + 0.5 * math.sin(pulse * 1.4)
 
-    # Outer halo glow (cyan)
-    halo = pygame.Surface((64, 64), pygame.SRCALPHA)
-    for r, a in ((26, int(40 * glow_t)),
-                 (20, int(75 * glow_t)),
-                 (15, int(110 * glow_t))):
-        pygame.draw.circle(halo, (140, 220, 255, a), (32, 28), r)
-    surf.blit(halo, (cx - 32, cy - 28 - 4))
+    # Soft cyan halo
+    halo = pygame.Surface((48, 38), pygame.SRCALPHA)
+    for r, a in ((22, int(30 + 20 * glow_t)),
+                 (18, int(60 + 30 * glow_t)),
+                 (14, int(95 + 40 * glow_t))):
+        pygame.draw.ellipse(halo, (140, 220, 255, a),
+                            pygame.Rect(24 - r, 19 - int(r * 0.7),
+                                        r * 2, int(r * 1.4)))
+    surf.blit(halo, (cx - 24, cy - 19 - 2))
 
-    # Crystalline stem — 2 stacked rhombuses (icy white-cyan)
-    stem_pts_outer = [
-        (cx,     cy + 14),
-        (cx - 6, cy + 8),
-        (cx - 5, cy + 1),
-        (cx,     cy - 2),
-        (cx + 5, cy + 1),
-        (cx + 6, cy + 8),
-    ]
-    stem_pts_inner = [
-        (cx,     cy + 12),
-        (cx - 4, cy + 8),
-        (cx - 3, cy + 2),
-        (cx,     cy - 1),
-        (cx + 3, cy + 2),
-        (cx + 4, cy + 8),
-    ]
-    pygame.draw.polygon(surf, ( 60, 130, 180), stem_pts_outer)
-    pygame.draw.polygon(surf, (200, 240, 255), stem_pts_inner)
-    pygame.draw.line(surf, (255, 255, 255),
-                     (cx - 1, cy + 1), (cx - 1, cy + 10), 1)
-    pygame.draw.line(surf, ( 90, 160, 200),
-                     (cx + 2, cy + 2), (cx + 2, cy + 9), 1)
+    # Standard tan stem with cool blue inner sheen
+    _draw_standard_stem(surf, cx, cy, hi=(220, 240, 255))
 
-    # Hexagonal faceted cap — drawn supersampled for clean edges.
-    R = 17
-    big = _ss_surface(R * 2 + 4, R * 2 + 4)
-    bcx, bcy = (R + 2) * SS, (R + 2) * SS
-    rs = R * SS
+    # Cap supersampled
+    cap_rect = _cap_rect(cx, cy)
+    big_w, big_h = cap_rect.width + 4, cap_rect.height + 4
+    big = _ss_surface(big_w, big_h)
+    bcap = pygame.Rect(2 * SS, 2 * SS, cap_rect.width * SS, cap_rect.height * SS)
 
-    # Hexagon vertices (flat-top, slightly squashed)
-    verts = []
-    for i in range(6):
-        ang = math.radians(60 * i + 30)  # pointy sides L/R
-        verts.append((
-            bcx + math.cos(ang) * rs,
-            bcy + math.sin(ang) * rs * 0.78,
-        ))
+    # Outer dark rim
+    pygame.draw.ellipse(big, (40, 60, 110), bcap.inflate(SS * 2, SS * 2))
 
-    # Facet colours — prismatic
-    # Top centre: bright white-cyan, fanning out into 6 facet triangles
-    # with hue shifting around the rim.
-    facet_hues = [0.55, 0.62, 0.78, 0.92, 0.08, 0.42]  # cyan→violet→pink→amber→teal
-    centre = (bcx, bcy - rs * 0.05)
-    for i in range(6):
-        v1 = verts[i]
-        v2 = verts[(i + 1) % 6]
-        h = facet_hues[i]
+    # Build base ellipse mask, then paint 6 prismatic facet wedges into it.
+    cap_mask = pygame.Surface(big.get_size(), pygame.SRCALPHA)
+    pygame.draw.ellipse(cap_mask, (255, 255, 255, 255), bcap)
+
+    facets = pygame.Surface(big.get_size(), pygame.SRCALPHA)
+    bcx_full = bcap.centerx
+    bcy_full = bcap.centery
+    rx = bcap.width // 2 + SS * 4
+    ry = bcap.height // 2 + SS * 4
+    facet_hues = [0.55, 0.65, 0.78, 0.92, 0.08, 0.42]
+    n = len(facet_hues)
+    for i, h in enumerate(facet_hues):
+        a0 = math.pi + i * (math.pi / n)         # left to right across the dome
+        a1 = math.pi + (i + 1) * (math.pi / n)
         col = _hsv_to_rgb(h, 0.55, 0.95)
-        dk  = _hsv_to_rgb(h, 0.70, 0.55)
-        pygame.draw.polygon(big, col, [centre, v1, v2])
-        # Thin dark facet edge
-        pygame.draw.line(big, dk, v1, v2, 2)
-        pygame.draw.line(big, dk, centre, v1, 1)
+        # Radial wedge as a triangle to a far point on the ellipse boundary.
+        p0 = (bcx_full + math.cos(a0) * rx, bcy_full + math.sin(a0) * ry)
+        p1 = (bcx_full + math.cos(a1) * rx, bcy_full + math.sin(a1) * ry)
+        pygame.draw.polygon(facets, col, [(bcx_full, bcy_full + ry), p0, p1])
+        # Facet edge
+        pygame.draw.line(facets, _hsv_to_rgb(h, 0.7, 0.55),
+                         (bcx_full, bcy_full + ry), p0, 2)
+    facets.blit(cap_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    big.blit(facets, (0, 0))
 
-    # Bright top triangle highlight (the gem's "table")
-    top_pts = [centre,
-               ((verts[1][0] + verts[2][0]) / 2, (verts[1][1] + verts[2][1]) / 2),
-               ((verts[0][0] + verts[1][0]) / 2, (verts[0][1] + verts[1][1]) / 2)]
-    pygame.draw.polygon(big, (255, 255, 255, 180), top_pts)
+    # Bright top sheen highlight
+    sheen = pygame.Surface(big.get_size(), pygame.SRCALPHA)
+    pygame.draw.ellipse(sheen, (255, 255, 255, 180),
+                        pygame.Rect(bcap.x + 4 * SS, bcap.y + 2 * SS,
+                                    bcap.width - 8 * SS, 4 * SS))
+    sheen.blit(cap_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    big.blit(sheen, (0, 0))
 
-    # Outer hexagon outline — bold dark for contrast
-    pygame.draw.polygon(big, (35, 50, 90), verts, 3)
+    # Cap rim line for definition
+    pygame.draw.ellipse(big, (50, 70, 130), bcap, 2 * SS)
 
-    # Inner glow core (pulses)
-    core_a = int(120 + 90 * glow_t)
-    core = pygame.Surface((rs, rs), pygame.SRCALPHA)
-    pygame.draw.circle(core, (255, 255, 255, core_a),
-                       (rs // 2, rs // 2), int(rs * 0.22))
-    big.blit(core, (bcx - rs // 2, int(bcy - rs * 0.45)))
+    _ss_blit(big, surf, cap_rect.x - 2, cap_rect.y - 2, big_w, big_h)
 
-    _ss_blit(big, surf, cx - R - 2, cy - R, R * 2 + 4, R * 2 + 4)
-
-    # Sparkle prick at top
-    for ang_deg, dist in ((90, 16), (30, 14), (150, 14)):
-        ang = math.radians(ang_deg)
-        sx = cx + int(math.cos(ang) * dist) * 0
-        sy = cy - int(dist * 0.7)
-        # placed via direct top-right/top-left sparks instead
-    for px, py in ((cx, cy - 17), (cx - 12, cy - 10), (cx + 12, cy - 11)):
-        a = int(180 + 70 * glow_t)
-        sp = pygame.Surface((7, 7), pygame.SRCALPHA)
-        pygame.draw.line(sp, (255, 255, 255, a), (3, 0), (3, 6), 1)
-        pygame.draw.line(sp, (255, 255, 255, a), (0, 3), (6, 3), 1)
-        pygame.draw.circle(sp, (255, 255, 255, a), (3, 3), 1)
-        surf.blit(sp, (px - 3, py - 3))
+    # Crystalline spots — bright white shines with a tiny cyan halo and
+    # a 4-spike sparkle cross overlayed on the largest one.
+    for dx, dy, r in CANONICAL_SPOTS:
+        sx, sy = cx + dx, cy + dy
+        pygame.draw.circle(surf, (180, 230, 255), (sx, sy), r + 1)
+        pygame.draw.circle(surf, (255, 255, 255), (sx, sy), r)
+        # 4-point sparkle on each spot
+        pygame.draw.line(surf, (255, 255, 255), (sx, sy - r - 1), (sx, sy + r + 1), 1)
+        pygame.draw.line(surf, (255, 255, 255), (sx - r - 1, sy), (sx + r + 1, sy), 1)
 
 
-# ── V2 — GALAXY / NEBULA MUSHROOM ──────────────────────────────────────────
+# ── V2 — GALAXY MUSHROOM ───────────────────────────────────────────────────
 def draw_v2_galaxy(surf, cx, cy, pulse=0.0):
-    """Cap is a deep cosmos: midnight purple base with a swirling spiral
-    nebula in pink/violet/cyan, scattered white stars, and a brilliant
-    glowing core. Stem is a starlit pillar with twinkles."""
+    """Mushroom dome cap with a deep cosmic interior — spiral nebula and
+    scattered stars. Spots → 4 brighter star clusters at the canonical
+    positions so the mushroom-spot rhythm survives."""
     spin = pulse * 0.5
     glow_t = 0.5 + 0.5 * math.sin(pulse * 1.4)
 
-    # Outer cosmic glow (violet halo so the dark cap reads on dark BG)
-    halo = pygame.Surface((72, 56), pygame.SRCALPHA)
-    for r, a in ((30, int(35 + 25 * glow_t)),
-                 (24, int(60 + 35 * glow_t)),
-                 (18, int(95 + 45 * glow_t))):
-        pygame.draw.circle(halo, (190, 130, 255, a), (36, 26), r)
-    surf.blit(halo, (cx - 36, cy - 26 - 4))
+    # Violet outer halo
+    halo = pygame.Surface((52, 42), pygame.SRCALPHA)
+    for r, a in ((24, int(30 + 20 * glow_t)),
+                 (20, int(55 + 30 * glow_t)),
+                 (16, int(90 + 40 * glow_t))):
+        pygame.draw.ellipse(halo, (190, 130, 255, a),
+                            pygame.Rect(26 - r, 21 - int(r * 0.7),
+                                        r * 2, int(r * 1.4)))
+    surf.blit(halo, (cx - 26, cy - 21 - 2))
 
-    # Stem — dark midnight blue with vertical gradient and tiny stars
-    stem_w, stem_h = 14, 14
-    stem_x = cx - stem_w // 2
-    pygame.draw.rect(surf, (15, 10, 35),
-                     pygame.Rect(stem_x - 1, cy - 1, stem_w + 2, stem_h + 2),
-                     border_radius=6)
-    for yy in range(stem_h):
-        t = yy / max(1, stem_h - 1)
-        col = (
-            int( 80 + ( 35 -  80) * t),
-            int( 65 + ( 28 -  65) * t),
-            int(140 + ( 65 - 140) * t),
-        )
-        pygame.draw.line(surf, col,
-                         (stem_x + 1, cy + yy), (stem_x + stem_w - 2, cy + yy))
-    pygame.draw.rect(surf, (12, 8, 30),
-                     pygame.Rect(stem_x, cy, stem_w, stem_h),
-                     width=2, border_radius=5)
-    # Stem stars
-    for sx, sy in ((cx - 3, cy + 3), (cx + 3, cy + 7), (cx - 2, cy + 11),
-                   (cx + 4, cy + 11)):
+    # Standard tan stem with two tiny twinkles
+    _draw_standard_stem(surf, cx, cy)
+    for sx, sy in ((cx - 3, cy + 4), (cx + 4, cy + 9)):
         pygame.draw.circle(surf, (255, 245, 220), (sx, sy), 1)
 
-    # Cap — supersampled cosmic disc
-    R = 17
-    big = _ss_surface(R * 2 + 4, R * 2 + 4)
-    bcx, bcy = (R + 2) * SS, (R + 2) * SS
-    rs = R * SS
+    # Cap supersampled
+    cap_rect = _cap_rect(cx, cy)
+    big_w, big_h = cap_rect.width + 4, cap_rect.height + 4
+    big = _ss_surface(big_w, big_h)
+    bcap = pygame.Rect(2 * SS, 2 * SS, cap_rect.width * SS, cap_rect.height * SS)
 
-    cap_rect = pygame.Rect(2 * SS, 4 * SS, R * 2 * SS, int(R * 1.5 * SS))
+    pygame.draw.ellipse(big, (15, 8, 35), bcap.inflate(SS * 2, SS * 2))
+    pygame.draw.ellipse(big, (40, 22, 75), bcap)
 
-    # Outer dark rim
-    pygame.draw.ellipse(big, (15, 8, 35), cap_rect.inflate(SS * 2, SS * 2))
-    # Base midnight purple disc
-    pygame.draw.ellipse(big, (40, 22, 75), cap_rect)
+    cap_mask = pygame.Surface(big.get_size(), pygame.SRCALPHA)
+    pygame.draw.ellipse(cap_mask, (255, 255, 255, 255), bcap)
 
-    # Build the swirling nebula on a circular surface, then mask to ellipse.
-    nebula = pygame.Surface((rs * 2, rs * 2), pygame.SRCALPHA)
-    ncx, ncy = rs, rs
-    # Plot spiral arms via dotted clouds
+    # Spiral nebula painted as colour-cycling dotted arms.
+    nebula = pygame.Surface(big.get_size(), pygame.SRCALPHA)
+    ncx, ncy = bcap.centerx, bcap.centery
+    rx, ry = bcap.width // 2, bcap.height // 2
     for arm in range(2):
         arm_phase = arm * math.pi
-        for i in range(80):
-            t = i / 80.0
-            r = t * rs * 0.95
+        for i in range(60):
+            t = i / 60.0
+            r = t * 0.9
             ang = arm_phase + t * 5.5 + spin
-            px = ncx + math.cos(ang) * r
-            py = ncy + math.sin(ang) * r * 0.7
-            # Colour cycles along arm — magenta → violet → cyan
+            px = ncx + math.cos(ang) * rx * r
+            py = ncy + math.sin(ang) * ry * r
             hue = (0.78 + t * 0.25) % 1.0
             col = _hsv_to_rgb(hue, 0.65, 0.95)
-            a = int(180 * (1 - t * 0.6))
-            for jitter in (-2, 0, 2):
-                pygame.draw.circle(
-                    nebula, (*col, a // 2),
-                    (int(px + jitter), int(py + jitter * 0.5)),
-                    int(3 * SS - t * 2 * SS))
-            pygame.draw.circle(
-                nebula, (*col, a),
-                (int(px), int(py)),
-                max(1, int(2 * SS - t * SS)))
+            a = int(180 * (1 - t * 0.5))
+            pygame.draw.circle(nebula, (*col, a),
+                               (int(px), int(py)),
+                               max(1, int(2 * SS - t * SS)))
+    nebula.blit(cap_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    big.blit(nebula, (0, 0))
 
-    # Mask nebula to the cap ellipse
-    mask = pygame.Surface((rs * 2, rs * 2), pygame.SRCALPHA)
-    pygame.draw.ellipse(mask, (255, 255, 255, 255),
-                        pygame.Rect(0, int(rs * 0.25),
-                                    rs * 2, int(rs * 1.05)))
-    nebula.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-    big.blit(nebula, (bcx - rs, bcy - rs))
+    # Bright cosmic core
+    core = pygame.Surface(big.get_size(), pygame.SRCALPHA)
+    for r, a in ((int(rx * 0.30), 90),
+                 (int(rx * 0.20), 160),
+                 (int(rx * 0.10), 240)):
+        pygame.draw.circle(core, (255, 245, 220, a), (ncx, ncy), r)
+    core.blit(cap_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    big.blit(core, (0, 0))
 
-    # Bright core
-    core = pygame.Surface((rs, rs), pygame.SRCALPHA)
-    for r, a in ((int(rs * 0.32), 90),
-                 (int(rs * 0.22), 160),
-                 (int(rs * 0.12), 240)):
-        pygame.draw.circle(core, (255, 245, 220, a),
-                           (rs // 2, rs // 2), r)
-    big.blit(core, (bcx - rs // 2, bcy - int(rs * 0.45)))
-
-    # Scattered stars (cross-shaped sparkles)
-    star_positions = [
-        (-12,  -6, 2), ( 10,  -8, 2), ( -4, -12, 1),
-        (  6,  -2, 1), (-10,   2, 1), ( 12,   0, 2),
-        ( -2,  -4, 1), (  2,   3, 1), (  0,  -9, 2),
-    ]
-    for dx, dy, sz in star_positions:
-        sxp = bcx + dx * SS
-        syp = bcy + dy * SS
-        sl = sz * SS
-        pygame.draw.line(big, (255, 255, 255), (sxp - sl, syp), (sxp + sl, syp), 1)
-        pygame.draw.line(big, (255, 255, 255), (sxp, syp - sl), (sxp, syp + sl), 1)
-        pygame.draw.circle(big, (255, 255, 255), (sxp, syp), max(1, sz))
-
-    # Cap rim outline + highlight
-    pygame.draw.ellipse(big, (180, 130, 220), cap_rect, 2 * SS)
+    # Cap rim highlight
+    pygame.draw.ellipse(big, (180, 130, 220), bcap, 2 * SS)
     pygame.draw.ellipse(big, (220, 180, 255),
-                        pygame.Rect(cap_rect.x + 2 * SS, cap_rect.y + SS,
-                                    cap_rect.width - 4 * SS, 4 * SS))
+                        pygame.Rect(bcap.x + 2 * SS, bcap.y + SS,
+                                    bcap.width - 4 * SS, 4 * SS))
 
-    _ss_blit(big, surf, cx - R - 2, cy - R, R * 2 + 4, R * 2 + 4)
+    _ss_blit(big, surf, cap_rect.x - 2, cap_rect.y - 2, big_w, big_h)
+
+    # Spots → bright star clusters at canonical positions. Each is a tight
+    # sparkle (cross + dot) so the spot rhythm is preserved.
+    for dx, dy, r in CANONICAL_SPOTS:
+        sx, sy = cx + dx, cy + dy
+        # halo
+        pygame.draw.circle(surf, (220, 200, 255), (sx, sy), r + 1)
+        # bright body
+        pygame.draw.circle(surf, (255, 255, 255), (sx, sy), r)
+        # cross sparkle
+        sl = r + 1
+        pygame.draw.line(surf, (255, 255, 255), (sx - sl, sy), (sx + sl, sy), 1)
+        pygame.draw.line(surf, (255, 255, 255), (sx, sy - sl), (sx, sy + sl), 1)
 
 
-# ── V3 — MOLTEN LAVA / OBSIDIAN ────────────────────────────────────────────
+# ── V3 — MOLTEN LAVA MUSHROOM ──────────────────────────────────────────────
 def draw_v3_lava(surf, cx, cy, pulse=0.0):
-    """Cap is dark cracked obsidian with glowing orange-yellow lava
-    seams running through it (lightning-pattern). Heat-glow halo,
-    rising ember sparks, dark stem with hot core."""
+    """Mushroom dome cap as glowing volcanic rock with bright lava cracks
+    snaking between the spots. Spots → glowing crater pits (dark-red disc
+    with a hot orange centre). Tan stem with a thin glowing core seam."""
     glow_t = 0.5 + 0.5 * math.sin(pulse * 2.2)
 
-    # Hot glow halo centred on the CAP (not above it). Bright orange
-    # bleed sells the dome as molten / glowing.
-    halo = pygame.Surface((60, 50), pygame.SRCALPHA)
-    halo_cx, halo_cy = 30, 22
-    for r, a in ((26, int(40 + 25 * glow_t)),
-                 (22, int(80 + 35 * glow_t)),
-                 (18, int(125 + 50 * glow_t))):
+    # Compact orange heat halo, cap-centred
+    halo = pygame.Surface((50, 40), pygame.SRCALPHA)
+    halo_cx, halo_cy = 25, 18
+    for r, a in ((22, int(35 + 25 * glow_t)),
+                 (18, int(70 + 35 * glow_t)),
+                 (15, int(110 + 50 * glow_t))):
         pygame.draw.ellipse(halo, (255, 140, 50, a),
                             pygame.Rect(halo_cx - r, halo_cy - int(r * 0.65),
                                         r * 2, int(r * 1.3)))
     surf.blit(halo, (cx - halo_cx, cy - halo_cy + 2))
 
-    # Stem — warm dark rock with a hot core seam
-    stem = pygame.Rect(cx - 7, cy, 14, 13)
-    pygame.draw.rect(surf, (30, 16, 14), stem.inflate(2, 2), border_radius=6)
-    pygame.draw.rect(surf, (95, 55, 45), stem, border_radius=5)
-    # Horizontal rock striations
-    pygame.draw.line(surf, (60, 30, 25), (cx - 5, cy + 5), (cx + 5, cy + 5), 1)
-    pygame.draw.line(surf, (60, 30, 25), (cx - 5, cy + 9), (cx + 5, cy + 9), 1)
-    # Glowing core seam
-    pygame.draw.line(surf, (255, 200, 80),
-                     (cx - 1, cy + 2), (cx - 1, cy + 11), 2)
-    pygame.draw.line(surf, (255, 245, 200),
-                     (cx - 1, cy + 4), (cx - 1, cy + 9), 1)
+    # Tan stem with a hot core seam
+    _draw_standard_stem(surf, cx, cy)
+    pygame.draw.line(surf, (255, 200, 80), (cx, cy + 3), (cx, cy + 10), 1)
 
-    # Cap supersampled — GLOWING volcanic dome
-    R = 17
-    big = _ss_surface(R * 2 + 4, R * 2 + 4)
-    cap_rect = pygame.Rect(2 * SS, 4 * SS, R * 2 * SS, int(R * 1.55 * SS))
+    # Cap supersampled — glowing volcanic dome
+    cap_rect = _cap_rect(cx, cy)
+    big_w, big_h = cap_rect.width + 4, cap_rect.height + 4
+    big = _ss_surface(big_w, big_h)
+    bcap = pygame.Rect(2 * SS, 2 * SS, cap_rect.width * SS, cap_rect.height * SS)
 
-    # Outline (charred crust)
-    pygame.draw.ellipse(big, (40, 18, 14), cap_rect.inflate(SS * 2, SS * 2))
-    # Vertical gradient: hot orange-red top → dark crust bottom.
-    # This is the KEY change: cap body is warm/bright, not brown/dark.
-    grad = pygame.Surface(cap_rect.size, pygame.SRCALPHA)
-    for yy in range(cap_rect.height):
-        t = yy / max(1, cap_rect.height - 1)
+    pygame.draw.ellipse(big, (40, 18, 14), bcap.inflate(SS * 2, SS * 2))
+
+    cap_mask = pygame.Surface(big.get_size(), pygame.SRCALPHA)
+    pygame.draw.ellipse(cap_mask, (255, 255, 255, 255), bcap)
+
+    # Volcanic vertical gradient: hot orange-red top → dark crust bottom.
+    grad = pygame.Surface(bcap.size, pygame.SRCALPHA)
+    for yy in range(bcap.height):
+        t = yy / max(1, bcap.height - 1)
         if t < 0.45:
             u = t / 0.45
-            col = (
-                int(255 + (220 - 255) * u),
-                int(150 + ( 70 - 150) * u),
-                int( 60 + ( 30 -  60) * u),
-            )
+            col = (int(255 + (220 - 255) * u),
+                   int(150 + ( 70 - 150) * u),
+                   int( 60 + ( 30 -  60) * u))
         else:
             u = (t - 0.45) / 0.55
-            col = (
-                int(220 + ( 90 - 220) * u),
-                int( 70 + ( 25 -  70) * u),
-                int( 30 + ( 18 -  30) * u),
-            )
-        pygame.draw.line(grad, col, (0, yy), (cap_rect.width, yy))
-    mask = pygame.Surface(cap_rect.size, pygame.SRCALPHA)
-    pygame.draw.ellipse(mask, (255, 255, 255, 255), mask.get_rect())
-    grad.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-    big.blit(grad, cap_rect.topleft)
+            col = (int(220 + ( 90 - 220) * u),
+                   int( 70 + ( 25 -  70) * u),
+                   int( 30 + ( 18 -  30) * u))
+        pygame.draw.line(grad, col, (0, yy), (bcap.width, yy))
+    inner_mask = pygame.Surface(bcap.size, pygame.SRCALPHA)
+    pygame.draw.ellipse(inner_mask, (255, 255, 255, 255), inner_mask.get_rect())
+    grad.blit(inner_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    big.blit(grad, bcap.topleft)
 
-    # Lava seams — branching cracks. Drawn in 3 alpha layers for bloom.
-    bcx, bcy = (R + 2) * SS, int((R - 5) * SS) + cap_rect.height // 2
+    # Lava cracks — branching from the cap centre, threading between the
+    # canonical spot slots so they don't collide with the crater pits.
+    bcx_full = bcap.centerx
+    bcy_full = bcap.centery
     cracks = [
-        # (start_off, segments [dx, dy])
-        ((-12,  -2), [(2, -3), (3,  4), (4, -2), (4,  3)]),
-        ((  0, -10), [(-2, 4), (3,  3), (-3, 4), (4,  2)]),
-        ((  3,  -1), [(4, -2), (3,  4), (-2, 3)]),
-        (( -6,   4), [(3,  2), (4, -1), (3,  3)]),
+        ((-1, -1), [(-3, -2), (-2,  3), (-3,  1)]),
+        (( 0,  0), [( 4, -3), ( 2,  3), ( 3,  1)]),
+        ((-1, -1), [( 0,  4), ( 3,  2)]),
+        (( 0,  0), [(-4,  3), (-3,  1)]),
     ]
-    # Bright crack layers — wide red bloom, mid yellow, hot white core.
     for layer_w, layer_col_a in (
-        (6, (255, 100,  30, 110)),
-        (4, (255, 200,  70, 200)),
-        (2, (255, 255, 230, 255)),
+        (5, (255, 100,  30, 110)),
+        (3, (255, 200,  70, 200)),
+        (1, (255, 255, 230, 255)),
     ):
         for start, segs in cracks:
-            x = bcx + start[0] * SS
-            y = bcy + start[1] * SS
+            x = bcx_full + start[0] * SS
+            y = bcy_full + start[1] * SS
             for dx, dy in segs:
                 nx = x + dx * SS
                 ny = y + dy * SS
-                pygame.draw.line(big, layer_col_a,
-                                 (x, y), (nx, ny), max(1, layer_w * SS // 2))
+                pygame.draw.line(big, layer_col_a, (x, y), (nx, ny),
+                                 max(1, layer_w * SS // 2))
                 x, y = nx, ny
 
-    # Specular sheen across the dome top
-    hi = pygame.Rect(cap_rect.x + 4 * SS, cap_rect.y + 2 * SS,
-                     cap_rect.width - 8 * SS, 3 * SS)
-    pygame.draw.ellipse(big, (255, 230, 180, 220), hi)
+    # Cap top sheen
+    sheen = pygame.Surface(big.get_size(), pygame.SRCALPHA)
+    pygame.draw.ellipse(sheen, (255, 230, 180, 200),
+                        pygame.Rect(bcap.x + 4 * SS, bcap.y + 2 * SS,
+                                    bcap.width - 8 * SS, 3 * SS))
+    sheen.blit(cap_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    big.blit(sheen, (0, 0))
 
-    # Mask anything outside the cap ellipse
-    mask = pygame.Surface(big.get_size(), pygame.SRCALPHA)
-    pygame.draw.ellipse(mask, (255, 255, 255, 255), cap_rect)
-    big.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-    # Re-draw a thin charred outline on top
-    pygame.draw.ellipse(big, (40, 18, 14), cap_rect, 2 * SS)
+    # Charred outline
+    pygame.draw.ellipse(big, (40, 18, 14), bcap, 2 * SS)
 
-    _ss_blit(big, surf, cx - R - 2, cy - R, R * 2 + 4, R * 2 + 4)
+    _ss_blit(big, surf, cap_rect.x - 2, cap_rect.y - 2, big_w, big_h)
 
-    # Rising embers above the cap
-    for i in range(3):
-        phase = pulse * 1.8 + i * 1.7
-        rise = (phase % 2.0)
-        if rise < 1.4:
-            ex = cx + int(math.sin(phase * 1.3 + i) * 6) + (i - 1) * 5
-            ey = cy - 14 - int(rise * 8)
-            a = int(255 * (1 - rise / 1.4))
-            es = pygame.Surface((5, 5), pygame.SRCALPHA)
-            pygame.draw.circle(es, (255, 200,  60, a), (2, 2), 2)
-            pygame.draw.circle(es, (255, 240, 180, a), (2, 2), 1)
-            surf.blit(es, (ex - 2, ey - 2))
+    # Spots → glowing crater pits at the canonical positions.
+    for dx, dy, r in CANONICAL_SPOTS:
+        sx, sy = cx + dx, cy + dy
+        pygame.draw.circle(surf, (60, 20, 18), (sx, sy), r + 1)   # rim
+        pygame.draw.circle(surf, (110, 40, 30), (sx, sy), r)       # dark base
+        pygame.draw.circle(surf, (255, 180,  60), (sx, sy), max(1, r - 1))
+        pygame.draw.circle(surf, (255, 250, 220), (sx, sy), max(1, r - 2))
 
 
-# ── V4 — HOLOGRAPHIC IRIDESCENT FOIL ───────────────────────────────────────
+# ── V4 — HOLOGRAPHIC FOIL MUSHROOM ─────────────────────────────────────────
 def draw_v4_holo(surf, cx, cy, pulse=0.0):
-    """Iridescent rainbow holographic foil cap — horizontal bands cycling
-    through cyan → magenta → yellow → green. Mirror-chrome stem with a
-    silver vertical gradient. Bright specular streak on the cap."""
+    """Mushroom dome cap with iridescent rainbow-foil bands and a diagonal
+    specular streak. Spots → 4 mirror-chrome dots, each tinted a different
+    rainbow hue. Silver chrome stem."""
     shift = (pulse * 0.18) % 1.0
 
-    # Iridescent halo — soft rainbow ring so the cap reads on dark BG
-    halo = pygame.Surface((68, 56), pygame.SRCALPHA)
-    for i, r in enumerate((28, 24, 20)):
+    # Soft rainbow halo
+    halo = pygame.Surface((52, 42), pygame.SRCALPHA)
+    for i, r in enumerate((22, 18, 14)):
         hue = (shift + i * 0.18) % 1.0
         col = _hsv_to_rgb(hue, 0.45, 1.0)
-        a = (40, 70, 110)[i]
+        a = (35, 65, 100)[i]
         pygame.draw.ellipse(halo, (*col, a),
-                            pygame.Rect(34 - r, 28 - int(r * 0.8),
-                                        r * 2, int(r * 1.6)))
-    surf.blit(halo, (cx - 34, cy - 28 - 4))
+                            pygame.Rect(26 - r, 21 - int(r * 0.7),
+                                        r * 2, int(r * 1.4)))
+    surf.blit(halo, (cx - 26, cy - 21 - 2))
 
-    # Chrome stem — silver gradient + dark outline
-    stem_w, stem_h = 14, 14
-    stem_x = cx - stem_w // 2
+    # Chrome stem (silver gradient)
+    stem_x = cx - STEM_W // 2
     pygame.draw.rect(surf, (30, 38, 60),
-                     pygame.Rect(stem_x - 1, cy - 1, stem_w + 2, stem_h + 2),
+                     pygame.Rect(stem_x - 1, cy - 1, STEM_W + 2, STEM_H + 2),
                      border_radius=6)
-    for yy in range(stem_h):
-        t = yy / max(1, stem_h - 1)
-        # silver: light → dim → light bands for chrome
+    for yy in range(STEM_H):
+        t = yy / max(1, STEM_H - 1)
         s = 0.5 + 0.5 * math.sin(t * math.pi * 2.0 + shift * math.tau)
         v = int(160 + 90 * s)
         pygame.draw.line(surf, (v, min(255, v + 5), min(255, v + 15)),
-                         (stem_x + 1, cy + yy), (stem_x + stem_w - 2, cy + yy))
+                         (stem_x + 1, cy + yy), (stem_x + STEM_W - 2, cy + yy))
     pygame.draw.rect(surf, (50, 60, 90),
-                     pygame.Rect(stem_x, cy, stem_w, stem_h),
+                     pygame.Rect(stem_x, cy, STEM_W, STEM_H),
                      width=2, border_radius=5)
-    # Bright vertical chrome highlight
     pygame.draw.line(surf, (255, 255, 255),
-                     (cx - 3, cy + 2), (cx - 3, cy + stem_h - 3), 2)
+                     (cx - 3, cy + 2), (cx - 3, cy + STEM_H - 3), 2)
 
-    # Cap supersampled — iridescent bands inside a TALL dome ellipse
-    R = 17
-    big = _ss_surface(R * 2 + 4, R * 2 + 6)
-    cap_rect = pygame.Rect(2 * SS, 4 * SS, R * 2 * SS, int(R * 1.7 * SS))
+    # Cap supersampled — iridescent dome
+    cap_rect = _cap_rect(cx, cy)
+    big_w, big_h = cap_rect.width + 4, cap_rect.height + 4
+    big = _ss_surface(big_w, big_h)
+    bcap = pygame.Rect(2 * SS, 2 * SS, cap_rect.width * SS, cap_rect.height * SS)
 
-    # Outer outline
-    pygame.draw.ellipse(big, (40, 50, 80), cap_rect.inflate(SS * 2, SS * 2))
+    pygame.draw.ellipse(big, (40, 50, 80), bcap.inflate(SS * 2, SS * 2))
 
-    # Build holographic gradient (horizontal bands of HSV-cycled colour)
-    grad = pygame.Surface((cap_rect.width, cap_rect.height), pygame.SRCALPHA)
-    for yy in range(cap_rect.height):
-        t = yy / max(1, cap_rect.height - 1)
+    cap_mask = pygame.Surface(big.get_size(), pygame.SRCALPHA)
+    pygame.draw.ellipse(cap_mask, (255, 255, 255, 255), bcap)
+
+    # Holographic horizontal bands cycling through HSV.
+    grad = pygame.Surface(bcap.size, pygame.SRCALPHA)
+    for yy in range(bcap.height):
+        t = yy / max(1, bcap.height - 1)
         hue = (t * 1.1 + shift) % 1.0
-        # vertical sheen modulates value
         vmod = 0.7 + 0.3 * math.sin(t * math.pi * 3 + shift * math.tau * 2)
         col = _hsv_to_rgb(hue, 0.55, vmod)
-        pygame.draw.line(grad, col, (0, yy), (cap_rect.width, yy))
+        pygame.draw.line(grad, col, (0, yy), (bcap.width, yy))
+    inner_mask = pygame.Surface(bcap.size, pygame.SRCALPHA)
+    pygame.draw.ellipse(inner_mask, (255, 255, 255, 255), inner_mask.get_rect())
+    grad.blit(inner_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    big.blit(grad, bcap.topleft)
 
-    # Apply elliptical mask
-    mask = pygame.Surface((cap_rect.width, cap_rect.height), pygame.SRCALPHA)
-    pygame.draw.ellipse(mask, (255, 255, 255, 255), mask.get_rect())
-    grad.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-    big.blit(grad, cap_rect.topleft)
-
-    # Diagonal specular streak (chrome highlight)
-    streak = pygame.Surface((cap_rect.width, cap_rect.height), pygame.SRCALPHA)
-    for k in range(cap_rect.width):
-        # diagonal offset
-        for j in range(3 * SS):
-            yy = int(k * 0.55) + j - cap_rect.height // 4
-            if 0 <= yy < cap_rect.height:
-                a = int(180 * (1 - j / (3 * SS)))
+    # Diagonal specular streak
+    streak = pygame.Surface(bcap.size, pygame.SRCALPHA)
+    for k in range(bcap.width):
+        for j in range(2 * SS):
+            yy = int(k * 0.55) + j - bcap.height // 4
+            if 0 <= yy < bcap.height:
+                a = int(180 * (1 - j / (2 * SS)))
                 streak.set_at((k, yy), (255, 255, 255, a))
-    streak.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-    big.blit(streak, cap_rect.topleft)
+    streak.blit(inner_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    big.blit(streak, bcap.topleft)
 
-    # Bold rim
-    pygame.draw.ellipse(big, (25, 30, 55), cap_rect, 2 * SS)
+    pygame.draw.ellipse(big, (25, 30, 55), bcap, 2 * SS)
 
-    _ss_blit(big, surf, cx - R - 2, cy - R, R * 2 + 4, R * 2 + 6)
+    _ss_blit(big, surf, cap_rect.x - 2, cap_rect.y - 2, big_w, big_h)
 
-    # 3 tiny rainbow sparkles around the cap
-    for i in range(3):
-        ang = pulse * 1.2 + i * (math.tau / 3)
-        sx = cx + int(math.cos(ang) * 16)
-        sy = cy - 4 + int(math.sin(ang) * 6) - 4
-        col = _hsv_to_rgb((shift + i / 3) % 1.0, 0.7, 1.0)
-        sp = pygame.Surface((5, 5), pygame.SRCALPHA)
-        pygame.draw.line(sp, (*col, 230), (2, 0), (2, 4), 1)
-        pygame.draw.line(sp, (*col, 230), (0, 2), (4, 2), 1)
-        pygame.draw.circle(sp, (255, 255, 255, 255), (2, 2), 1)
-        surf.blit(sp, (sx - 2, sy - 2))
+    # Spots → mirror-chrome dots, each rainbow-hue-tinted at the canonical
+    # positions. Each is a small radial gradient ring (dark rim → tint
+    # body → bright white centre) so they read as mirror balls.
+    spot_hues = [0.55, 0.92, 0.15, 0.42]
+    for (dx, dy, r), hue in zip(CANONICAL_SPOTS, spot_hues):
+        sx, sy = cx + dx, cy + dy
+        tint = _hsv_to_rgb((hue + shift) % 1.0, 0.55, 1.0)
+        pygame.draw.circle(surf, (40, 50, 80),    (sx, sy), r + 1)
+        pygame.draw.circle(surf, tint,            (sx, sy), r)
+        pygame.draw.circle(surf, (255, 255, 255), (sx - 1, sy - 1), max(1, r - 1))
 
 
-# ── V5 — CLOUD HEART (Skybit-themed, sky-game appropriate) ─────────────────
-def draw_v5_cloud_heart(surf, cx, cy, pulse=0.0):
-    """The cap is a pillowy CLOUD shaped like a heart — multiple white
-    puffs forming a heart silhouette. A glowing pink heart-core peeks
-    through. Tiny rainbow arc above. Stem is a golden sunbeam."""
+# ── V5 — CLOUD-FLUFF MUSHROOM (Skybit-themed) ──────────────────────────────
+def draw_v5_cloud(surf, cx, cy, pulse=0.0):
+    """Mushroom silhouette ASSEMBLED from cloud-puff circles. Pale-pastel
+    cloud-puff "spots" at the canonical positions (different pastel hues).
+    Fluffy cloud-pillar stem with a soft sky-blue inner shadow. Tiny
+    rainbow arc above."""
     pulse_v = 0.5 + 0.5 * math.sin(pulse * 2.0)
 
-    # Tiny rainbow arc above
-    arc_rect = pygame.Rect(cx - 14, cy - 26, 28, 18)
+    # Tiny rainbow arc above the cap
+    arc_rect = pygame.Rect(cx - 14, cy - 26, 28, 14)
     for i, col in enumerate(((255, 100, 100), (255, 180,  80),
                              (255, 240, 120), (120, 220, 130),
                              (110, 180, 255), (180, 130, 230))):
         r = arc_rect.inflate(-i * 2, -i * 2)
         if r.width > 4 and r.height > 4:
-            pygame.draw.arc(surf, col, r, math.radians(20), math.radians(160), 1)
+            pygame.draw.arc(surf, col, r,
+                            math.radians(20), math.radians(160), 1)
 
-    # Sunbeam stem — gold gradient, slightly tapered
-    stem_h = 14
-    for yy in range(stem_h):
-        t = yy / max(1, stem_h - 1)
-        col = (
-            int(255 + (220 - 255) * t),
-            int(220 + (160 - 220) * t),
-            int( 80 + ( 40 -  80) * t),
-        )
-        w = 13 - int(t * 3)
-        pygame.draw.line(surf, col,
-                         (cx - w // 2, cy + yy), (cx + w // 2, cy + yy))
-    pygame.draw.rect(surf, (180, 110, 20),
-                     pygame.Rect(cx - 7, cy, 14, stem_h),
-                     width=2, border_radius=5)
-    pygame.draw.line(surf, (255, 250, 200),
-                     (cx - 3, cy + 2), (cx - 3, cy + stem_h - 3), 2)
-
-    # Heart-shaped cloud cap — drawn supersampled.
-    R = 18
-    big = _ss_surface(R * 2 + 6, R * 2 + 6)
-    bcx = (R + 3) * SS
-    bcy = (R + 3) * SS
-
-    # Heart silhouette via two top circles + bottom triangle (filled)
-    lobe_r = int(8 * SS)
-    lobe_dx = int(7 * SS)
-    lobe_y = bcy - int(7 * SS)
-    pink_outline = (180, 30, 70)
-    # Outer pink outline (slightly larger heart)
-    out_lobe_r = lobe_r + int(1.5 * SS)
-    pygame.draw.circle(big, pink_outline, (bcx - lobe_dx, lobe_y), out_lobe_r)
-    pygame.draw.circle(big, pink_outline, (bcx + lobe_dx, lobe_y), out_lobe_r)
-    pygame.draw.polygon(big, pink_outline, [
-        (bcx - int(15 * SS), lobe_y + int(2 * SS)),
-        (bcx + int(15 * SS), lobe_y + int(2 * SS)),
-        (bcx, bcy + int(11 * SS)),
-    ])
-
-    # Pink heart core (glowing, smaller)
-    pink_core_a = int(180 + 70 * pulse_v)
-    core_r = lobe_r - int(1 * SS)
-    core_layer = pygame.Surface(big.get_size(), pygame.SRCALPHA)
-    pygame.draw.circle(core_layer, (255, 130, 170, pink_core_a),
-                       (bcx - lobe_dx, lobe_y), core_r)
-    pygame.draw.circle(core_layer, (255, 130, 170, pink_core_a),
-                       (bcx + lobe_dx, lobe_y), core_r)
-    pygame.draw.polygon(core_layer, (255, 130, 170, pink_core_a), [
-        (bcx - int(13 * SS), lobe_y + int(2 * SS)),
-        (bcx + int(13 * SS), lobe_y + int(2 * SS)),
-        (bcx, bcy + int(9 * SS)),
-    ])
-    big.blit(core_layer, (0, 0))
-
-    # Cloud puffs forming the heart's outer surface — overlay fluffy white
-    # circles around the heart silhouette so it reads as a CLOUD heart.
-    puffs = [
-        (bcx - int(10 * SS), lobe_y - int(3 * SS), int(6 * SS)),
-        (bcx - int(5 * SS),  lobe_y - int(5 * SS), int(5 * SS)),
-        (bcx + int(5 * SS),  lobe_y - int(5 * SS), int(5 * SS)),
-        (bcx + int(10 * SS), lobe_y - int(3 * SS), int(6 * SS)),
-        (bcx - int(11 * SS), lobe_y + int(1 * SS), int(5 * SS)),
-        (bcx + int(11 * SS), lobe_y + int(1 * SS), int(5 * SS)),
-        (bcx - int(7 * SS),  lobe_y + int(4 * SS), int(5 * SS)),
-        (bcx + int(7 * SS),  lobe_y + int(4 * SS), int(5 * SS)),
-        (bcx,                lobe_y + int(5 * SS), int(5 * SS)),
-        (bcx - int(3 * SS),  lobe_y + int(8 * SS), int(4 * SS)),
-        (bcx + int(3 * SS),  lobe_y + int(8 * SS), int(4 * SS)),
-        (bcx,                lobe_y + int(11 * SS), int(3 * SS)),
+    # Stem — fluffy cloud column. 3 stacked puffs to form a stem-shaped
+    # rectangle silhouette while still reading as cloud.
+    stem_puffs = [
+        (cx - 4, cy + 3,  5),
+        (cx + 4, cy + 3,  5),
+        (cx - 3, cy + 9,  5),
+        (cx + 3, cy + 9,  5),
+        (cx,     cy + 12, 4),
     ]
-    # Outer cloud rim (soft grey-pink)
-    for px, py, pr in puffs:
-        pygame.draw.circle(big, (240, 220, 230), (px, py), pr + int(0.8 * SS))
-    # White cloud body
-    for px, py, pr in puffs:
-        pygame.draw.circle(big, (255, 255, 255), (px, py), pr)
-    # Subtle highlights
-    for px, py, pr in puffs[:6]:
-        pygame.draw.circle(big, (255, 255, 255),
-                           (px - pr // 4, py - pr // 3), pr // 3)
+    for px, py, pr in stem_puffs:
+        pygame.draw.circle(surf, (220, 235, 250), (px, py), pr + 1)
+    for px, py, pr in stem_puffs:
+        pygame.draw.circle(surf, (255, 255, 255), (px, py), pr)
+    # Sky-blue inner shadow on the right side
+    pygame.draw.circle(surf, (200, 220, 240), (cx + 3, cy + 6), 2)
 
-    # Re-stamp the pink core ON TOP at lower alpha so it glows through
-    glow = pygame.Surface(big.get_size(), pygame.SRCALPHA)
-    pygame.draw.circle(glow, (255, 90, 140, int(110 + 60 * pulse_v)),
-                       (bcx, lobe_y + int(1 * SS)), int(5 * SS))
-    big.blit(glow, (0, 0))
+    # Cap — assembled from cloud puffs. Layout matches a horizontal-oval
+    # dome so the silhouette reads as a mushroom cap.
+    # Outer pale-blue rim first.
+    cap_puffs = [
+        (cx - 12, cy - 5, 5),
+        (cx -  7, cy - 9, 6),
+        (cx -  1, cy -10, 6),
+        (cx +  6, cy - 9, 6),
+        (cx + 12, cy - 5, 5),
+        (cx -  9, cy - 2, 5),
+        (cx -  3, cy - 4, 5),
+        (cx +  3, cy - 4, 5),
+        (cx +  9, cy - 2, 5),
+        (cx,      cy - 1, 4),
+    ]
+    for px, py, pr in cap_puffs:
+        pygame.draw.circle(surf, (215, 230, 248), (px, py), pr + 1)
+    for px, py, pr in cap_puffs:
+        pygame.draw.circle(surf, (255, 255, 255), (px, py), pr)
+    # Soft pink underglow inside the cap (hints at the "red mushroom" colour
+    # without breaking the cloud read)
+    glow = pygame.Surface((28, 14), pygame.SRCALPHA)
+    pygame.draw.ellipse(glow, (255, 180, 200, int(80 + 50 * pulse_v)),
+                        glow.get_rect())
+    surf.blit(glow, (cx - 14, cy - 8))
 
-    _ss_blit(big, surf, cx - R - 3, cy - R - 3, R * 2 + 6, R * 2 + 6)
+    # Highlights on top puffs
+    for px, py, pr in cap_puffs[:5]:
+        pygame.draw.circle(surf, (255, 255, 255),
+                           (px - pr // 3, py - pr // 3), max(1, pr // 3))
 
-    # Floating heart sparkles
-    for i in range(2):
-        phase = pulse * 1.6 + i * 2.1
-        if math.sin(phase) > 0:
-            sx = cx + (-12 if i == 0 else 12)
-            sy = cy - 10 + int(math.sin(phase) * -3)
-            pygame.draw.circle(surf, (255, 130, 170), (sx, sy), 1)
-            pygame.draw.circle(surf, (255, 220, 230), (sx - 1, sy - 1), 1)
+    # Spots → small pastel cloud puffs at the canonical positions, each in
+    # a different pastel hue so the spot rhythm reads.
+    spot_pastels = [(255, 200, 220), (200, 230, 255),
+                    (255, 240, 200), (220, 240, 220)]
+    for (dx, dy, r), col in zip(CANONICAL_SPOTS, spot_pastels):
+        sx, sy = cx + dx, cy + dy
+        pygame.draw.circle(surf, (180, 190, 210), (sx, sy), r + 1)
+        pygame.draw.circle(surf, col,             (sx, sy), r)
+        pygame.draw.circle(surf, (255, 255, 255),
+                           (sx - 1, sy - 1), max(1, r - 1))
 
 
 VARIANTS = {
-    1: ("1 — crystal gem",   draw_v1_crystal),
-    2: ("2 — galaxy nebula", draw_v2_galaxy),
-    3: ("3 — molten lava",   draw_v3_lava),
-    4: ("4 — holo chrome",   draw_v4_holo),
-    5: ("5 — cloud heart",   draw_v5_cloud_heart),
+    1: ("1 — crystal",     draw_v1_crystal),
+    2: ("2 — galaxy",      draw_v2_galaxy),
+    3: ("3 — molten",      draw_v3_lava),
+    4: ("4 — holo foil",   draw_v4_holo),
+    5: ("5 — cloud-fluff", draw_v5_cloud),
 }
