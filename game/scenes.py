@@ -23,6 +23,59 @@ from game import intro as _intro
 _OPENER_SCROLL_END = int(World.SPAWN_GRACE * SCROLL_BASE)
 
 
+# ── intro-seen persistence ────────────────────────────────────────────────────
+# Tracks whether the player has already watched the once-per-launch intro
+# cinematic. Skipping it on repeat visits cuts ~12 s off the perceived
+# load time. Browser path uses localStorage (survives page reloads, scoped
+# to the origin); native path uses skybit_save.json so a quit/relaunch on
+# desktop also remembers. Failures in either store are silent — we just
+# play the intro again, which is the original behaviour.
+
+_INTRO_SEEN_KEY = "skybit_intro_seen"
+
+
+def _intro_already_seen() -> bool:
+    import sys as _sys
+    if _sys.platform == "emscripten":
+        try:
+            import js  # type: ignore
+            return js.window.localStorage.getItem(_INTRO_SEEN_KEY) == "1"
+        except Exception:
+            return False
+    try:
+        import json as _json
+        from game.config import SAVE_FILE
+        with open(SAVE_FILE, "r", encoding="utf-8") as f:
+            data = _json.load(f)
+        return bool(data.get("intro_seen"))
+    except Exception:
+        return False
+
+
+def _mark_intro_seen() -> None:
+    import sys as _sys
+    if _sys.platform == "emscripten":
+        try:
+            import js  # type: ignore
+            js.window.localStorage.setItem(_INTRO_SEEN_KEY, "1")
+        except Exception:
+            pass
+        return
+    try:
+        import json as _json
+        from game.config import SAVE_FILE
+        try:
+            with open(SAVE_FILE, "r", encoding="utf-8") as f:
+                data = _json.load(f)
+        except Exception:
+            data = {}
+        data["intro_seen"] = True
+        with open(SAVE_FILE, "w", encoding="utf-8") as f:
+            _json.dump(data, f)
+    except Exception:
+        pass
+
+
 def _draw_opener(surf: pygame.Surface, world) -> None:
     """Gameplay opener — cottage drifting off-screen-left + parcel tucked
     beneath Pip. Mirrors the intro's beat-2 ending so the cut from menu →
@@ -72,13 +125,26 @@ class App:
         self.hud = HUD()
         self.session_best = 0
         self._new_best = False
-        # Intro plays once per program launch — start every session in
-        # STATE_INTRO. Within the session (consecutive games after death,
-        # menu-tap → play → die → menu) the intro is never replayed since
-        # the App stays alive and we already moved past STATE_INTRO.
-        from game.intro import IntroScene
-        self.intro: object | None = IntroScene()
-        self.state = STATE_INTRO
+        # Intro plays only on the user's *first* visit — repeat loads
+        # land straight on the menu so they don't watch the 12-second
+        # cinematic again. Persisted via localStorage in the browser
+        # and via skybit_save.json natively (best-effort; if either
+        # store can't be read we just play the intro and treat it as
+        # first-launch).
+        if _intro_already_seen():
+            self.intro: object | None = None
+            self.state = STATE_MENU
+            # Same 0.6 s cooldown that `_finish_intro` installs after a
+            # tap-to-skip — stops the dismiss tap from the loading
+            # overlay (which dispatches a synthetic canvas click) from
+            # echoing into MENU and immediately calling `_start_play`
+            # before the user has even seen the menu.
+            self._initial_menu_cooldown = 0.6
+        else:
+            from game.intro import IntroScene
+            self.intro = IntroScene()
+            self.state = STATE_INTRO
+            self._initial_menu_cooldown = 0.0
         self._cloud_phase = 0.0
         self._running = True
         self._stats_t = 0.0
@@ -178,6 +244,7 @@ class App:
         if self.intro is not None:
             self.intro.skip()
         self.intro = None
+        _mark_intro_seen()
         self.state = STATE_MENU
         self._cooldown_t = 0.6
 
@@ -200,7 +267,7 @@ class App:
     async def async_run(self):
         import asyncio
         import sys as _sys
-        self._cooldown_t = 0.0
+        self._cooldown_t = self._initial_menu_cooldown
         self._start_name_entry = False
         first_frame_done = False
         while self._running:

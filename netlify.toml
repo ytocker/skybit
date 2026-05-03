@@ -1,5 +1,5 @@
 [build]
-  command = "pip install 'pygbag==0.9.2' && python -m pygbag --build main.py && python inject_theme.py"
+  command = "pip install 'pygbag==0.9.3' && python -m pygbag --build main.py && python inject_theme.py"
   publish = "build/web"
 
 [build.environment]

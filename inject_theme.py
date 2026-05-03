@@ -891,14 +891,22 @@ body   { background: #0d0820 !important; }
         var INFO_MS    =  8000;
         /* Asymptote target while WASM is still downloading. We never let
            the bar reach 100 % from time alone — only a real `window.MM`
-           boot snaps it there. Time-constant chosen so the bar reaches
-           ~63 % at 6 s, ~86 % at 12 s, ~95 % at 18 s. The CSS transition
-           on .skybit-progress-fill smooths each sample into a glide. */
+           boot snaps it there. Tightened from 6000 -> 3500 so the bar
+           reaches ~82 % by 6 s instead of ~63 %, which makes a slow
+           cold-start feel responsive instead of stuck. The CSS
+           transition on .skybit-progress-fill still smooths each sample
+           into a glide so the curve doesn't jitter. */
         var ASYMPTOTE  = 0.92;
-        var TAU_MS     = 6000;
+        var TAU_MS     = 3500;
         var t0 = Date.now();
         var pygbagReady = false;
         var stalled = false;
+        /* If the user taps before pygbag has booted, remember it and
+           auto-dismiss the moment `window.MM` shows up. Without this,
+           the first tap was silently swallowed (pulseBtn no-op) and the
+           player had to wait for boot AND tap a second time — a wasted
+           gesture on every cold load. */
+        var tappedEarly = false;
 
         if (btn) btn.textContent = BTN_LOAD;
 
@@ -922,6 +930,10 @@ body   { background: #0d0820 !important; }
                 if (status) status.textContent = '';
                 if (fill) fill.classList.remove('skybit-progress-stalled');
                 setFill(100);
+                /* The user already tapped while we were still loading —
+                   honour their intent and dismiss right away instead of
+                   making them tap a second time. */
+                if (tappedEarly) { tappedEarly = false; dismiss(); }
                 return;
             }
             if (pygbagReady) return;
@@ -965,7 +977,14 @@ body   { background: #0d0820 !important; }
             try { getCtx(); } catch (_) {}
 
             if (stalled) { reloadBust(); return; }
-            if (!pygbagReady) { pulseBtn(); return; }
+            if (!pygbagReady) {
+                /* Remember the gesture so the poll loop above can
+                   auto-dismiss as soon as pygbag finishes booting,
+                   instead of forcing the player to tap a second time. */
+                tappedEarly = true;
+                pulseBtn();
+                return;
+            }
 
             clearInterval(pollId);
             try { if (window.MM) window.MM.UME = true; } catch (_) {}
