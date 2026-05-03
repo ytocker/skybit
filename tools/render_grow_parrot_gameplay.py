@@ -4,11 +4,12 @@ hi-res variant. Mirrors the prior `render_grow_gameplay.py` workflow.
 For each variant:
   - Build the 4 hi-res wing frames at the variant's resolution.
   - Monkey-patch `parrot.FRAMES` to those hi-res frames.
-  - Set `game.config.GROW_SCALE = 1.0` so `Bird.draw` does NOT
-    smoothscale-up (the frames are already at grow size).
+  - Swap `Bird.draw` for a wrapper that SKIPS the in-method bird-sprite
+    upscale (the frames are already at grow size) BUT keeps the
+    parcel scaling untouched, so the parcel stays at the same size +
+    location as the original grow path.
   - Clear `parrot._rot_cache` so cached rotations get rebuilt against
     the new frames.
-  - Render the scene with `bird.grow_active = True`.
 
 v0 uses the original blurry path (no patching) for direct comparison.
 
@@ -24,6 +25,7 @@ import math
 import os
 import random
 import sys
+import types
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
@@ -64,6 +66,80 @@ def draw_bg(surf, scroll=0.0, phase=0.62):
                 pal['ground_top'], pal['ground_mid'], (60, 40, 25))
 
 
+def _hi_res_bird_draw(self, surf, shake_x=0, shake_y=0, flipped=False):
+    """Mirror of `entities.Bird.draw` with the grow-mode BIRD smoothscale
+    REMOVED — used by the picker harness when `parrot.FRAMES` has been
+    monkey-patched to pre-built hi-res grow-size sprites. Parcel scaling
+    stays untouched so its size + location match the original grow path.
+
+    Kept in lockstep with `game/entities.py:Bird.draw` (commit 7e86d29).
+    """
+    from game import parrot
+    from game.config import GROW_SCALE, PARCEL_Y_OFFSET
+
+    frame_idx = int(self.frame_t) % len(parrot.FRAMES)
+    tilt = -self.tilt_deg if flipped else self.tilt_deg
+    if self.kfc_active and self.ghost_active and self.triple_active:
+        img = parrot.get_kfc_ghost_hat_parrot(frame_idx, tilt)
+    elif self.kfc_active and self.ghost_active:
+        img = parrot.get_kfc_ghost_parrot(frame_idx, tilt)
+    elif self.kfc_active and self.triple_active:
+        img = parrot.get_kfc_hat_parrot(frame_idx, tilt)
+    elif self.ghost_active and self.triple_active:
+        img = parrot.get_ghost_hat_parrot(frame_idx, tilt)
+    elif self.kfc_active:
+        img = parrot.get_fried_parrot(frame_idx, tilt)
+    elif self.ghost_active:
+        img = parrot.get_ghost_parrot(frame_idx, tilt)
+    elif self.triple_active:
+        img = parrot.get_hat_parrot(frame_idx, tilt)
+    else:
+        img = parrot.get_parrot(frame_idx, tilt)
+
+    # ── PATCH ── upstream's `if self.grow_active: smoothscale up by 1.5`
+    # is removed here: FRAMES were rebuilt at grow size already.
+
+    if flipped:
+        img = pygame.transform.flip(img, False, True)
+    pulse = 0.0
+    if self.ghost_active:
+        img = img.copy()
+        pulse = 0.5 + 0.5 * math.sin(self.ghost_pulse)
+        img.set_alpha(int(90 + pulse * 80))
+    r = img.get_rect(center=(self.x + shake_x, self.y + shake_y))
+    surf.blit(img, r.topleft)
+
+    # Parcel — UNCHANGED from upstream so its size and location match
+    # whatever the live grow path produces.
+    if self.kfc_active:
+        mode = "kfc"
+    elif self.ghost_active:
+        mode = "ghost"
+    elif self.triple_active:
+        mode = "triple"
+    else:
+        mode = "normal"
+    parcel = parrot.get_parcel(mode)
+    scale = GROW_SCALE if self.grow_active else 1.0
+    if scale != 1.0:
+        pw, ph = parcel.get_size()
+        parcel = pygame.transform.smoothscale(
+            parcel, (int(pw * scale), int(ph * scale)))
+    if flipped:
+        parcel = pygame.transform.flip(parcel, False, True)
+    y_off = -PARCEL_Y_OFFSET * scale if flipped else PARCEL_Y_OFFSET * scale
+    parcel_tilt = -self.tilt_deg if flipped else self.tilt_deg
+    offset = pygame.math.Vector2(0, y_off)
+    offset = offset.rotate(-parcel_tilt)
+    parcel_rot = pygame.transform.rotate(parcel, parcel_tilt)
+    if self.ghost_active:
+        parcel_rot = parcel_rot.copy()
+        parcel_rot.set_alpha(int(90 + pulse * 80))
+    pr = parcel_rot.get_rect(center=(self.x + shake_x + offset.x,
+                                     self.y + shake_y + offset.y))
+    surf.blit(parcel_rot, pr.topleft)
+
+
 def main():
     random.seed(42)
     pygame.init()
@@ -72,13 +148,11 @@ def main():
     from game.config import W, H
     screen = pygame.display.set_mode((W, H))
 
-    import game.config as _cfg
     from game import parrot
     from game.world import World
     from game.hud import HUD
 
-    original_FRAMES     = parrot.FRAMES
-    original_GROW_SCALE = _cfg.GROW_SCALE
+    original_FRAMES = parrot.FRAMES
 
     world = World()
     world.score = 12
@@ -94,6 +168,9 @@ def main():
     hud = HUD()
     hud.title_t = 0.8
 
+    # Save original draw method so v0 uses the live (blurry) path.
+    original_bird_draw = world.bird.draw
+
     out_dir = os.path.join("docs", "grow_parrot_variants")
     os.makedirs(out_dir, exist_ok=True)
 
@@ -101,15 +178,13 @@ def main():
 
     for idx, (label, builder) in BUILDERS.items():
         if idx == 0:
-            # Reference: keep the live FRAMES + GROW_SCALE so we capture the
-            # exact current blurry path.
+            # Reference: keep live FRAMES + live Bird.draw (the blurry path).
             parrot.FRAMES = original_FRAMES
-            _cfg.GROW_SCALE = original_GROW_SCALE
+            world.bird.draw = original_bird_draw
         else:
             parrot.FRAMES = build_frames(builder)
-            # Frames are already at the grow display size — disable the
-            # in-method upscale so Bird.draw blits at 1×.
-            _cfg.GROW_SCALE = 1.0
+            # Surgically swap just the bird upscale; parcel scaling untouched.
+            world.bird.draw = types.MethodType(_hi_res_bird_draw, world.bird)
 
         # Cached rotations were built against the OLD frames; flush so the
         # next get_parrot() rebuilds against the patched FRAMES.
@@ -135,7 +210,7 @@ def main():
 
     # Restore so any subsequent code in this process sees the live state.
     parrot.FRAMES = original_FRAMES
-    _cfg.GROW_SCALE = original_GROW_SCALE
+    world.bird.draw = original_bird_draw
     parrot._rot_cache.clear()
 
     # Comparison strip — tight crop around the bird, 2× zoom so sharpness
