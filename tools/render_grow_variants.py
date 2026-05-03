@@ -1,13 +1,18 @@
-"""Five red-top witch-hat variants — round 6.
+"""Five VELVET-family witch-hat variants — round 7, hi-res.
 
-User picked the pink-red witch-hat from round 4 (commit 6b4e310 — the
-Liberty-Cap silhouette) and asked for "a few variants around that
-style with red top." Round 5 (commit f3656ca) explored the same
-silhouette in 5 different hues; this round narrows back to RED but
-pushes the variation through tone, finish, and ornament.
+User picked the velvet variant from round 6 (commit 6412b97) and
+requested:
+  - smooth, gradual background-halo gradient (no stepped rings)
+  - higher resolution icon
+  - 5 variants of the velvet style
 
-Shared style: tall pointy conical cap, scalloped curled rim, slim
-elongated bulbed stem, soft halo, 4 ornaments scattered down the cone.
+Changes vs. round 6:
+  - SS bumped 3 → 5 for crisper supersampled curves at the same draw size.
+  - `_draw_smooth_halo` replaces the 3-stamp halo with ~60 concentric
+    circles in a quadratic falloff, producing a continuous radial
+    gradient with no visible banding.
+  - All 5 variants share the wine/maroon velvet palette but vary one
+    feature each: tone, sheen, rim trim, ornament colour, glossiness.
 
 Each function has the same signature as `PowerUp._draw_mushroom`:
 
@@ -19,7 +24,7 @@ import math
 import pygame
 
 
-SS = 3
+SS = 5  # ↑ from 3 — higher resolution for the icon's curves and fine details
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
@@ -31,32 +36,37 @@ def _ss_blit(big, dst, x, y, w, h):
     dst.blit(pygame.transform.smoothscale(big, (w, h)), (x, y))
 
 
-def _star(surf, cx, cy, r_out, r_in, color, n=5, rot=-math.pi / 2):
-    pts = []
-    for i in range(n * 2):
-        r = r_out if i % 2 == 0 else r_in
-        a = rot + i * (math.pi / n)
-        pts.append((cx + math.cos(a) * r, cy + math.sin(a) * r))
-    pygame.draw.polygon(surf, color, pts)
+def _draw_smooth_halo(surf, cx, cy, color_rgb, radius=27, max_alpha=180,
+                      falloff=2.2, steps=60, peak_y_off=-2):
+    """Smooth radial halo: ~60 concentric circles with a quadratic
+    alpha falloff, producing a continuous gradient with no banding.
 
-
-def _draw_halo(surf, cx, cy, color_rgb, pulse_t=1.0,
-               size=(40, 56), peak_y_off=0):
-    w, h = size
-    halo = pygame.Surface((w, h), pygame.SRCALPHA)
-    hcx, hcy = w // 2, h // 2 + peak_y_off
-    for r, a in ((22, int(28 + 16 * pulse_t)),
-                 (17, int(50 + 30 * pulse_t)),
-                 (13, int(80 + 40 * pulse_t))):
-        pygame.draw.ellipse(halo, (*color_rgb, a),
-                            pygame.Rect(hcx - r, hcy - r, r * 2, r * 2))
-    surf.blit(halo, (cx - w // 2, cy - h // 2 + peak_y_off + 4))
+    `falloff` shapes the decay — higher = tighter centre. 2.2 gives a
+    soft glow that fades naturally to the background.
+    """
+    w = radius * 2 + 4
+    halo = pygame.Surface((w, w), pygame.SRCALPHA)
+    hcx = hcy = w // 2
+    for i in range(steps):
+        # i=0 → outer (alpha=0), i=steps-1 → inner (alpha=max).
+        # Drawing largest first so smaller (higher-alpha) circles
+        # naturally overwrite the inner part of larger ones.
+        r = max(0, radius - (i * radius) // steps)
+        if r <= 0:
+            break
+        t = i / max(1, steps - 1)
+        a = int(max_alpha * (t ** falloff))
+        if a > 0:
+            pygame.draw.circle(halo, (*color_rgb, a), (hcx, hcy), r)
+    surf.blit(halo, (cx - hcx, cy - hcy + peak_y_off))
 
 
 def _draw_slim_stem(surf, cx, cy_top,
-                    body=(250, 235, 215),
-                    outline=(170, 145, 110),
+                    body=(245, 230, 200),
+                    outline=(150, 120,  90),
                     hi=(255, 250, 230)):
+    """Slim elongated witch-hat stem with a bulbed base. Drawn
+    supersampled for clean edges."""
     W = _ss(20, 22)
     pts = [
         (8 * SS,  0 * SS),
@@ -76,8 +86,7 @@ def _draw_slim_stem(surf, cx, cy_top,
 CAP_W = 22
 CAP_H = 24
 
-# Cone outline / body / highlight polygon vertex helpers — shared by all
-# variants so the silhouette stays identical.
+
 def _cone_outline_pts():
     return [
         (CAP_W // 2 * SS, 0),
@@ -87,6 +96,7 @@ def _cone_outline_pts():
         (int(CAP_W * 0.14 * SS), int(CAP_H * 0.78 * SS)),
     ]
 
+
 def _cone_body_pts():
     return [
         (CAP_W // 2 * SS, 1 * SS),
@@ -95,6 +105,7 @@ def _cone_body_pts():
         (int(CAP_W * 0.09 * SS), int(CAP_H * 0.90 * SS)),
         (int(CAP_W * 0.18 * SS), int(CAP_H * 0.78 * SS)),
     ]
+
 
 def _cone_hi_pts():
     return [
@@ -106,15 +117,11 @@ def _cone_hi_pts():
     ]
 
 
-def _draw_cone_solid(big, outline, body, hi_stripe, rim_hi,
-                     rim_count=5, rim_outline=None,
-                     rim_body=None):
-    """Standard solid-colour cone + rim. `rim_body` defaults to `body`,
-    `rim_outline` defaults to `outline` so the rim matches the cone."""
-    rim_body    = rim_body    or body
-    rim_outline = rim_outline or outline
-    pygame.draw.polygon(big, outline, _cone_outline_pts())
-    pygame.draw.polygon(big, body,    _cone_body_pts())
+def _draw_cone(big, outline, body, hi_stripe, rim_body, rim_outline, rim_hi,
+               rim_count=5):
+    """Outline + body + side highlight + scalloped curled rim, all on `big`."""
+    pygame.draw.polygon(big, outline,   _cone_outline_pts())
+    pygame.draw.polygon(big, body,      _cone_body_pts())
     pygame.draw.polygon(big, hi_stripe, _cone_hi_pts())
     rim_w = int(CAP_W * 0.86 * SS)
     rim_x = int(CAP_W * 0.07 * SS)
@@ -129,6 +136,12 @@ def _draw_cone_solid(big, outline, body, hi_stripe, rim_hi,
                            max(1, curl_w // 4))
 
 
+def _cone_mask():
+    m = _ss(CAP_W, CAP_H + 4)
+    pygame.draw.polygon(m, (255, 255, 255, 255), _cone_body_pts())
+    return m
+
+
 ORNAMENT_SLOTS = (
     (0.50, 0.18),
     (0.62, 0.42),
@@ -137,51 +150,118 @@ ORNAMENT_SLOTS = (
 )
 
 
-def _white_spot(big, fx_frac, fy_frac, r=2.0, halo=(220, 200, 210)):
+def _ornament(big, fx_frac, fy_frac, body, halo, hi=(255, 250, 220),
+              r_body=2.0, r_halo_extra=0.4):
     fx = int(CAP_W * fx_frac * SS)
     fy = int(CAP_H * fy_frac * SS)
-    pygame.draw.circle(big, halo, (fx, fy), int((r + 0.4) * SS))
-    pygame.draw.circle(big, (255, 255, 255), (fx, fy), int(r * SS))
+    pygame.draw.circle(big, halo, (fx, fy), int((r_body + r_halo_extra) * SS))
+    pygame.draw.circle(big, body, (fx, fy), int(r_body * SS))
+    pygame.draw.circle(big, hi,
+                       (fx - SS // 2, fy - SS // 2), max(1, SS // 2))
 
 
-# ── V1 — CLASSIC CRIMSON (Mario-red witch-hat) ─────────────────────────────
-def draw_v1_classic(surf, cx, cy, pulse=0.0):
-    """Saturated Mario red cap, white spots, soft pink halo, ivory stem.
-    The most direct 'witch-hat-shaped Mario mushroom.'"""
-    pulse_t = 0.5 + 0.5 * math.sin(pulse * 1.4)
-    _draw_halo(surf, cx, cy, (255, 130, 130), pulse_t)
+# Velvet base palette — shared by all 5.
+VELVET_OUTLINE = ( 60,  15,  25)
+VELVET_BODY    = (125,  30,  45)
+VELVET_HI      = (180,  60,  75)
+VELVET_RIM_HI  = (220, 120, 130)
+
+
+# ── V1 — VELVET REFINED (smooth halo + hi-res, the cleaned-up base) ────────
+def draw_v1_velvet_refined(surf, cx, cy, pulse=0.0):
+    pulse_t = 0.5 + 0.5 * math.sin(pulse * 1.2)
+    _draw_smooth_halo(surf, cx, cy, (180,  90, 110), radius=27,
+                      max_alpha=int(155 + 25 * pulse_t))
     _draw_slim_stem(surf, cx, cy + 2)
 
     big = _ss(CAP_W, CAP_H + 4)
-    _draw_cone_solid(
-        big,
-        outline=( 130,  20,  30),
-        body=(   220,  40,  45),
-        hi_stripe=(255, 100,  90),
-        rim_hi=(255, 200, 180),
-    )
+    _draw_cone(big,
+               outline=VELVET_OUTLINE,
+               body=VELVET_BODY,
+               hi_stripe=VELVET_HI,
+               rim_body=VELVET_BODY,
+               rim_outline=VELVET_OUTLINE,
+               rim_hi=VELVET_RIM_HI)
+
+    # Subtle inner-velvet sheen blob near the top
+    sheen = _ss(CAP_W, CAP_H + 4)
+    pygame.draw.ellipse(sheen, (220, 130, 150, 130),
+                        pygame.Rect(int(CAP_W * 0.34 * SS),
+                                    int(CAP_H * 0.16 * SS),
+                                    int(CAP_W * 0.20 * SS),
+                                    int(CAP_H * 0.42 * SS)))
+    sheen.blit(_cone_mask(), (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    big.blit(sheen, (0, 0))
+
     for fx, fy in ORNAMENT_SLOTS:
-        _white_spot(big, fx, fy, r=2.0)
+        _ornament(big, fx, fy,
+                  body=(255, 235, 175),
+                  halo=(195, 165, 110))
+
     _ss_blit(big, surf, cx - CAP_W // 2, cy - CAP_H + 2, CAP_W, CAP_H + 4)
 
 
-# ── V2 — ROYAL CRIMSON (deep red + gold stars + gold rim) ──────────────────
-def draw_v2_royal(surf, cx, cy, pulse=0.0):
-    """Deep crimson cone, gold 5-point stars instead of spots, gold-trim
-    scalloped rim. Royal/regal feel."""
+# ── V2 — BLACK-CHERRY (deeper, almost-black wine + bright cream spots) ─────
+def draw_v2_black_cherry(surf, cx, cy, pulse=0.0):
+    pulse_t = 0.5 + 0.5 * math.sin(pulse * 1.2)
+    _draw_smooth_halo(surf, cx, cy, (140,  40,  70), radius=27,
+                      max_alpha=int(155 + 25 * pulse_t))
+    _draw_slim_stem(surf, cx, cy + 2)
+
+    big = _ss(CAP_W, CAP_H + 4)
+    _draw_cone(big,
+               outline=( 30,   8,  18),
+               body=(   75,  18,  35),
+               hi_stripe=(125,  35,  55),
+               rim_body=(  65,  15,  30),
+               rim_outline=( 30,  8,  18),
+               rim_hi=(155,  60,  75))
+
+    # Velvet sheen — even subtler since the base is darker
+    sheen = _ss(CAP_W, CAP_H + 4)
+    pygame.draw.ellipse(sheen, (180,  80, 100, 110),
+                        pygame.Rect(int(CAP_W * 0.34 * SS),
+                                    int(CAP_H * 0.16 * SS),
+                                    int(CAP_W * 0.20 * SS),
+                                    int(CAP_H * 0.42 * SS)))
+    sheen.blit(_cone_mask(), (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    big.blit(sheen, (0, 0))
+
+    # Brighter cream spots so they pop against the very dark cap
+    for fx, fy in ORNAMENT_SLOTS:
+        _ornament(big, fx, fy,
+                  body=(255, 240, 195),
+                  halo=(180, 150, 100),
+                  r_body=2.1)
+
+    _ss_blit(big, surf, cx - CAP_W // 2, cy - CAP_H + 2, CAP_W, CAP_H + 4)
+
+
+# ── V3 — VELVET WITH GOLD RIM (wine cap + gold scalloped rim) ──────────────
+def draw_v3_gold_rim(surf, cx, cy, pulse=0.0):
     pulse_t = 0.5 + 0.5 * math.sin(pulse * 1.3)
-    _draw_halo(surf, cx, cy, (220, 100, 130), pulse_t)
+    _draw_smooth_halo(surf, cx, cy, (200, 130, 110), radius=27,
+                      max_alpha=int(155 + 25 * pulse_t))
     _draw_slim_stem(surf, cx, cy + 2)
 
     big = _ss(CAP_W, CAP_H + 4)
 
-    # Cone with deep crimson palette. Manually draw so the rim can use
-    # gold instead of inheriting the cone colour.
-    pygame.draw.polygon(big, ( 90,  10,  30), _cone_outline_pts())
-    pygame.draw.polygon(big, (160,  25,  50), _cone_body_pts())
-    pygame.draw.polygon(big, (210,  60,  80), _cone_hi_pts())
+    # Wine cone body
+    pygame.draw.polygon(big, VELVET_OUTLINE, _cone_outline_pts())
+    pygame.draw.polygon(big, VELVET_BODY,    _cone_body_pts())
+    pygame.draw.polygon(big, VELVET_HI,      _cone_hi_pts())
 
-    # Gold scalloped rim
+    # Velvet inner sheen
+    sheen = _ss(CAP_W, CAP_H + 4)
+    pygame.draw.ellipse(sheen, (220, 130, 150, 130),
+                        pygame.Rect(int(CAP_W * 0.34 * SS),
+                                    int(CAP_H * 0.16 * SS),
+                                    int(CAP_W * 0.20 * SS),
+                                    int(CAP_H * 0.42 * SS)))
+    sheen.blit(_cone_mask(), (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    big.blit(sheen, (0, 0))
+
+    # GOLD scalloped rim
     rim_w = int(CAP_W * 0.86 * SS)
     rim_x = int(CAP_W * 0.07 * SS)
     rim_count = 5
@@ -190,184 +270,108 @@ def draw_v2_royal(surf, cx, cy, pulse=0.0):
         center = (rim_x + i * curl_w + curl_w // 2,
                   int(CAP_H * 0.93 * SS))
         pygame.draw.circle(big, (140,  90,  20), center, curl_w // 2)
-        pygame.draw.circle(big, (255, 220,  80), center, max(1, curl_w // 2 - SS))
+        pygame.draw.circle(big, (255, 220,  80),
+                           center, max(1, curl_w // 2 - SS))
         pygame.draw.circle(big, (255, 250, 200),
                            (center[0] - curl_w // 5, center[1] - curl_w // 5),
                            max(1, curl_w // 4))
 
-    # Gold stars
-    for fx_frac, fy_frac in ORNAMENT_SLOTS:
-        fx = int(CAP_W * fx_frac * SS)
-        fy = int(CAP_H * fy_frac * SS)
-        _star(big, fx, fy, int(2.4 * SS), int(1.0 * SS), (140,  85,  20))
-        _star(big, fx, fy, int(2.0 * SS), int(0.8 * SS), (255, 220,  80))
-        pygame.draw.circle(big, (255, 250, 200),
-                           (fx - SS // 2, fy - SS // 2), max(1, SS // 2))
+    # Cream ornaments (matching the original velvet)
+    for fx, fy in ORNAMENT_SLOTS:
+        _ornament(big, fx, fy,
+                  body=(255, 235, 175),
+                  halo=(195, 165, 110))
 
     _ss_blit(big, surf, cx - CAP_W // 2, cy - CAP_H + 2, CAP_W, CAP_H + 4)
 
 
-# ── V3 — CHERRY CANDY (glossy bright red + diagonal sheen + white spots) ───
-def draw_v3_candy(surf, cx, cy, pulse=0.0):
-    """Bright candy-cherry red cap with a glossy diagonal sheen swatch
-    suggesting a polished candy finish, white spots, pink halo."""
-    pulse_t = 0.5 + 0.5 * math.sin(pulse * 1.5)
-    _draw_halo(surf, cx, cy, (255, 150, 170), pulse_t)
+# ── V4 — VELVET WITH GOLD SPOTS (wine cap, polished gold ornaments) ────────
+def draw_v4_gold_spots(surf, cx, cy, pulse=0.0):
+    pulse_t = 0.5 + 0.5 * math.sin(pulse * 1.3)
+    _draw_smooth_halo(surf, cx, cy, (220, 150, 110), radius=27,
+                      max_alpha=int(155 + 25 * pulse_t))
     _draw_slim_stem(surf, cx, cy + 2)
 
     big = _ss(CAP_W, CAP_H + 4)
-    _draw_cone_solid(
-        big,
-        outline=( 140,  20,  40),
-        body=(   240,  60,  80),
-        hi_stripe=(255, 130, 150),
-        rim_hi=(255, 220, 220),
-    )
+    _draw_cone(big,
+               outline=VELVET_OUTLINE,
+               body=VELVET_BODY,
+               hi_stripe=VELVET_HI,
+               rim_body=VELVET_BODY,
+               rim_outline=VELVET_OUTLINE,
+               rim_hi=VELVET_RIM_HI)
 
-    # Glossy diagonal candy sheen — bright white wedge across the cap.
-    cone_mask = pygame.Surface(big.get_size(), pygame.SRCALPHA)
-    pygame.draw.polygon(cone_mask, (255, 255, 255, 255), _cone_body_pts())
-    sheen = pygame.Surface(big.get_size(), pygame.SRCALPHA)
-    pygame.draw.polygon(sheen, (255, 255, 255, 200), [
-        (int(CAP_W * 0.40 * SS), int(CAP_H * 0.10 * SS)),
-        (int(CAP_W * 0.50 * SS), int(CAP_H * 0.10 * SS)),
-        (int(CAP_W * 0.30 * SS), int(CAP_H * 0.85 * SS)),
-        (int(CAP_W * 0.22 * SS), int(CAP_H * 0.85 * SS)),
-    ])
-    pygame.draw.polygon(sheen, (255, 255, 255, 120), [
-        (int(CAP_W * 0.55 * SS), int(CAP_H * 0.25 * SS)),
-        (int(CAP_W * 0.60 * SS), int(CAP_H * 0.25 * SS)),
-        (int(CAP_W * 0.45 * SS), int(CAP_H * 0.85 * SS)),
-        (int(CAP_W * 0.41 * SS), int(CAP_H * 0.85 * SS)),
-    ])
-    sheen.blit(cone_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-    big.blit(sheen, (0, 0))
-
-    # White spots
-    for fx, fy in ORNAMENT_SLOTS:
-        _white_spot(big, fx, fy, r=2.0, halo=(255, 200, 210))
-
-    _ss_blit(big, surf, cx - CAP_W // 2, cy - CAP_H + 2, CAP_W, CAP_H + 4)
-
-
-# ── V4 — FIERY RED (hot gradient + ember sparks) ──────────────────────────
-def draw_v4_fiery(surf, cx, cy, pulse=0.0):
-    """Hot-red→deep-red vertical gradient cone with white spots, intense
-    orange-red halo, and ember sparks rising from the cap. Reads as
-    glowing/on-fire while still clearly red."""
-    pulse_t = 0.5 + 0.5 * math.sin(pulse * 2.0)
-    _draw_halo(surf, cx, cy, (255, 130,  80), pulse_t)
-    _draw_slim_stem(surf, cx, cy + 2,
-                    hi=(255, 240, 210))
-
-    big = _ss(CAP_W, CAP_H + 4)
-
-    # Outline
-    pygame.draw.polygon(big, (110, 15, 20), _cone_outline_pts())
-
-    # Build cone body via vertical gradient masked to the cone polygon.
-    cone_mask = pygame.Surface(big.get_size(), pygame.SRCALPHA)
-    pygame.draw.polygon(cone_mask, (255, 255, 255, 255), _cone_body_pts())
-    grad = pygame.Surface(big.get_size(), pygame.SRCALPHA)
-    h = CAP_H * SS
-    for yy in range(h):
-        t = yy / max(1, h - 1)
-        if t < 0.45:
-            u = t / 0.45
-            col = (int(255), int(140 + ( 70 - 140) * u), int(60 + (40 - 60) * u))
-        else:
-            u = (t - 0.45) / 0.55
-            col = (int(255 + (190 - 255) * u),
-                   int( 70 + ( 25 -  70) * u),
-                   int( 40 + ( 20 -  40) * u))
-        pygame.draw.line(grad, col, (0, yy), (big.get_width(), yy))
-    grad.blit(cone_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-    big.blit(grad, (0, 0))
-
-    # Highlight stripe
-    pygame.draw.polygon(big, (255, 200, 130), _cone_hi_pts())
-
-    # Rim
-    rim_w = int(CAP_W * 0.86 * SS)
-    rim_x = int(CAP_W * 0.07 * SS)
-    rim_count = 5
-    curl_w = rim_w // rim_count
-    for i in range(rim_count):
-        center = (rim_x + i * curl_w + curl_w // 2,
-                  int(CAP_H * 0.93 * SS))
-        pygame.draw.circle(big, (220,  40,  30), center, curl_w // 2)
-        pygame.draw.circle(big, (110,  15,  20), center, curl_w // 2, SS)
-        pygame.draw.circle(big, (255, 200, 130),
-                           (center[0] - curl_w // 5, center[1] - curl_w // 5),
-                           max(1, curl_w // 4))
-
-    # White spots
-    for fx, fy in ORNAMENT_SLOTS:
-        _white_spot(big, fx, fy, r=2.0, halo=(255, 220, 200))
-
-    _ss_blit(big, surf, cx - CAP_W // 2, cy - CAP_H + 2, CAP_W, CAP_H + 4)
-
-    # Rising ember sparks above the cap
-    for i in range(3):
-        phase = pulse * 1.7 + i * 1.6
-        rise = phase % 2.0
-        if rise < 1.4:
-            ex = cx + (i - 1) * 5 + int(math.sin(phase * 1.2) * 4)
-            ey = cy - CAP_H + 2 - int(rise * 6)
-            a = int(255 * (1 - rise / 1.4))
-            es = pygame.Surface((5, 5), pygame.SRCALPHA)
-            pygame.draw.circle(es, (255, 200, 80, a), (2, 2), 2)
-            pygame.draw.circle(es, (255, 240, 200, a), (2, 2), 1)
-            surf.blit(es, (ex - 2, ey - 2))
-
-
-# ── V5 — VELVET MAROON (deep wine + cream spots + soft sheen) ──────────────
-def draw_v5_velvet(surf, cx, cy, pulse=0.0):
-    """Deep wine/maroon cone with cream-butter spots — elegant,
-    velvet-textured tone. Soft warm halo. Dark cap, light spots."""
-    pulse_t = 0.5 + 0.5 * math.sin(pulse * 1.2)
-    _draw_halo(surf, cx, cy, (180,  90, 110), pulse_t)
-    _draw_slim_stem(surf, cx, cy + 2,
-                    body=(245, 230, 200),
-                    outline=(150, 120,  90))
-
-    big = _ss(CAP_W, CAP_H + 4)
-    _draw_cone_solid(
-        big,
-        outline=( 60,  15,  25),
-        body=(   125,  30,  45),
-        hi_stripe=(180,  60,  75),
-        rim_hi=(220, 120, 130),
-    )
-
-    # Subtle velvet inner sheen — diffuse highlight blob near the top.
-    cone_mask = pygame.Surface(big.get_size(), pygame.SRCALPHA)
-    pygame.draw.polygon(cone_mask, (255, 255, 255, 255), _cone_body_pts())
-    sheen = pygame.Surface(big.get_size(), pygame.SRCALPHA)
+    # Velvet sheen
+    sheen = _ss(CAP_W, CAP_H + 4)
     pygame.draw.ellipse(sheen, (220, 130, 150, 130),
                         pygame.Rect(int(CAP_W * 0.34 * SS),
-                                    int(CAP_H * 0.18 * SS),
+                                    int(CAP_H * 0.16 * SS),
                                     int(CAP_W * 0.20 * SS),
-                                    int(CAP_H * 0.40 * SS)))
-    sheen.blit(cone_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+                                    int(CAP_H * 0.42 * SS)))
+    sheen.blit(_cone_mask(), (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
     big.blit(sheen, (0, 0))
 
-    # Cream-butter spots (NOT white — to push the elegance)
+    # Polished gold ornament dots
     for fx_frac, fy_frac in ORNAMENT_SLOTS:
         fx = int(CAP_W * fx_frac * SS)
         fy = int(CAP_H * fy_frac * SS)
-        pygame.draw.circle(big, (195, 165, 110), (fx, fy), int(2.4 * SS))
-        pygame.draw.circle(big, (255, 235, 175), (fx, fy), int(1.9 * SS))
+        pygame.draw.circle(big, (110,  60,  10), (fx, fy), int(2.4 * SS))
+        pygame.draw.circle(big, (255, 200,  60), (fx, fy), int(2.0 * SS))
+        pygame.draw.circle(big, (255, 230, 130), (fx, fy), int(1.4 * SS))
         pygame.draw.circle(big, (255, 250, 220),
                            (fx - SS // 2, fy - SS // 2), max(1, SS // 2))
 
     _ss_blit(big, surf, cx - CAP_W // 2, cy - CAP_H + 2, CAP_W, CAP_H + 4)
 
 
+# ── V5 — VELVET GLOSSY (wine cap with strong silk/satin specular streak) ───
+def draw_v5_glossy(surf, cx, cy, pulse=0.0):
+    pulse_t = 0.5 + 0.5 * math.sin(pulse * 1.4)
+    _draw_smooth_halo(surf, cx, cy, (200, 110, 130), radius=27,
+                      max_alpha=int(165 + 25 * pulse_t))
+    _draw_slim_stem(surf, cx, cy + 2)
+
+    big = _ss(CAP_W, CAP_H + 4)
+    _draw_cone(big,
+               outline=VELVET_OUTLINE,
+               body=VELVET_BODY,
+               hi_stripe=VELVET_HI,
+               rim_body=VELVET_BODY,
+               rim_outline=VELVET_OUTLINE,
+               rim_hi=VELVET_RIM_HI)
+
+    cone_mask = _cone_mask()
+
+    # SILK/SATIN diagonal specular streak — soft bright wedge sweeping
+    # down the left side of the cone.
+    streak = _ss(CAP_W, CAP_H + 4)
+    pygame.draw.polygon(streak, (255, 220, 230, 230), [
+        (int(CAP_W * 0.40 * SS), int(CAP_H * 0.08 * SS)),
+        (int(CAP_W * 0.50 * SS), int(CAP_H * 0.08 * SS)),
+        (int(CAP_W * 0.30 * SS), int(CAP_H * 0.86 * SS)),
+        (int(CAP_W * 0.20 * SS), int(CAP_H * 0.86 * SS)),
+    ])
+    pygame.draw.polygon(streak, (255, 230, 240, 150), [
+        (int(CAP_W * 0.55 * SS), int(CAP_H * 0.22 * SS)),
+        (int(CAP_W * 0.62 * SS), int(CAP_H * 0.22 * SS)),
+        (int(CAP_W * 0.42 * SS), int(CAP_H * 0.86 * SS)),
+        (int(CAP_W * 0.36 * SS), int(CAP_H * 0.86 * SS)),
+    ])
+    streak.blit(cone_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    big.blit(streak, (0, 0))
+
+    for fx, fy in ORNAMENT_SLOTS:
+        _ornament(big, fx, fy,
+                  body=(255, 235, 175),
+                  halo=(195, 165, 110))
+
+    _ss_blit(big, surf, cx - CAP_W // 2, cy - CAP_H + 2, CAP_W, CAP_H + 4)
+
+
 VARIANTS = {
-    1: ("1 — classic",  draw_v1_classic),
-    2: ("2 — royal",    draw_v2_royal),
-    3: ("3 — candy",    draw_v3_candy),
-    4: ("4 — fiery",    draw_v4_fiery),
-    5: ("5 — velvet",   draw_v5_velvet),
+    1: ("1 — refined",     draw_v1_velvet_refined),
+    2: ("2 — black-cherry", draw_v2_black_cherry),
+    3: ("3 — gold rim",    draw_v3_gold_rim),
+    4: ("4 — gold spots",  draw_v4_gold_spots),
+    5: ("5 — glossy",      draw_v5_glossy),
 }
