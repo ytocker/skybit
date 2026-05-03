@@ -516,12 +516,24 @@ class Bird:
             img = parrot.get_ghost_parrot(frame_idx, tilt)
         elif self.triple_active:
             img = parrot.get_hat_parrot(frame_idx, tilt)
+        elif self.grow_active:
+            # Hi-res grow-mode bird: pre-built at full grow display size by
+            # `parrot._build_grow_frame` (round-9 v3 = 3× supersample → 1.5×
+            # downscale). Skips the smoothscale-up that produced the prior
+            # blur. Combo modes (kfc / ghost / triple + grow) still use
+            # the legacy upscale below — they pre-empt this branch.
+            img = parrot.get_grow_parrot(frame_idx, tilt)
         else:
             img = parrot.get_parrot(frame_idx, tilt)
-        if self.grow_active:
+        if self.grow_active and (self.kfc_active or self.ghost_active
+                                  or self.triple_active):
+            # Combo + grow: smoothscale-up the variant sprite. No hi-res
+            # combo frames yet; this preserves correctness at the cost of
+            # the same upscale blur the base bird used to have.
             from game.config import GROW_SCALE
             w, h = img.get_size()
-            img = pygame.transform.smoothscale(img, (int(w * GROW_SCALE), int(h * GROW_SCALE)))
+            img = pygame.transform.smoothscale(
+                img, (int(w * GROW_SCALE), int(h * GROW_SCALE)))
         if flipped:
             img = pygame.transform.flip(img, False, True)
         if self.ghost_active:

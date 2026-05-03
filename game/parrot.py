@@ -197,6 +197,181 @@ _WING_ANGLES = (50, 20, -10, -40)
 FRAMES: list[pygame.Surface] = [_add_outline(_build_frame(a)) for a in _WING_ANGLES]
 
 
+# ── Hi-res GROW-mode frames ──────────────────────────────────────────────────
+# Round-9 picker (commit 0073175) chose v3: build the bird at 4.5× the
+# base coordinates, then smoothscale DOWN to grow display size. Ports the
+# same draw recipe as `_build_wing` / `_build_frame` / `_add_outline`,
+# with every literal coordinate, line width, and ellipse radius
+# multiplied by `s`. This produces a crisp grow-mode bird without
+# upscaling the small 68×64 base sprite (the prior path's blur source).
+
+_GROW_SS = 4.5                                       # 3× supersample of 1.5×
+_GROW_W  = int((SPRITE_W + 4) * 1.5)                 # 102
+_GROW_H  = int((SPRITE_H + 4) * 1.5)                 # 96
+
+
+def _Sg(v, s): return int(round(v * s))
+def _Pg(p, s): return (_Sg(p[0], s), _Sg(p[1], s))
+def _Lg(pts, s): return [_Pg(p, s) for p in pts]
+
+
+def _aaellipse_scaled(surf, color, center, rx, ry, s):
+    cx, cy = center
+    rect = pygame.Rect(_Sg(cx - rx, s), _Sg(cy - ry, s),
+                       _Sg(rx * 2, s),  _Sg(ry * 2, s))
+    pygame.draw.ellipse(surf, color, rect)
+
+
+def _build_wing_scaled(angle_deg, s):
+    box = _Sg(50, s)
+    w = pygame.Surface((box, box), pygame.SRCALPHA)
+    pygame.draw.polygon(w, (0, 0, 0, 110), _Lg(
+        [(24, 26), (46, 14), (50, 30), (34, 44), (18, 40)], s))
+    pygame.draw.polygon(w, BIRD_WING, _Lg(
+        [(24, 24), (44, 13), (48, 28), (32, 42), (18, 36)], s))
+    pygame.draw.polygon(w, BIRD_WING_D, _Lg(
+        [(24, 24), (32, 42), (18, 36)], s))
+    pygame.draw.polygon(w, BIRD_TIP, _Lg(
+        [(44, 13), (50, 18), (48, 28)], s))
+    pygame.draw.polygon(w, (255, 200, 60), _Lg(
+        [(42, 18), (48, 22), (46, 28), (40, 24)], s))
+    div_w = max(1, _Sg(2, s))
+    pygame.draw.line(w, BIRD_WING_D, _Pg((26, 25), s), _Pg((42, 18), s), div_w)
+    pygame.draw.line(w, BIRD_WING_D, _Pg((28, 30), s), _Pg((44, 25), s), div_w)
+    pygame.draw.line(w, BIRD_WING_D, _Pg((30, 34), s), _Pg((46, 32), s), div_w)
+    pygame.draw.line(w, (170, 210, 255),
+                     _Pg((25, 25), s), _Pg((41, 15), s), max(1, _Sg(1, s)))
+    return pygame.transform.rotate(w, angle_deg)
+
+
+def _draw_sunglasses_scaled(surf, cx, cy, s):
+    r_outer = 6
+    left  = (cx - 4, cy)
+    right = (cx + 6, cy - 1)
+    pygame.draw.circle(surf, SHADE_FRAME, _Pg(left, s),  _Sg(r_outer + 1, s))
+    pygame.draw.circle(surf, SHADE_FRAME, _Pg(right, s), _Sg(r_outer + 1, s))
+    pygame.draw.circle(surf, SHADE_BLACK, _Pg(left, s),  _Sg(r_outer, s))
+    pygame.draw.circle(surf, SHADE_BLACK, _Pg(right, s), _Sg(r_outer, s))
+    tw = _Sg(r_outer * 2, s); th = _Sg(r_outer, s)
+    tint = pygame.Surface((tw, th), pygame.SRCALPHA)
+    pygame.draw.ellipse(tint, (*SHADE_TINT, 130), tint.get_rect())
+    surf.blit(tint, (_Sg(left[0]  - r_outer, s), _Sg(left[1]  - r_outer + 1, s)))
+    surf.blit(tint, (_Sg(right[0] - r_outer, s), _Sg(right[1] - r_outer + 1, s)))
+    pygame.draw.circle(surf, SHADE_GLINT, _Pg((left[0]  - 2, left[1]  - 2), s), _Sg(2, s))
+    pygame.draw.circle(surf, SHADE_GLINT, _Pg((right[0] - 2, right[1] - 3), s), _Sg(2, s))
+    pygame.draw.circle(surf, (255, 255, 255, 200),
+                       _Pg((left[0]  + 2, left[1]  + 2), s), max(1, _Sg(1, s)))
+    pygame.draw.circle(surf, (255, 255, 255, 200),
+                       _Pg((right[0] + 2, right[1] + 1), s), max(1, _Sg(1, s)))
+    pygame.draw.line(surf, SHADE_FRAME,
+                     _Pg((left[0]  + r_outer, left[1]),  s),
+                     _Pg((right[0] - r_outer, right[1]), s), max(1, _Sg(2, s)))
+    pygame.draw.line(surf, SHADE_FRAME,
+                     _Pg((left[0]  - r_outer + 1, left[1]  - r_outer + 2), s),
+                     _Pg((right[0] + r_outer - 1, right[1] - r_outer + 2), s),
+                     max(1, _Sg(1, s)))
+
+
+def _build_frame_scaled(wing_angle_deg, s):
+    surf = pygame.Surface((_Sg(SPRITE_W, s), _Sg(SPRITE_H, s)), pygame.SRCALPHA)
+    tail_colors = [
+        (200,  30,  40),
+        (240,  95,  40),
+        (255, 160,  55),
+        (255, 220,  80),
+    ]
+    for i, c in enumerate(tail_colors):
+        pts = [
+            (2 + i * 3, 26 + i * 2),
+            (14 + i,     24 + i),
+            (20 + i,     30 + i * 2),
+            (6 + i * 3,  36 + i * 2),
+        ]
+        pygame.draw.polygon(surf, c, _Lg(pts, s))
+    div_w = max(1, _Sg(1, s))
+    pygame.draw.line(surf, BIRD_RED_D, _Pg((4, 27), s), _Pg((18, 31), s), div_w)
+    pygame.draw.line(surf, BIRD_RED_D, _Pg((6, 33), s), _Pg((20, 35), s), div_w)
+
+    _aaellipse_scaled(surf, (120, 20, 25),  (34, 35), 19, 14, s)
+    _aaellipse_scaled(surf, BIRD_RED,       (32, 32), 19, 14, s)
+    _aaellipse_scaled(surf, (255, 100, 100),(30, 29), 13,  8, s)
+    _aaellipse_scaled(surf, BIRD_BELLY,     (28, 38), 12,  6, s)
+
+    sw, sh = _Sg(28, s), _Sg(6, s)
+    sheen = pygame.Surface((sw, sh), pygame.SRCALPHA)
+    pygame.draw.ellipse(sheen, (255, 230, 230, 160), sheen.get_rect())
+    surf.blit(sheen, (_Sg(22, s), _Sg(21, s)))
+
+    wing = _build_wing_scaled(wing_angle_deg, s)
+    surf.blit(wing, wing.get_rect(center=_Pg((34, 28), s)).topleft)
+
+    _aaellipse_scaled(surf, (150, 15, 20),  (48, 23), 12, 11, s)
+    _aaellipse_scaled(surf, BIRD_RED,       (47, 21), 12, 11, s)
+    _aaellipse_scaled(surf, (255, 130, 130),(44, 24),  4,  3, s)
+    _aaellipse_scaled(surf, (255, 170, 170),(46, 16),  7,  3, s)
+
+    _draw_sunglasses_scaled(surf, 50, 20, s)
+
+    beak_pts = [(55, 21), (61, 24), (58, 28), (52, 26)]
+    pygame.draw.polygon(surf, BIRD_BEAK,   _Lg(beak_pts, s))
+    pygame.draw.polygon(surf, BIRD_BEAK_D, _Lg(beak_pts, s), max(1, _Sg(1, s)))
+    pygame.draw.line(surf, (255, 230, 150),
+                     _Pg((55, 22), s), _Pg((59, 24), s), max(1, _Sg(1, s)))
+    pygame.draw.line(surf, BIRD_BEAK_D,
+                     _Pg((52, 24), s), _Pg((58, 25), s), max(1, _Sg(1, s)))
+
+    foot_w = max(1, _Sg(2, s))
+    pygame.draw.line(surf, BIRD_BEAK_D, _Pg((28, 45), s), _Pg((26, 49), s), foot_w)
+    pygame.draw.line(surf, BIRD_BEAK_D, _Pg((34, 45), s), _Pg((36, 49), s), foot_w)
+
+    return surf
+
+
+def _add_outline_scaled(src, scale, outline_color=(20, 12, 18, 220)):
+    """Outline thickness scales with `scale` so that after smoothscale-down
+    to the 102×96 display target the outline reads as ~1 px."""
+    w, h = src.get_size()
+    r = max(1, int(round(scale)))
+    pad = r + 1
+    out = pygame.Surface((w + pad * 2, h + pad * 2), pygame.SRCALPHA)
+    mask = pygame.mask.from_surface(src, threshold=8)
+    silhouette = mask.to_surface(setcolor=outline_color, unsetcolor=(0, 0, 0, 0))
+    for dx in range(-r, r + 1):
+        for dy in range(-r, r + 1):
+            if dx == 0 and dy == 0:
+                continue
+            if max(abs(dx), abs(dy)) > r:
+                continue
+            out.blit(silhouette, (pad + dx, pad + dy))
+    out.blit(src, (pad, pad))
+    return out
+
+
+def _build_grow_frame(angle_deg):
+    """One grow-mode bird frame: 4.5× supersampled body + outline,
+    smoothscaled DOWN to grow display size (102×96)."""
+    src = _build_frame_scaled(angle_deg, _GROW_SS)
+    outlined = _add_outline_scaled(src, _GROW_SS)
+    return pygame.transform.smoothscale(outlined, (_GROW_W, _GROW_H))
+
+
+GROW_FRAMES: list[pygame.Surface] = [_build_grow_frame(a) for a in _WING_ANGLES]
+
+_grow_rot_cache: dict = {}
+
+
+def get_grow_parrot(frame_idx: int, tilt_deg: float) -> pygame.Surface:
+    """Hi-res grow-mode parrot. Pre-built at full grow display size — the
+    caller MUST NOT smoothscale-up further."""
+    frame_idx = frame_idx % len(GROW_FRAMES)
+    key = (frame_idx, int(round(tilt_deg / 3.0)) * 3)
+    s = _grow_rot_cache.get(key)
+    if s is None:
+        s = pygame.transform.rotozoom(GROW_FRAMES[frame_idx], key[1], 1.0)
+        _grow_rot_cache[key] = s
+    return s
+
+
 # ── parcel sprite (Pip's permanent companion in gameplay) ────────────────────
 # Pip carries the parcel through every run. Each visual mode (KFC, ghost,
 # triple-buff hat, normal) uses a hand-tuned palette so the parcel reads as
