@@ -261,14 +261,48 @@ def _draw_buff_icon(surf, rect, kind):
     """Tiny 20x20-ish icon for an active buff. Matches in-world sprites."""
     cx, cy = rect.center
     if kind == "grow":
-        # Red mushroom cap + stem (Mario super-mushroom feel for the GROW power-up)
-        pygame.draw.rect(surf, (245, 225, 195), (cx - 3, cy + 1, 6, 7), border_radius=1)
-        pygame.draw.ellipse(surf, (130, 10, 20),
-                            (cx - 9, cy - 6, 18, 10))
-        pygame.draw.ellipse(surf, (220, 30, 30),
-                            (cx - 8, cy - 5, 16, 8))
-        pygame.draw.circle(surf, WHITE, (cx - 3, cy - 3), 1)
-        pygame.draw.circle(surf, WHITE, (cx + 3, cy - 2), 1)
+        # Mini velvet witch-hat: tall conical wine cone + slim ivory stem +
+        # cream-butter spots. Mirrors the in-world powerup at HUD scale.
+        # Cone outline (dark wine) + body
+        cone_outline = [
+            (cx,     cy - 8),   # peak
+            (cx + 6, cy + 2),
+            (cx + 7, cy + 4),
+            (cx - 7, cy + 4),
+            (cx - 6, cy + 2),
+        ]
+        cone_body = [
+            (cx,     cy - 7),
+            (cx + 5, cy + 2),
+            (cx + 6, cy + 4),
+            (cx - 6, cy + 4),
+            (cx - 5, cy + 2),
+        ]
+        pygame.draw.polygon(surf, ( 60, 15, 25), cone_outline)
+        pygame.draw.polygon(surf, (125, 30, 45), cone_body)
+        # Pink highlight stripe down the left side of the cone
+        pygame.draw.polygon(surf, (180, 60, 75), [
+            (cx,     cy - 6),
+            (cx - 2, cy - 1),
+            (cx - 3, cy + 3),
+            (cx - 1, cy + 3),
+            (cx,     cy - 1),
+        ])
+        # Cream spots scattered down the cone
+        pygame.draw.circle(surf, (255, 235, 175), (cx,     cy - 4), 1)
+        pygame.draw.circle(surf, (255, 235, 175), (cx + 2, cy + 0), 1)
+        pygame.draw.circle(surf, (255, 235, 175), (cx - 1, cy + 3), 1)
+        # Slim ivory stem with a tiny bulb at the bottom
+        pygame.draw.polygon(surf, (245, 230, 200), [
+            (cx - 2, cy + 4),
+            (cx + 2, cy + 4),
+            (cx + 3, cy + 8),
+            (cx + 1, cy + 9),
+            (cx - 1, cy + 9),
+            (cx - 2, cy + 8),
+        ])
+        pygame.draw.line(surf, (255, 250, 230),
+                         (cx - 1, cy + 5), (cx - 1, cy + 8), 1)
     elif kind == "magnet":
         # Polished horseshoe magnet — rendered at 2× on a scratch surface
         # so the arc smooths under `smoothscale`. Has a dark silhouette

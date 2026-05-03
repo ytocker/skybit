@@ -54,6 +54,206 @@ def _get_grow_parrot() -> "pygame.Surface":
     return _grow_parrot
 
 
+# ── GROW power-up icon (velvet witch-hat) ────────────────────────────────────
+# Tall conical Liberty-Cap silhouette with a curled scalloped rim, slim
+# bulbed ivory stem, cream ornaments. Body is static — built once at 5×
+# supersample then smoothscaled and cached. The pulsing halo behind it is
+# redrawn each frame.
+
+_GROW_SS = 5                                 # supersample factor
+_GROW_CAP_W, _GROW_CAP_H = 22, 24            # cap footprint in display px
+_GROW_STEM_W, _GROW_STEM_H = 20, 22          # stem footprint in display px
+_GROW_VELVET_OUTLINE = ( 60,  15,  25)
+_GROW_VELVET_RIM_HI  = (220, 120, 130)
+_GROW_VELVET_SHEEN   = (220, 130, 150, 130)
+_GROW_SPOT_HALO      = (195, 165, 110)
+_GROW_SPOT_HI        = (255, 250, 220)
+_GROW_STEM_OUTLINE   = (150, 120,  90)
+_GROW_STEM_HI        = (255, 250, 230)
+_GROW_HALO_RGB       = (180,  90, 110)
+_GROW_HALO_RADIUS    = 46                    # round-8 V3 pick
+
+# Spot positions as fractions of (CAP_W, CAP_H) — same canonical layout
+# the picker rounds used for the witch-hat family.
+_GROW_ORNAMENT_SLOTS = (
+    (0.50, 0.18),
+    (0.62, 0.42),
+    (0.40, 0.62),
+    (0.70, 0.72),
+)
+
+# Cone polygon vertex helpers (computed at SS resolution).
+def _grow_cone_outline_pts():
+    SS = _GROW_SS
+    W, H = _GROW_CAP_W, _GROW_CAP_H
+    return [
+        (W // 2 * SS, 0),
+        (int(W * 0.86 * SS), int(H * 0.78 * SS)),
+        (int(W * 0.95 * SS), int(H * 0.92 * SS)),
+        (int(W * 0.05 * SS), int(H * 0.92 * SS)),
+        (int(W * 0.14 * SS), int(H * 0.78 * SS)),
+    ]
+
+def _grow_cone_body_pts():
+    SS = _GROW_SS
+    W, H = _GROW_CAP_W, _GROW_CAP_H
+    return [
+        (W // 2 * SS, 1 * SS),
+        (int(W * 0.82 * SS), int(H * 0.78 * SS)),
+        (int(W * 0.91 * SS), int(H * 0.90 * SS)),
+        (int(W * 0.09 * SS), int(H * 0.90 * SS)),
+        (int(W * 0.18 * SS), int(H * 0.78 * SS)),
+    ]
+
+def _grow_cone_hi_pts():
+    SS = _GROW_SS
+    W, H = _GROW_CAP_W, _GROW_CAP_H
+    return [
+        (W // 2 * SS - 1 * SS,           1 * SS),
+        (int(W * 0.32 * SS),             int(H * 0.55 * SS)),
+        (int(W * 0.22 * SS),             int(H * 0.85 * SS)),
+        (int(W * 0.34 * SS),             int(H * 0.85 * SS)),
+        (int(W * 0.42 * SS),             int(H * 0.55 * SS)),
+    ]
+
+
+_grow_body_sprite: "pygame.Surface | None" = None
+_grow_body_offset: "tuple[int, int] | None" = None
+
+def _get_grow_body_sprite() -> "tuple[pygame.Surface, int, int]":
+    """Build the static witch-hat body sprite (cap + stem + sheen + spots)
+    once, return it plus the (dx, dy) offset from the powerup centre to
+    the sprite's top-left corner."""
+    global _grow_body_sprite, _grow_body_offset
+    if _grow_body_sprite is not None and _grow_body_offset is not None:
+        return _grow_body_sprite, _grow_body_offset[0], _grow_body_offset[1]
+
+    SS = _GROW_SS
+    CAP_W, CAP_H = _GROW_CAP_W, _GROW_CAP_H
+    STEM_W, STEM_H = _GROW_STEM_W, _GROW_STEM_H
+
+    # Sprite footprint: cap (22 wide × 24 tall) sits above stem
+    # (20 wide × 22 tall). Stem extends below the cap base by a few px.
+    # Origin (0,0) of the sprite corresponds to the top-left of the cap.
+    sprite_w = max(CAP_W, STEM_W) + 2
+    sprite_h = CAP_H + STEM_H + 4
+    big = pygame.Surface((sprite_w * SS, sprite_h * SS), pygame.SRCALPHA)
+
+    # Cap origin at (1, 0) in display coords → (1*SS, 0) in big coords.
+    cap_ox = 1 * SS
+    cap_oy = 0
+
+    # Stem origin at (2, CAP_H + 2) in display coords (centred under cap).
+    stem_ox = 2 * SS
+    stem_oy = (CAP_H + 2) * SS
+
+    # ── Stem ──────────────────────────────────────────────────────────
+    stem_pts = [
+        (8 * SS,  0 * SS),
+        (12 * SS, 0 * SS),
+        (13 * SS, 12 * SS),
+        (15 * SS, 18 * SS),
+        (10 * SS, 21 * SS),
+        ( 5 * SS, 18 * SS),
+        ( 7 * SS, 12 * SS),
+    ]
+    stem_pts_offset = [(p[0] + stem_ox, p[1] + stem_oy) for p in stem_pts]
+    pygame.draw.polygon(big, MUSH_STEM,           stem_pts_offset)
+    pygame.draw.polygon(big, _GROW_STEM_OUTLINE,  stem_pts_offset, width=SS)
+    pygame.draw.line(
+        big, _GROW_STEM_HI,
+        (9 * SS + stem_ox, 2 * SS + stem_oy),
+        (9 * SS + stem_ox, 18 * SS + stem_oy), SS,
+    )
+
+    # ── Cap (cone) ────────────────────────────────────────────────────
+    def _shift(pts, ox, oy):
+        return [(p[0] + ox, p[1] + oy) for p in pts]
+
+    pygame.draw.polygon(big, _GROW_VELVET_OUTLINE,
+                        _shift(_grow_cone_outline_pts(), cap_ox, cap_oy))
+    pygame.draw.polygon(big, MUSH_CAP,
+                        _shift(_grow_cone_body_pts(),    cap_ox, cap_oy))
+    pygame.draw.polygon(big, MUSH_CAP2,
+                        _shift(_grow_cone_hi_pts(),      cap_ox, cap_oy))
+
+    # Curled scalloped rim
+    rim_w = int(CAP_W * 0.86 * SS)
+    rim_x = int(CAP_W * 0.07 * SS) + cap_ox
+    rim_y = int(CAP_H * 0.93 * SS) + cap_oy
+    rim_count = 5
+    curl_w = rim_w // rim_count
+    for i in range(rim_count):
+        center = (rim_x + i * curl_w + curl_w // 2, rim_y)
+        pygame.draw.circle(big, MUSH_CAP,             center, curl_w // 2)
+        pygame.draw.circle(big, _GROW_VELVET_OUTLINE, center, curl_w // 2, SS)
+        pygame.draw.circle(big, _GROW_VELVET_RIM_HI,
+                           (center[0] - curl_w // 5, center[1] - curl_w // 5),
+                           max(1, curl_w // 4))
+
+    # Velvet inner sheen blob — alpha ellipse masked to the cone shape.
+    sheen = pygame.Surface(big.get_size(), pygame.SRCALPHA)
+    pygame.draw.ellipse(sheen, _GROW_VELVET_SHEEN,
+                        pygame.Rect(int(CAP_W * 0.34 * SS) + cap_ox,
+                                    int(CAP_H * 0.16 * SS) + cap_oy,
+                                    int(CAP_W * 0.20 * SS),
+                                    int(CAP_H * 0.42 * SS)))
+    cone_mask = pygame.Surface(big.get_size(), pygame.SRCALPHA)
+    pygame.draw.polygon(cone_mask, (255, 255, 255, 255),
+                        _shift(_grow_cone_body_pts(), cap_ox, cap_oy))
+    sheen.blit(cone_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    big.blit(sheen, (0, 0))
+
+    # Cream-butter spots
+    for fx_frac, fy_frac in _GROW_ORNAMENT_SLOTS:
+        fx = int(CAP_W * fx_frac * SS) + cap_ox
+        fy = int(CAP_H * fy_frac * SS) + cap_oy
+        r_body = 2.0
+        pygame.draw.circle(big, _GROW_SPOT_HALO, (fx, fy),
+                           int((r_body + 0.4) * SS))
+        pygame.draw.circle(big, MUSH_SPOT, (fx, fy), int(r_body * SS))
+        pygame.draw.circle(big, _GROW_SPOT_HI,
+                           (fx - SS // 2, fy - SS // 2), max(1, SS // 2))
+
+    sprite = pygame.transform.smoothscale(big, (sprite_w, sprite_h))
+
+    # Offset from the in-world (cx, cy) anchor to the sprite's top-left.
+    # The original mushroom anchor placed the cap at (cx - 15, cy - 12)
+    # and the stem at (cx - 7, cy). The new icon centres the cap
+    # horizontally on cx and lets the stem hang from there. We want the
+    # icon's centre of mass roughly aligned with (cx, cy) so the existing
+    # POWERUP_R collision feels right.
+    dx = -sprite_w // 2 + 1                              # centre horizontally
+    dy = -CAP_H + 2                                       # cap top above cy
+    _grow_body_sprite = sprite
+    _grow_body_offset = (dx, dy)
+    return sprite, dx, dy
+
+
+def _draw_grow_halo(surf, cx, cy, pulse,
+                    color_rgb=_GROW_HALO_RGB,
+                    radius=_GROW_HALO_RADIUS,
+                    falloff=2.2,
+                    peak_y_off=-2):
+    """Smooth radial halo (~60 concentric circles, quadratic falloff).
+    `pulse` drives the brightness pulse; same curve as the picker rounds."""
+    pulse_t = 0.5 + 0.5 * math.sin(pulse * 1.2)
+    max_alpha = int(140 + 25 * pulse_t)
+    steps = max(60, radius * 2)
+    w = radius * 2 + 4
+    halo = pygame.Surface((w, w), pygame.SRCALPHA)
+    hcx = hcy = w // 2
+    for i in range(steps):
+        r = max(0, radius - (i * radius) // steps)
+        if r <= 0:
+            break
+        t = i / max(1, steps - 1)
+        a = int(max_alpha * (t ** falloff))
+        if a > 0:
+            pygame.draw.circle(halo, (*color_rgb, a), (hcx, hcy), r)
+    surf.blit(halo, (cx - hcx, cy - hcy + peak_y_off))
+
+
 # ── KFC logo sprite (lazy-loaded once at first draw) ─────────────────────────
 _kfc_sprite: "pygame.Surface | None" = None
 
@@ -971,33 +1171,9 @@ class PowerUp:
     def _draw_mushroom(self, surf):
         cx = int(self.x)
         cy = int(self.y)
-
-        # Stem with vivid highlight
-        stem = pygame.Rect(cx - 7, cy, 14, 13)
-        rounded_rect(surf, stem, 5, MUSH_STEM, 255)
-        pygame.draw.line(surf, (255, 255, 230), (cx - 4, cy + 2), (cx - 4, cy + 11), 2)
-        pygame.draw.line(surf, (200, 180, 145), (cx + 3, cy + 2), (cx + 3, cy + 11), 1)
-
-        cap_rect = pygame.Rect(cx - POWERUP_R - 1, cy - POWERUP_R + 2, (POWERUP_R + 1) * 2, POWERUP_R + 5)
-
-        # Cap base (deep crimson outline) then vivid red
-        pygame.draw.ellipse(surf, (130, 10, 20), cap_rect.inflate(2, 2))
-        pygame.draw.ellipse(surf, MUSH_CAP,     cap_rect)
-        # Upper highlight arc (hot pink / orange)
-        hi = pygame.Rect(cap_rect.x + 3, cap_rect.y + 2, cap_rect.width - 6, 7)
-        pygame.draw.ellipse(surf, MUSH_CAP2, hi)
-        # Specular sheen
-        sh2 = pygame.Surface((cap_rect.width - 14, 3), pygame.SRCALPHA)
-        pygame.draw.ellipse(sh2, (255, 230, 220, 200), sh2.get_rect())
-        surf.blit(sh2, (cap_rect.x + 7, cap_rect.y + 3))
-
-        # Spots with a soft ring so they read clearly
-        for sx, sy, sr in ((cx - 7, cy - 5, 3),
-                           (cx + 6, cy - 7, 4),
-                           (cx + 2, cy + 1, 3),
-                           (cx - 3, cy + 2, 2)):
-            pygame.draw.circle(surf, (220, 190, 200), (sx, sy), sr + 1)
-            pygame.draw.circle(surf, MUSH_SPOT,       (sx, sy), sr)
+        _draw_grow_halo(surf, cx, cy, self.pulse)
+        sprite, dx, dy = _get_grow_body_sprite()
+        surf.blit(sprite, (cx + dx, cy + dy))
 
     def _draw_surprise(self, surf):
         cx = int(self.x)

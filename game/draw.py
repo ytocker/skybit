@@ -27,10 +27,10 @@ COIN_GOLD     = (255, 210,  20)
 COIN_LIGHT    = (255, 245, 120)
 COIN_DARK     = (200, 140,   0)
 
-MUSH_CAP      = (220,  30,  30)
-MUSH_CAP2     = (255,  70,  50)
-MUSH_SPOT     = (255, 255, 255)
-MUSH_STEM     = (245, 225, 195)
+MUSH_CAP      = (125,  30,  45)   # velvet wine cone body
+MUSH_CAP2     = (180,  60,  75)   # velvet highlight stripe
+MUSH_SPOT     = (255, 235, 175)   # cream-butter ornament
+MUSH_STEM     = (245, 230, 200)   # ivory stem
 
 BIRD_RED      = (240,  55,  55)
 BIRD_RED_D    = (170,  25,  25)
