@@ -518,3 +518,128 @@ def get_hat_parrot(frame_idx: int, tilt_deg: float) -> pygame.Surface:
         s = pygame.transform.rotozoom(frames[frame_idx], key[1], 1.0)
         _hat_cache[key] = s
     return s
+
+
+# ── Stacked-powerup combo helpers ────────────────────────────────────────────
+# When kfc, ghost, and triple flags can all be true simultaneously, the
+# default cascade in Bird.draw silently dropped all but the top-priority
+# mode. These accessors give Bird.draw a dedicated sprite for every
+# reachable combo. Themed hats live in dollar_parrot_hat; the cyan tint
+# helper sits here (parrot.py) since both hatted and bare-fried-ghost
+# combos use it.
+
+def _cyan_tint_in_place(sprite, tint=(170, 230, 255), strength=0.55):
+    """Shift a sprite's RGB toward cool cyan while preserving its alpha
+    silhouette. Cheap derivation that turns a fried-chicken sprite into a
+    spectral-fried hybrid without rebuilding a full palette pixel-by-
+    pixel.
+
+    `strength` is the alpha of the cyan overlay (0 = no effect, 1 = full
+    cyan replacement). Implementation: build a solid cyan layer, mask it
+    to the sprite silhouette so cyan doesn't leak into transparent
+    regions, then alpha-blend onto the sprite."""
+    sw, sh = sprite.get_size()
+    overlay = pygame.Surface((sw, sh), pygame.SRCALPHA)
+    overlay.fill((*tint, int(255 * strength)))
+    overlay.blit(sprite, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+    sprite.blit(overlay, (0, 0))
+
+
+# kfc + triple — fried bird + crispy KFC hat
+_kfc_hat_frames: "list | None" = None
+_kfc_hat_cache: dict = {}
+
+
+def _ensure_kfc_hat_frames():
+    global _kfc_hat_frames
+    if _kfc_hat_frames is None:
+        from game.dollar_parrot_hat import build_kfc_hat_frames
+        _kfc_hat_frames = build_kfc_hat_frames()
+    return _kfc_hat_frames
+
+
+def get_kfc_hat_parrot(frame_idx: int, tilt_deg: float) -> pygame.Surface:
+    frames = _ensure_kfc_hat_frames()
+    frame_idx = frame_idx % len(frames)
+    key = (frame_idx, int(round(tilt_deg / 3.0)) * 3)
+    s = _kfc_hat_cache.get(key)
+    if s is None:
+        s = pygame.transform.rotozoom(frames[frame_idx], key[1], 1.0)
+        _kfc_hat_cache[key] = s
+    return s
+
+
+# ghost + triple — spectral bird + spectral hat
+_ghost_hat_frames: "list | None" = None
+_ghost_hat_cache: dict = {}
+
+
+def _ensure_ghost_hat_frames():
+    global _ghost_hat_frames
+    if _ghost_hat_frames is None:
+        from game.dollar_parrot_hat import build_ghost_hat_frames
+        _ghost_hat_frames = build_ghost_hat_frames()
+    return _ghost_hat_frames
+
+
+def get_ghost_hat_parrot(frame_idx: int, tilt_deg: float) -> pygame.Surface:
+    frames = _ensure_ghost_hat_frames()
+    frame_idx = frame_idx % len(frames)
+    key = (frame_idx, int(round(tilt_deg / 3.0)) * 3)
+    s = _ghost_hat_cache.get(key)
+    if s is None:
+        s = pygame.transform.rotozoom(frames[frame_idx], key[1], 1.0)
+        _ghost_hat_cache[key] = s
+    return s
+
+
+# kfc + ghost — fried body cyan-tinted to read as spectral fried (no hat)
+_kfc_ghost_frames: "list | None" = None
+_kfc_ghost_cache: dict = {}
+
+
+def _ensure_kfc_ghost_frames():
+    global _kfc_ghost_frames
+    if _kfc_ghost_frames is None:
+        frames = []
+        for a in _WING_ANGLES:
+            f = _build_fried_frame(a).copy()
+            _cyan_tint_in_place(f)
+            frames.append(_add_outline(f))
+        _kfc_ghost_frames = frames
+    return _kfc_ghost_frames
+
+
+def get_kfc_ghost_parrot(frame_idx: int, tilt_deg: float) -> pygame.Surface:
+    frames = _ensure_kfc_ghost_frames()
+    frame_idx = frame_idx % len(frames)
+    key = (frame_idx, int(round(tilt_deg / 3.0)) * 3)
+    s = _kfc_ghost_cache.get(key)
+    if s is None:
+        s = pygame.transform.rotozoom(frames[frame_idx], key[1], 1.0)
+        _kfc_ghost_cache[key] = s
+    return s
+
+
+# kfc + ghost + triple — full stack: fried + KFC hat composite, all cyan-tinted
+_kfc_ghost_hat_frames: "list | None" = None
+_kfc_ghost_hat_cache: dict = {}
+
+
+def _ensure_kfc_ghost_hat_frames():
+    global _kfc_ghost_hat_frames
+    if _kfc_ghost_hat_frames is None:
+        from game.dollar_parrot_hat import build_kfc_ghost_hat_frames
+        _kfc_ghost_hat_frames = build_kfc_ghost_hat_frames()
+    return _kfc_ghost_hat_frames
+
+
+def get_kfc_ghost_hat_parrot(frame_idx: int, tilt_deg: float) -> pygame.Surface:
+    frames = _ensure_kfc_ghost_hat_frames()
+    frame_idx = frame_idx % len(frames)
+    key = (frame_idx, int(round(tilt_deg / 3.0)) * 3)
+    s = _kfc_ghost_hat_cache.get(key)
+    if s is None:
+        s = pygame.transform.rotozoom(frames[frame_idx], key[1], 1.0)
+        _kfc_ghost_hat_cache[key] = s
+    return s

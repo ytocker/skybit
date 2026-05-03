@@ -298,7 +298,19 @@ class Bird:
         # bird's head still leads in the direction of motion after the
         # vertical mirror is applied below.
         tilt = -self.tilt_deg if flipped else self.tilt_deg
-        if self.kfc_active:
+        # Combo-aware sprite cascade. The four reachable stacks each have
+        # a dedicated themed sprite so no powerup is silently lost; check
+        # combos before single-mode flags so e.g. kfc+triple picks the
+        # crispy-hat sprite instead of falling through to plain kfc.
+        if self.kfc_active and self.ghost_active and self.triple_active:
+            img = parrot.get_kfc_ghost_hat_parrot(frame_idx, tilt)
+        elif self.kfc_active and self.ghost_active:
+            img = parrot.get_kfc_ghost_parrot(frame_idx, tilt)
+        elif self.kfc_active and self.triple_active:
+            img = parrot.get_kfc_hat_parrot(frame_idx, tilt)
+        elif self.ghost_active and self.triple_active:
+            img = parrot.get_ghost_hat_parrot(frame_idx, tilt)
+        elif self.kfc_active:
             img = parrot.get_fried_parrot(frame_idx, tilt)
         elif self.ghost_active:
             img = parrot.get_ghost_parrot(frame_idx, tilt)
