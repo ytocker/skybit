@@ -213,7 +213,11 @@ class AchievementsScene:
     def _draw_cat_header(self, surf, cat, y, store, S):
         got, total = ach.category_progress(store, cat)
         complete = got >= total and total > 0
-        head_col = _GOLD_PALE if complete else _GOLD_BRIGHT
+        # A category is itself a spoiler — its name telegraphs a whole class of
+        # goals. Keep it masked until the player earns their first badge inside
+        # it, so the wall's shape is discovered in play like the rows are.
+        revealed = got > 0
+        head_col = (_GOLD_PALE if complete else _GOLD_BRIGHT) if revealed else _GOLD_MUTED
 
         # A small gold diamond pip leads the section title — a struck-metal
         # bullet that echoes the badge rim and sets the title off the rail.
@@ -224,7 +228,8 @@ class AchievementsScene:
         pygame.draw.polygon(surf, head_col, pip)
         pygame.draw.polygon(surf, _GOLD_DEEP, pip, max(1, S))
 
-        label = self._scaled_text(cat.upper(), 15 * S, head_col)
+        label = self._scaled_text(cat.upper() if revealed else "???",
+                                  15 * S, head_col)
         lx = _PAD_X * S + 3 * d
         surf.blit(label, (lx, int((y + 5) * S)))
 
@@ -242,7 +247,7 @@ class AchievementsScene:
             rail = pygame.Surface((rail_r - rail_l, max(2, 2 * S)), pygame.SRCALPHA)
             for xx in range(rail.get_width()):
                 fade = 1.0 - xx / max(1, rail.get_width())
-                rail.fill((*_GOLD_BRIGHT, int(160 * fade)),
+                rail.fill((*head_col, int(160 * fade)),
                           (xx, 0, 1, max(2, 2 * S)))
             surf.blit(rail, (rail_l, ry))
 
