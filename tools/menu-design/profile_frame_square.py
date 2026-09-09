@@ -38,6 +38,10 @@ GOLD_MID, GOLD_BRIGHT, GOLD_PALE = B.GOLD_MID, B.GOLD_BRIGHT, B.GOLD_PALE
 GOLD_DEEP = B.GOLD_DEEP
 W, H = 360, 640
 
+# The pick: L2 lifted 5px — square Rect(19, 204, 144, 144), tag seated flush
+# in the inner rule's bottom-left corner at Rect(25, 320, 84, 22).
+CHOSEN = ("L2", 5)
+
 ROOF = 221            # cottage roof top — a frame below this crops it
 STORE_TOP = 359       # STORE plank's rotated bbox — the floor for any drop
 
@@ -420,6 +424,41 @@ if __name__ == "__main__":
                       "store=%d pip_clip=%d"
                       % (dy, s_, st["rect"], st["roof_crop"], st["subtitle_clear"],
                          st["tag_below_cloud"], st["store_clear"], st["clip_px"]))
+    elif os.environ.get("CONFIRM"):
+        F = "/home/user/skybit/game/assets/LiberationSans-Bold.ttf"
+        fh = pygame.font.Font(F, 20)
+        fl = pygame.font.Font(F, 15)
+        fs = pygame.font.Font(F, 12)
+        slug, dy = CHOSEN
+        st = verify(slug, pip, sub, dy)
+        fr, tag = rect_for(slug, dy), tag_for(rect_for(slug, dy))
+        CW, CH, PAD, GAP, HEAD, LAB = W, H, 22, 14, 74, 46
+        sheet = pygame.Surface((PAD * 2 + 2 * CW + GAP, PAD * 2 + HEAD + CH + LAB))
+        sheet.fill((17, 17, 23))
+        sheet.blit(fh.render("SKYBIT · PROFILE frame · chosen: %s lifted %dpx" % (slug, dy),
+                             True, (228, 204, 134)), (PAD, PAD))
+        sheet.blit(fs.render(
+            "square %s   ·   tag %s, flush in the inner rule's bottom-left corner"
+            % (tuple(fr), tuple(tag)), True, (150, 148, 142)), (PAD, PAD + 26))
+        sheet.blit(fs.render(
+            "Pip L%d R%d T%d B%d, uncut   ·   %dpx over the roof   ·   subtitle gap %dpx   "
+            "·   STORE gap %dpx   ·   tag %dpx into the cloud's base"
+            % (*st["pip"], st["cottage"][2], st["subtitle_clear"], st["store_clear"],
+               -st["tag_below_cloud"]), True, (128, 186, 132)), (PAD, PAD + 46))
+        for i, (ph, name) in enumerate(((0.20, "day"), (0.75, "night"))):
+            x = PAD + i * (CW + GAP)
+            y = PAD + HEAD
+            sheet.blit(build(ph, slug, dy), (x, y))
+            pygame.draw.rect(sheet, (76, 76, 86), (x, y, CW, CH), 1)
+            t = fl.render(name, True, (240, 240, 246))
+            sheet.blit(t, t.get_rect(midtop=(x + CW // 2, y + CH + 10)))
+        out = ("/home/user/skybit/docs/main-menu/harbour-post/"
+               "profile-frame/chosen_L2_up5.png")
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        pygame.image.save(sheet, out)
+        print("saved", out, sheet.get_size())
+        print("frame", tuple(fr), "tag", tuple(tag))
+        print(st)
     else:
         which = os.environ.get("OPTION", "L3")
         dy = int(os.environ.get("UP", "0"))
