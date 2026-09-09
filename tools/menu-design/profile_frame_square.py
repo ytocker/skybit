@@ -39,12 +39,18 @@ GOLD_DEEP = B.GOLD_DEEP
 W, H = 360, 640
 
 BOTTOM = 324          # 3px under the cloud's measured base (y321)
-TAG_W, TAG_H = 96, 26
-TAG_DROP = 5          # "just below it"
-# The left rope leaves the cloud at x42 and the right at x173, converging on
-# the STORE plank. Between y330 and y355 that pins the tag's centre into this
-# window; a tag centred on a frame further left would sit on the left rope.
-TAG_CX_MIN, TAG_CX_MAX = 94, 113
+
+# The tag rides the cloud's lower-left lobe, inside the frame, rather than
+# hanging under it. One fixed rect for all five: it is anchored to the cloud,
+# which never moves, so the tag reads as pinned to the same spot however the
+# square around it is sized.
+#
+# The cloud is a lens, not a box. Its left edge runs x40 at y296, pinches to
+# x55 at y299, opens to x28 by y306, holds that to y315, then closes fast —
+# x38 at y316, x66 at y320. So the lowest a left-anchored tag can sit and stay
+# on cloud mass is a bottom edge at y316, and the 8px corner radius carries the
+# top-left arc over the y299-302 pinch.
+TAG = pygame.Rect(42, 295, 84, 22)
 
 
 def _sq(left, top, side):
@@ -62,11 +68,8 @@ PRESETS = {
 
 
 def tag_for(fr):
-    """Directly under the frame, centred on it — then clamped off the ropes."""
-    cx = min(max(fr.centerx, TAG_CX_MIN), TAG_CX_MAX)
-    t = pygame.Rect(0, 0, TAG_W, TAG_H)
-    t.midtop = (cx, fr.bottom + TAG_DROP)
-    return t
+    """Same seat on the cloud for every option — see TAG."""
+    return pygame.Rect(TAG)
 
 
 def draw_frame(surf, fr, tag):
@@ -83,13 +86,15 @@ def draw_frame(surf, fr, tag):
                      (tag.right - 8, tag.top + 3), 1)
     pygame.draw.line(surf, (86, 60, 16), (tag.left + 8, tag.bottom - 3),
                      (tag.right - 8, tag.bottom - 3), 1)
-    inset = tag.inflate(-8, -8)
+    inset = tag.inflate(-7, -7)
     pygame.draw.rect(surf, (52, 34, 14), inset, border_radius=5)
-    lx = inset.centerx - 7
-    _hud._tracked_label(surf, "PROFILE", (lx, inset.centery + 1), 13,
-                        color=(34, 20, 8), track=2, alpha=150)
-    _hud._tracked_label(surf, "PROFILE", (lx, inset.centery), 13,
-                        color=GOLD_PALE, track=2, alpha=250)
+    # 12/1 rather than the old 13/2: on this shorter tag the recess is 77px
+    # wide and PROFILE at 13/2 plus the triangle measures 84.
+    lx = inset.centerx - 6
+    _hud._tracked_label(surf, "PROFILE", (lx, inset.centery + 1), 12,
+                        color=(34, 20, 8), track=1, alpha=150)
+    _hud._tracked_label(surf, "PROFILE", (lx, inset.centery), 12,
+                        color=GOLD_PALE, track=1, alpha=250)
     _hud._profile_tri(surf, inset.right - 9, inset.centery, 4, GOLD_PALE)
     return fr.union(tag)
 
@@ -250,10 +255,31 @@ def verify(slug, pip=None, sub=None):
     px = [x for x, y in pip]
     py = [y for x, y in pip]
 
+    # The ropes only exist below their y316 cloud anchors, so only the tag's
+    # bottom rows can foul them.
+    shape = pygame.Surface((W, H), pygame.SRCALPHA)
+    pygame.draw.rect(shape, (255, 255, 255), tag, border_radius=8)
     worst = float("inf")
-    for y in range(max(tag.top, 317), tag.bottom, 2):
-        worst = min(worst, tag.left - _rope_x(-1, y),
-                    _rope_x(1, y) - (tag.right - 1))
+    for y in range(max(tag.top, 316), tag.bottom):
+        row = [x for x in range(tag.left, tag.right) if shape.get_at((x, y))[3] > 8]
+        if row:
+            worst = min(worst, min(row) - _rope_x(-1, y),
+                        _rope_x(1, y) - max(row))
+    if worst == float("inf"):
+        worst = None
+
+    # The tag now sits INSIDE the frame, so the number that matters is its
+    # clearance to the inner gold rule, not to the outer one.
+    inner = fr.inflate(-10, -10)
+    fit = min(tag.left - inner.left, inner.right - 1 - (tag.right - 1),
+              tag.top - inner.top, inner.bottom - 1 - (tag.bottom - 1))
+
+    house = B._intro.get_sprite("skyhouse_post")
+    hx, hy = B.house_topleft()
+    lay = pygame.Surface((W, H), pygame.SRCALPHA)
+    lay.blit(house, (hx, hy))
+    on = sum(1 for x in range(tag.left, tag.right)
+             for y in range(tag.top, tag.bottom) if lay.get_at((x, y))[3] > 8)
     return dict(
         side=(fr.width, fr.height),
         square=fr.width == fr.height,
@@ -266,10 +292,10 @@ def verify(slug, pip=None, sub=None):
         below_cloud=fr.bottom - 1 - (cloud.bottom - 1),
         cloud_spill_r=max(0, (cloud.right - 1) - (fr.right - 1)),
         subtitle_clear=fr.top - sub,
-        tag_gap=tag.top - fr.bottom,
-        tag_off_centre=tag.centerx - fr.centerx,
-        tag_rope_clear=round(worst, 1),
-        store_clear=359 - tag.bottom,
+        tag_inside_frame=fit,
+        tag_on_cloud="%d%%" % round(100 * on / (tag.width * tag.height)),
+        tag_rope_clear=None if worst is None else round(worst, 1),
+        tag_clears_pip=min(y for x, y in pip) if False else tag.top - max(py),
     )
 
 
@@ -296,11 +322,11 @@ if __name__ == "__main__":
         sheet = pygame.Surface((PAD * 2 + n * CW + (n - 1) * GAP,
                                 PAD * 2 + HEAD + CH + LAB))
         sheet.fill((17, 17, 23))
-        sheet.blit(fh.render("SKYBIT · PROFILE frame · today, then five squares",
+        sheet.blit(fh.render("SKYBIT · PROFILE frame · five squares, tag on the cloud",
                              True, (228, 204, 134)), (PAD, PAD))
         sheet.blit(fs.render(
-            "leftmost is the shipped menu. Every option after it: a true square, bottom edge 3px "
-            "under the cloud's base (y324), PROFILE tag 5px under that.",
+            "leftmost is the menu on this branch. Every option after it: a true square, bottom edge 3px under "
+            "the cloud's base (y324), and the PROFILE tag seated on the cloud's lower-left lobe inside the frame.",
             True, (150, 148, 142)), (PAD, PAD + 26))
 
         y = PAD + HEAD
