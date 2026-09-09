@@ -558,7 +558,12 @@ class App:
         # demand if a pickup happens before its variant is warm.
         from game import parrot
         from game.fries_mountains import LAYER_DRAWERS, get_cached_mountain
+        from game.hud import _menu_furniture
         self._prewarm_queue = [
+            # First in the queue: the menu is the very next screen after the
+            # intro, and baking its signage costs ~37 ms — two dropped frames
+            # on entry if it is left to build lazily on the first draw.
+            ("menu",       lambda: _menu_furniture()),
             ("grow",       lambda: parrot._get_grow_frames()),
             ("first_hit",  lambda: parrot._get_fh_frames()),
             ("hurt",       lambda: parrot._get_hurt_frames()),

@@ -1212,6 +1212,362 @@ def _profile_tri(surf, cx, cy, size, color):
                                       (cx - size // 2, cy + size)])
 
 
+# ── Harbour-post menu furniture ─────────────────────────────────────────────
+# The main menu's signage: three plank signs slung on ropes from the cottage's
+# cloud, START planted on its own post in the bottom-right, and the square
+# jewel frame that turns the standing-Pip diorama into the PROFILE entry.
+#
+# None of it reads game state, so the whole set is baked once into a single
+# transparent layer and blitted — the same cache discipline as the nest slots
+# above. Rebuilt per frame it would cost four board builds and two rotozoom
+# calls every tick for a picture that never changes, which is exactly the kind
+# of waste the browser build cannot absorb.
+
+_T_HI    = (188, 138,  78)
+_T_LIT   = (150,  99,  53)
+_T_MID   = (112,  70,  38)
+_T_DARK  = ( 68,  40,  22)
+# Softer than a true shadow tone: at the 1-2px widths these are stroked at, a
+# near-black edge made every board look ink-outlined.
+_T_EDGE  = ( 60,  36,  20)
+_IRON    = ( 62,  56,  60)
+_IRON_HI = (132, 128, 134)
+_ROPE    = (198, 166, 106)
+_ROPE_D  = (128,  96,  52)
+
+# Shadows are tinted off the day sky rather than neutral black, so one reads as
+# "less light reached here" instead of a grey shape laid over the artwork.
+_SH_TINT = (14, 38, 52)
+# (contact_a, ambient_a, dy, spread) per elevation tier, following Material's
+# opacity budget — umbra .20, ambient .12. Every element used to invent its own
+# shadow at .43-.47, which is why they all read as pasted on.
+_SH_TIERS = {
+    "contact": (44, 24, 1, 3),
+    "low":     (40, 22, 2, 4),   # the hanging sign planks
+    "raised":  (50, 28, 2, 5),   # START, the one primary control
+}
+
+# Geometry, all measured against fixed art: Pip is blitted centred on
+# (BIRD_X, H*0.42) and a fresh Bird respawns there the instant START is hit, so
+# he is the one anchor the menu cannot move.
+_MENU_CLOUD_ANCHOR_Y = 316        # just inside the cloud's lower mass
+_MENU_CLOUD_HOOKS = (42, 174)     # the cloud's outer lobes
+# The PROFILE frame: a true square whose bottom clears the STORE plank's
+# rotated bbox (y359) by 12px, and whose tag sits flush in the inner rule's
+# bottom-left corner. Both are locked values — the square was chosen against a
+# grid of sizes and lifts, and every clearance in it (Pip's silhouette, the
+# rope columns, the roofline, the subtitle) was measured, not estimated.
+_MENU_FRAME = pygame.Rect(19, 204, 144, 144)
+_MENU_TAG = pygame.Rect(25, 320, 84, 22)
+_MENU_START = pygame.Rect(208, 494, 136, 100)
+# Fixed grain seeds. These were hash(label) % 997, which Python salts per
+# process — the same code drew a measurably different sign every launch.
+# Centres already carry the 10px left shift that clears the START post.
+_MENU_PLANKS = (("STORE", "coin", (102, 386), -3.0, 344),
+                ("TOP 10", "trophy", (108, 446), 2.4, 429),
+                ("SETTINGS", "gear", (100, 506), -1.6, 510))
+
+
+def _soft_shadow(surf, shape, tier, mask=None):
+    """Material-style stacked pair: a tight contact shadow plus a wider ambient
+    one that actually falls off, instead of a single hard-edged slab. `mask`
+    supplies a silhouette for rotated boards; without it the shape is treated
+    as a rounded rect."""
+    contact_a, ambient_a, dy, spread = _SH_TIERS[tier]
+    pad = spread + 2
+    layer = pygame.Surface((shape.width + pad * 2, shape.height + pad * 2),
+                           pygame.SRCALPHA)
+    if mask is not None:
+        for k in range(spread, 0, -1):
+            a = int(ambient_a * (k / spread) * 0.5)
+            tinted = mask.copy()
+            tinted.fill((*_SH_TINT, a), special_flags=pygame.BLEND_RGBA_MULT)
+            for ox, oy in ((-k, 0), (k, 0), (0, -k), (0, k)):
+                layer.blit(tinted, (pad + ox, pad + oy + dy))
+        tinted = mask.copy()
+        tinted.fill((*_SH_TINT, contact_a), special_flags=pygame.BLEND_RGBA_MULT)
+        layer.blit(tinted, (pad, pad + dy))
+    else:
+        for k in range(spread, 0, -1):
+            a = int(ambient_a * (1.0 - (k - 1) / max(1, spread)))
+            pygame.draw.rect(layer, (*_SH_TINT, a),
+                             pygame.Rect(pad - k, pad - k + dy,
+                                         shape.width + k * 2,
+                                         shape.height + k * 2),
+                             border_radius=8 + k)
+        pygame.draw.rect(layer, (*_SH_TINT, contact_a),
+                         pygame.Rect(pad, pad + dy, shape.width, shape.height),
+                         border_radius=8)
+    surf.blit(layer, (shape.x - pad, shape.y - pad))
+
+
+def _under_shade(surf, rect, height=4, alpha=46):
+    """The object's own underside catching less light. This is what sells 3D
+    form for something floating against open sky, where a projected cast
+    shadow has nothing to fall on."""
+    layer = pygame.Surface((rect.width, height), pygame.SRCALPHA)
+    for y in range(height):
+        a = int(alpha * (1.0 - y / max(1, height)))
+        pygame.draw.line(layer, (*_SH_TINT, a), (0, y), (rect.width, y))
+    surf.blit(layer, (rect.x, rect.bottom - height))
+
+
+def _grad_fill(surf, rect, top, bot):
+    x, y, w, h = rect
+    for i in range(h):
+        t = i / max(1, h - 1)
+        pygame.draw.line(surf, (int(top[0] + (bot[0] - top[0]) * t),
+                                int(top[1] + (bot[1] - top[1]) * t),
+                                int(top[2] + (bot[2] - top[2]) * t)),
+                         (x, y + i), (x + w - 1, y + i))
+
+
+def _board_points(w, h, chamfer=5, notch=5):
+    """Chamfered corners plus a shallow V bitten out of each end face — the
+    hand-cut sign silhouette, not a plain rectangle."""
+    return [(chamfer, 0), (w - chamfer, 0), (w, chamfer),
+            (w - notch, h * 0.5), (w, h - chamfer), (w - chamfer, h),
+            (chamfer, h), (0, h - chamfer), (notch, h * 0.5), (0, chamfer)]
+
+
+def _timber_board(w, h, seed=0, chamfer=5, notch=5, plain=False):
+    """One planed board: lit-from-above gradient, drifting grain, a knot or
+    two, chamfer highlights and a shadow lip along the bottom."""
+    rnd = random.Random(seed)
+    w, h = int(w), int(h)
+    body = pygame.Surface((w, h), pygame.SRCALPHA)
+    _grad_fill(body, (0, 0, w, h), _T_LIT, _T_DARK)
+
+    for _ in range(max(3, h // 5)):
+        gy = rnd.uniform(h * 0.12, h * 0.9)
+        col = _T_MID if rnd.random() < 0.6 else _T_EDGE
+        pts = [(gx, gy + math.sin(gx * 0.05 + seed) * 1.4 + rnd.uniform(-0.5, 0.5))
+               for gx in range(0, w + 6, 6)]
+        if len(pts) > 1:
+            pygame.draw.lines(body, col, False, pts, 1)
+
+    for _ in range(1 if w < 90 else 2):
+        kx = rnd.uniform(w * 0.15, w * 0.85)
+        ky = rnd.uniform(h * 0.3, h * 0.7)
+        kr = rnd.uniform(2.0, 3.2)
+        pygame.draw.ellipse(body, _T_EDGE,
+                            (kx - kr, ky - kr * 0.72, kr * 2, kr * 1.45))
+        pygame.draw.ellipse(body, _T_MID,
+                            (kx - kr * 1.9, ky - kr * 1.3, kr * 3.8, kr * 2.6), 1)
+
+    pygame.draw.line(body, _T_HI, (chamfer, 1), (w - chamfer, 1), 2)
+    pygame.draw.line(body, (200, 156, 96), (chamfer + 2, 0), (w - chamfer - 2, 0), 1)
+    pygame.draw.line(body, _T_EDGE, (chamfer, h - 1), (w - chamfer, h - 1), 1)
+
+    if plain:
+        pygame.draw.rect(body, _T_EDGE, (0, 0, w, h), 1)
+        return body
+
+    mask = pygame.Surface((w, h), pygame.SRCALPHA)
+    pts = _board_points(w, h, chamfer, notch)
+    pygame.draw.polygon(mask, (255, 255, 255, 255), pts)
+    body.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+    pygame.draw.polygon(body, _T_EDGE, pts, 1)
+    return body
+
+
+def _iron_nail(surf, x, y, r=3):
+    pygame.draw.circle(surf, _T_EDGE, (int(x), int(y + 1)), max(1, r - 1))
+    pygame.draw.circle(surf, _IRON, (int(x), int(y)), r)
+    pygame.draw.circle(surf, _IRON_HI, (int(x - r * 0.3), int(y - r * 0.35)),
+                       max(1, r - 2))
+
+
+def _hemp_rope(surf, p0, p1, sag=6, width=3):
+    """A sagging catenary in two tones, so the twist reads at this size."""
+    x0, y0 = p0
+    x1, y1 = p1
+    pts = [(x0 + (x1 - x0) * (i / 12),
+            y0 + (y1 - y0) * (i / 12) + math.sin(math.pi * i / 12) * sag)
+           for i in range(13)]
+    pygame.draw.lines(surf, _ROPE_D, False, pts, width + 1)
+    pygame.draw.lines(surf, _ROPE, False, pts, max(1, width - 1))
+
+
+_MENU_CLOUD_RECT: "pygame.Rect | None" = None
+
+
+def _menu_cloud_rect():
+    """Screen bbox of the cloud lobes inside the blitted cottage sprite.
+
+    Derived from the sprite's own alpha rather than hardcoded, so the rope
+    anchors can never end up hanging in open sky beside the cloud if the art
+    changes. Cached — it walks a mask."""
+    global _MENU_CLOUD_RECT
+    if _MENU_CLOUD_RECT is None:
+        from game import intro as _intro
+        house = _intro.get_sprite("skyhouse_post")
+        hx = int(W * 0.30) - house.get_width() // 2
+        hy = int(H * 0.42) - house.get_height() // 2
+        # The cloud occupies sprite rows 88 and below; above that is cottage.
+        sub = house.subsurface(pygame.Rect(0, 88, house.get_width(),
+                                           house.get_height() - 88))
+        bb = pygame.mask.from_surface(sub, threshold=8).get_bounding_rects()
+        r = bb[0]
+        for extra in bb[1:]:
+            r = r.union(extra)
+        _MENU_CLOUD_RECT = pygame.Rect(hx + r.x, hy + 88 + r.y, r.width, r.height)
+    return _MENU_CLOUD_RECT
+
+
+def _menu_sign_chain(surf):
+    """The three utility signs, hung from the cloud Pip is standing on.
+
+    They used to be slung off a separately mounted START signboard, which put
+    the primary control ABOVE all three utilities. Hanging them from the cloud
+    fixes both things: the ropes leave the object Pip actually stands on, and
+    START drops out of the chain entirely to sit lowest and nearest the thumb.
+    """
+    cloud = _menu_cloud_rect()
+    # 44, not 40: at a shallow hang angle a 40px board published a 46px tap
+    # rect once rotated, under the 48dp floor. 44 clears it at every angle.
+    bw, bh = 172, 44
+    chamfer, notch = 6, 7
+    label_cx = (44 + (bw - notch)) // 2
+    anchors = [(min(max(x, cloud.left + 14), cloud.right - 14),
+                _MENU_CLOUD_ANCHOR_Y) for x in _MENU_CLOUD_HOOKS]
+
+    rects = {}
+    for label, kind, (cx, cy), ang, seed in _MENU_PLANKS:
+        rad = math.radians(-ang)
+        for sgn, apt in zip((-1, 1), anchors):
+            ox = sgn * (bw * 0.36)
+            hx = cx + ox * math.cos(rad)
+            hy = cy + ox * math.sin(rad) - bh * 0.5
+            _hemp_rope(surf, apt, (hx, hy), sag=5, width=3)
+            pygame.draw.circle(surf, _IRON, (int(hx), int(hy)), 3)
+
+        board = _timber_board(bw, bh, seed=seed, chamfer=chamfer, notch=notch)
+        if kind == "coin":
+            _coin_icon(board, 30, bh // 2, 12)
+        elif kind == "trophy":
+            _draw_trophy(board, 30, bh // 2, 10)
+        else:
+            _draw_gear(board, 30, bh // 2, 12)
+        _tracked_label(board, label, (label_cx, bh // 2 + 1), 17,
+                       color=(46, 26, 14), track=2, alpha=120)
+        _tracked_label(board, label, (label_cx, bh // 2 - 1), 17,
+                       color=_GOLD_PALE, track=2, alpha=250)
+
+        rot = pygame.transform.rotozoom(board, ang, 1.0)
+        rr = rot.get_rect(center=(cx, cy))
+        _soft_shadow(surf, rr, "low", mask=rot)
+        surf.blit(rot, rr.topleft)
+        rects[label] = rr
+
+        anchors = [(cx - bw * 0.34 * math.cos(rad),
+                    cy - bw * 0.34 * math.sin(rad) + bh * 0.42),
+                   (cx + bw * 0.34 * math.cos(rad),
+                    cy + bw * 0.34 * math.sin(rad) + bh * 0.42)]
+    return rects
+
+
+def _menu_start_post(surf):
+    """START, planted on its own post in the dead bottom-right quadrant.
+
+    It leaves the sign chain because the body's ink centroid sat at x113 while
+    the title spine is x180 — two vertical axes that disagreed under four
+    near-identical horizontal bands. Standing it apart also terminates the
+    chain instead of adding a fifth parallel edge to it."""
+    rect = pygame.Rect(_MENU_START)
+    surf.blit(_timber_board(24, 120, seed=7, plain=True), (264, 494))
+    brace = pygame.transform.rotozoom(_timber_board(74, 12, seed=11, plain=True),
+                                      38, 1.0)
+    surf.blit(brace, brace.get_rect(center=(236, 566)).topleft)
+    _soft_shadow(surf, pygame.Rect(264, 588, 24, 22), "contact")
+    _soft_shadow(surf, rect, "raised")
+
+    board = _timber_board(rect.width, rect.height, seed=21, chamfer=9, notch=0)
+    face = pygame.Rect(0, 0, 110, 46)
+    face.center = (rect.width // 2, rect.height // 2)
+    _grad_fill(board, (face.x, face.y, face.width, face.height),
+               _SCARLET_TOP, _SCARLET_BOT)
+    frost = pygame.Surface((face.width, face.height // 2), pygame.SRCALPHA)
+    frost.fill((255, 255, 255, 34))
+    board.blit(frost, face.topleft)
+    pygame.draw.rect(board, _GOLD_BRIGHT, face, 2)
+    pygame.draw.rect(board, _T_EDGE, face.inflate(3, 3), 1)
+    pygame.draw.line(board, (*_GOLD_PALE, 150), (face.left + 8, face.top + 5),
+                     (face.right - 8, face.top + 5), 1)
+    f = _font(28, True)
+    img = f.render("START", True, (255, 244, 222))
+    ir = img.get_rect(center=(face.centerx, face.centery - 1))
+    out = f.render("START", True, (108, 20, 14))
+    out.set_alpha(190)
+    for ox, oy in ((-1, 0), (1, 0), (0, -1), (0, 1), (1, 1)):
+        board.blit(out, (ir.x + ox, ir.y + oy))
+    board.blit(img, ir.topleft)
+
+    # Gold double-chevron under the word: the extra board height carries the
+    # emphasis a narrower slab gives up.
+    for oy in (14, 21):
+        cy2 = face.bottom + oy - 6
+        pygame.draw.lines(board, _GOLD_PALE, False,
+                          [(rect.width // 2 - 11, cy2 - 4),
+                           (rect.width // 2, cy2),
+                           (rect.width // 2 + 11, cy2 - 4)], 2)
+    surf.blit(board, rect.topleft)
+    _under_shade(surf, rect, height=6, alpha=42)
+    return rect
+
+
+def _menu_profile_frame(surf):
+    """The square jewel frame around the standing-Pip diorama, plus its brass
+    PROFILE tag.
+
+    Two rules, not one: the outer at radius 13 and the inner 5px in at radius
+    8, with a pale sheen along the top so the gold reads as struck metal
+    rather than a drawn outline. The tag is seated flush into the inner rule's
+    bottom-left corner — against its left run and on its bottom run — so it
+    belongs to the frame instead of floating inside it."""
+    fr, tag = pygame.Rect(_MENU_FRAME), pygame.Rect(_MENU_TAG)
+    pygame.draw.rect(surf, _GOLD_MID, fr, width=1, border_radius=13)
+    pygame.draw.rect(surf, _GOLD_BRIGHT, fr.inflate(-10, -10), width=1,
+                     border_radius=8)
+    pygame.draw.line(surf, (*_GOLD_PALE, 200), (fr.left + 14, fr.top + 2),
+                     (fr.right - 14, fr.top + 2), 1)
+
+    pygame.draw.rect(surf, _GOLD_DEEP, tag, border_radius=8)
+    pygame.draw.rect(surf, _GOLD_MID, tag.inflate(-3, -3), border_radius=7)
+    pygame.draw.line(surf, _GOLD_PALE, (tag.left + 8, tag.top + 3),
+                     (tag.right - 8, tag.top + 3), 1)
+    pygame.draw.line(surf, (86, 60, 16), (tag.left + 8, tag.bottom - 3),
+                     (tag.right - 8, tag.bottom - 3), 1)
+    inset = tag.inflate(-7, -7)
+    pygame.draw.rect(surf, (52, 34, 14), inset, border_radius=5)
+    # 12/1, not the 13/2 the larger plates use: PROFILE at 13/2 plus the
+    # chevron measures 84px against this tag's 77px recess.
+    lx = inset.centerx - 6
+    _tracked_label(surf, "PROFILE", (lx, inset.centery + 1), 12,
+                   color=(34, 20, 8), track=1, alpha=150)
+    _tracked_label(surf, "PROFILE", (lx, inset.centery), 12,
+                   color=_GOLD_PALE, track=1, alpha=250)
+    _profile_tri(surf, inset.right - 9, inset.centery, 4, _GOLD_PALE)
+    return fr
+
+
+_MENU_FURNITURE: "pygame.Surface | None" = None
+_MENU_FURNITURE_RECTS: "dict | None" = None
+
+
+def _menu_furniture():
+    """The whole static menu set, baked once. Returns (layer, tap rects)."""
+    global _MENU_FURNITURE, _MENU_FURNITURE_RECTS
+    if _MENU_FURNITURE is None:
+        layer = pygame.Surface((W, H), pygame.SRCALPHA)
+        rects = _menu_sign_chain(layer)
+        rects["START"] = _menu_start_post(layer)
+        rects["PROFILE"] = _menu_profile_frame(layer)
+        _MENU_FURNITURE, _MENU_FURNITURE_RECTS = layer, rects
+    return _MENU_FURNITURE, _MENU_FURNITURE_RECTS
+
+
+
 # ── Neon-Arcade HUD kit (E2 layout, menu-yellow accent) ──────────────────────
 # Shipped from the gameplay-HUD design loop. The score/coins/pause sit on opaque
 # softened cut-corner slate plates: an OPAQUE body is the hard value floor that
@@ -1964,57 +2320,6 @@ class HUD:
         """Arm the transient STORE 'coming soon' toast; draw_menu ticks it down."""
         self.store_toast_t = 1.6
 
-    def _draw_profile_card(self, surf):
-        """Frame the live standing-Pip diorama (already blitted to `surf` by
-        the menu scene) as a tappable PROFILE card: a thin double-rule jewel
-        edge + a beveled brass nameplate, riding the START-pill pulse so it
-        reads as interactive, not scenery. The player's look shows through
-        the frame; their records (achievements) open behind it. Publishes
-        menu_profile_rect for the tap router."""
-        from game import intro as _intro
-        house = _intro.get_sprite("skyhouse_post")
-        hw, hh = house.get_size()
-        hx = int(W * 0.30) - hw // 2
-        hy = int(H * 0.42) - hh // 2
-        house_r = pygame.Rect(hx, hy, hw, hh)
-        bird_r = pygame.Rect(90 - 34, int(H * 0.42) - 34, 68, 84)
-        fr = house_r.union(bird_r).inflate(24, 24)
-        fr.height += 20
-
-        glow_amt = 0.5 + 0.5 * math.sin(self.title_t * 3.6)
-        pad = 14
-        glow = pygame.Surface((fr.width + pad * 2, fr.height + pad * 2),
-                              pygame.SRCALPHA)
-        for k in range(pad, 0, -1):
-            a = int(0.9 * (48 + 40 * glow_amt) * k / pad / 3.6)
-            gr = pygame.Rect(pad - k, pad - k, fr.width + k * 2, fr.height + k * 2)
-            pygame.draw.rect(glow, (*_GOLD_BRIGHT, a), gr, border_radius=15 + k)
-        surf.blit(glow, (fr.x - pad, fr.y - pad))
-
-        pygame.draw.rect(surf, _GOLD_MID, fr, width=1, border_radius=14)
-        pygame.draw.rect(surf, _GOLD_BRIGHT, fr.inflate(-12, -12), width=1,
-                         border_radius=9)
-        pygame.draw.line(surf, (*_GOLD_PALE, 200), (fr.left + 16, fr.top + 2),
-                         (fr.right - 16, fr.top + 2), 1)
-
-        plate = pygame.Rect(fr.centerx - 60, fr.bottom - 24, 120, 22)
-        pygame.draw.rect(surf, _GOLD_DEEP, plate, border_radius=7)
-        pygame.draw.rect(surf, _GOLD_MID, plate.inflate(-3, -3), border_radius=6)
-        pygame.draw.line(surf, _GOLD_PALE, (plate.left + 8, plate.top + 3),
-                         (plate.right - 8, plate.top + 3), 1)
-        pygame.draw.line(surf, (60, 40, 6), (plate.left + 8, plate.bottom - 3),
-                         (plate.right - 8, plate.bottom - 3), 1)
-        inset = plate.inflate(-8, -8)
-        pygame.draw.rect(surf, (30, 18, 8), inset, border_radius=4)
-        lx = inset.centerx - 7
-        _tracked_label(surf, "PROFILE", (lx, inset.centery + 1), 13,
-                       color=(20, 10, 4), track=2, alpha=200)
-        _tracked_label(surf, "PROFILE", (lx, inset.centery), 13,
-                       color=_GOLD_PALE, track=2, alpha=250)
-        _profile_tri(surf, inset.right - 9, inset.centery, 4, _GOLD_PALE)
-
-        self.menu_profile_rect = fr
-
     def draw_pause_overlay(self, surf, score: int = 0):
         # Deep blue-purple dim. The current score and coins pills from
         # draw_play sit underneath and read through the dim — no dedicated
@@ -2051,55 +2356,33 @@ class HUD:
         # crosses the parrot.
         pulse = 1.0 + math.sin(self.title_t * 2.4) * 0.04
         float_y = int(7 * math.sin(self.title_t * 1.8))
-        _outlined_text(surf, "SKYBIT", (W // 2, 126 + float_y),
-                        size=int(72 * pulse), px=3)
+        _outlined_text(surf, "SKYBIT", (W // 2, 112 + float_y),
+                        size=int(72 * pulse), px=3, shadow_offset=(2, 3))
 
         # Subtitle — same gold-on-red outline as SKYBIT, just smaller and
-        # with a tighter pixel outline so it reads as a partner line.
-        _outlined_text(surf, "POCKET  SKY  FLYER", (W // 2, 184),
-                        size=22, px=2, shadow_offset=(2, 3))
+        # with a tighter pixel outline so it reads as a partner line. The whole
+        # block sits higher than it used to, and the divider that used to close
+        # it is gone: the PROFILE frame now opens at y204, which the old rule
+        # at y208 ran straight through.
+        _outlined_text(surf, "POCKET  SKY  FLYER", (W // 2, 168),
+                        size=20, px=2, shadow_offset=(1, 2))
 
-        # Divider
-        pygame.draw.line(surf, (*_ORANGE_BORDER, 120),
-                         (W // 2 - 70, 208), (W // 2 + 70, 208), 1)
-
-        # Single primary pill: HOW TO PLAY + POWER-UPS moved into the (future)
-        # Settings screen, so START is recentered + enlarged to own the freed
-        # band instead of sitting cramped atop a now-empty stack.
-        btn_alpha = int(225 + math.sin(self.title_t * 3.6) * 30)
-        self.menu_start_rect = _pill_btn(
-            surf, (W // 2, 430), "START",
-            size=24, alpha=btn_alpha, min_width=240, primary=True, dim=True,
-            shadow=False)
-
-        # Profile card — the standing Pip diorama, framed as a tappable entry
-        # (records/achievements live behind it). Drawn over the already-blitted
-        # diorama so the frame + nameplate sit on top of Pip.
-        self._draw_profile_card(surf)
-
-        # Bottom trio — STORE · TOP 10 · SETTINGS as icon-forward chips, inset
-        # and centre-clustered so they clear the screen edges. STORE is a stub
-        # (coming-soon toast), TOP 10 opens the leaderboard, SETTINGS the
-        # settings screen. Hit-rects read by scenes.py STATE_MENU routing.
-        cy = H - 86
-        tile_w, tgap, tile_h = 84, 8, 54
-        tx = (W - (tile_w * 3 + tgap * 2)) // 2
-        chips = []
-        for _label, _kind in (("STORE", "coin"), ("TOP 10", "trophy"),
-                              ("SETTINGS", "gear")):
-            r = pygame.Rect(tx, cy - tile_h // 2, tile_w, tile_h)
-            _volume_panel(surf, r, radius=13)
-            if _kind == "coin":
-                _coin_icon(surf, r.centerx, cy - 5, 12)
-            elif _kind == "trophy":
-                _draw_trophy(surf, r.centerx, cy - 5, 10)
-            else:
-                _draw_gear(surf, r.centerx, cy - 5, 12)
-            _tracked_label(surf, _label, (r.centerx, cy + 15), 10,
-                           color=_AWSTAR_HI, track=1, alpha=210)
-            chips.append(r)
-            tx += tile_w + tgap
-        self.menu_store_rect, self.menu_top10_rect, self.menu_settings_rect = chips
+        # The menu's furniture: three plank signs hung from Pip's cloud, START
+        # planted on its own post bottom-right, and the jewel frame that makes
+        # the standing-Pip diorama the PROFILE entry. One cached layer, blitted
+        # over the already-drawn diorama so the frame sits on top of Pip.
+        #
+        # START left the sign chain deliberately. As a centred pill above the
+        # utilities it put the primary control ABOVE them and shared a column
+        # with nothing; planted low and right it is the lowest, largest target
+        # on the screen and nearest the thumb.
+        furniture, rects = _menu_furniture()
+        surf.blit(furniture, (0, 0))
+        self.menu_start_rect = rects["START"]
+        self.menu_profile_rect = rects["PROFILE"]
+        self.menu_store_rect = rects["STORE"]
+        self.menu_top10_rect = rects["TOP 10"]
+        self.menu_settings_rect = rects["SETTINGS"]
 
         # Transient STORE "coming soon" toast — a small gold-rimmed tag above
         # the STORE chip, fading via the countdown armed on a STORE tap.
