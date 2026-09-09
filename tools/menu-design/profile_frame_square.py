@@ -64,6 +64,13 @@ PRESETS = {
     "L4": (_sq(13, 197, 156), "largest before the right rule reaches the right rope"),
     "L5": (_sq(29, 229, 124), "tight - smallest of the five; pays 8px of roof"),
 }
+def rect_for(slug, dy=0):
+    """The option's square, lifted dy pixels. The tag hangs off the frame, so
+    moving the frame moves the button with it — that is the whole point of
+    anchoring it to the inner rule rather than to the cloud."""
+    return PRESETS[slug][0].move(0, -dy)
+
+
 def tag_for(fr):
     """On the frame's own bottom band, inside it, clear of the inner rule.
 
@@ -147,7 +154,9 @@ def build_shipped(phase):
     app.world.bird.draw(pip, 0, 0)
     m = pygame.mask.from_surface(pip, threshold=8)
     px = [(x, y) for x in range(GW) for y in range(200, 340) if m.get_at((x, y))]
-    return s, app.hud.menu_profile_rect, px
+    # A copy, not app.screen itself: every App() hands back the same display
+    # surface, so the next render would repaint this one under the caller.
+    return s.copy(), app.hud.menu_profile_rect, px
 
 
 def shipped_stats(fr, px):
@@ -167,7 +176,7 @@ def shipped_stats(fr, px):
     )
 
 
-def build(phase, slug):
+def build(phase, slug, dy=0):
     import random
     from game.scenes import App, STATE_MENU
     from game.world import World
@@ -207,7 +216,7 @@ def build(phase, slug):
     chain = B.draw_signchain(surf)
     tails = chain.pop("_tails")
     B.draw_start_B(surf, tails)
-    fr = PRESETS[slug][0]
+    fr = rect_for(slug, dy)
     draw_frame(surf, fr, tag_for(fr))
     _hud._outlined_text(surf, "SKYBIT", (GW // 2, 112), size=72, px=3,
                         shadow_offset=(2, 3))
@@ -255,8 +264,8 @@ def _rope_x(sgn, y):
     return ax + (y - 316) / (hy - 316) * (hx - ax)
 
 
-def verify(slug, pip=None, sub=None):
-    fr = PRESETS[slug][0]
+def verify(slug, pip=None, sub=None, dy=0):
+    fr = rect_for(slug, dy)
     tag = tag_for(fr)
     pip = pip if pip is not None else _pip_pixels()
     sub = sub if sub is not None else _subtitle_bottom()
@@ -320,74 +329,100 @@ def verify(slug, pip=None, sub=None):
 
 if __name__ == "__main__":
     order = ["L1", "L2", "L3", "L4", "L5"]
+    # Each row lifts the frame — and the tag riding its inner corner — by this
+    # many pixels. 15 is the ceiling: L4 is the tallest square, and at -15 its
+    # top rule sits 5px under the subtitle's ink.
+    SHIFTS = [0, 5, 10, 15]
     pip, sub = _pip_pixels(), _subtitle_bottom()
-    stats = {s: verify(s, pip, sub) for s in order}
 
     if os.environ.get("SHOWCASE"):
         F = "/home/user/skybit/game/assets/LiberationSans-Bold.ttf"
         fh = pygame.font.Font(F, 20)
+        fb = pygame.font.Font(F, 16)
         fl = pygame.font.Font(F, 15)
         fs = pygame.font.Font(F, 12)
         CW, CH = W, H
-        PAD, GAP, LAB, HEAD = 22, 14, 66, 52
+        PAD, GAP, LAB, HEAD, BAN, RGAP = 22, 14, 64, 52, 26, 20
 
         live_surf, live_fr, live_pip = build_shipped(0.20)
-        stats["current"] = shipped_stats(live_fr, live_pip)
-        panels = [("current", live_surf,
-                   "the live game menu today - not square, not keyed to the cloud")]
-        panels += [(s, None, PRESETS[s][1]) for s in order]
-
-        n = len(panels)
-        sheet = pygame.Surface((PAD * 2 + n * CW + (n - 1) * GAP,
-                                PAD * 2 + HEAD + CH + LAB))
+        cols = ["current"] + order
+        ncol = len(cols)
+        rowh = BAN + CH + LAB
+        sheet = pygame.Surface((PAD * 2 + ncol * CW + (ncol - 1) * GAP,
+                                PAD * 2 + HEAD + len(SHIFTS) * rowh
+                                + (len(SHIFTS) - 1) * RGAP))
         sheet.fill((17, 17, 23))
-        sheet.blit(fh.render("SKYBIT · PROFILE frame · tag flush in the inner rule, just under the cloud",
-                             True, (228, 204, 134)), (PAD, PAD))
+        sheet.blit(fh.render(
+            "SKYBIT · PROFILE frame · the same five, lifted row by row",
+            True, (228, 204, 134)), (PAD, PAD))
         sheet.blit(fs.render(
-            "leftmost is the menu on this branch. Every option after it: a true square whose bottom is pinned at y352, "
-            "so the PROFILE tag - seated flush into the INNER rule's bottom-left corner - lands just under the cloud. Only the square's size varies.",
+            "top row is where the last round left it. Each row below lifts the square AND the tag riding its inner "
+            "bottom-left corner by the stated amount. Columns are the five sizes; the leftmost panel is this branch's menu, repeated as a fixed anchor.",
             True, (150, 148, 142)), (PAD, PAD + 26))
 
-        y = PAD + HEAD
-        for i, (slug, surf, thesis) in enumerate(panels):
-            if surf is None:
-                surf = build(0.20, slug)
-            x = PAD + i * (CW + GAP)
-            sheet.blit(surf, (x, y))
-            live = slug == "current"
-            pygame.draw.rect(sheet, (150, 122, 62) if live else (76, 76, 86),
-                             (x, y, CW, CH), 2 if live else 1)
-            st = stats[slug]
-            t = fl.render("%s   %d x %d" % (slug, *st["side"]), True,
-                          (232, 206, 138) if live else (240, 240, 246))
-            sheet.blit(t, t.get_rect(midtop=(x + CW // 2, y + CH + 8)))
-            c = fs.render(thesis, True, (156, 154, 148))
-            sheet.blit(c, c.get_rect(midtop=(x + CW // 2, y + CH + 28)))
-            # The rope running behind the tag is occlusion, not a defect —
-            # only a cut roof or a cut Pip turns the line red.
-            bad = st["clip_px"] > 0 or st["roof_crop"] > 0
-            rc = st.get("tag_rope_clear")
-            m = ("Pip  L%d R%d T%d B%d    roof %s    rope hidden behind tag %s"
-                 % (*st["pip"],
-                    ("CROPPED %d" % st["roof_crop"]) if st["roof_crop"]
-                    else "+%d" % st["cottage"][2],
-                    "n/a" if rc is None else
-                    ("%dpx" % -rc if rc < 0 else "none")))
-            c2 = fs.render(m, True, (214, 106, 96) if bad else (128, 186, 132))
-            sheet.blit(c2, c2.get_rect(midtop=(x + CW // 2, y + CH + 46)))
+        allstats = {}
+        for r, dy in enumerate(SHIFTS):
+            ry = PAD + HEAD + r * (rowh + RGAP)
+            st0 = verify(order[0], pip, sub, dy)
+            tb = st0["tag_below_cloud"]
+            sub_min = min(verify(s_, pip, sub, dy)["subtitle_clear"] for s_ in order)
+            banner = ("MOVED UP %d px%s      tag vs cloud base: %s"
+                      "      tightest subtitle gap: %dpx"
+                      % (dy, "   (as now)" if dy == 0 else "",
+                         "%dpx below" % tb if tb >= 0 else "%dpx into it" % -tb,
+                         sub_min))
+            sheet.blit(fb.render(banner, True, (232, 206, 138) if dy == 0
+                                 else (206, 200, 188)), (PAD, ry + 4))
+            pygame.draw.line(sheet, (60, 60, 70), (PAD, ry + BAN - 4),
+                             (sheet.get_width() - PAD, ry + BAN - 4), 1)
+
+            y = ry + BAN
+            for i, slug in enumerate(cols):
+                x = PAD + i * (CW + GAP)
+                if slug == "current":
+                    sheet.blit(live_surf, (x, y))
+                    pygame.draw.rect(sheet, (150, 122, 62), (x, y, CW, CH), 2)
+                    t = fl.render("this branch's menu", True, (232, 206, 138))
+                    sheet.blit(t, t.get_rect(midtop=(x + CW // 2, y + CH + 8)))
+                    c = fs.render("unchanged reference", True, (156, 154, 148))
+                    sheet.blit(c, c.get_rect(midtop=(x + CW // 2, y + CH + 28)))
+                    continue
+
+                sheet.blit(build(0.20, slug, dy), (x, y))
+                pygame.draw.rect(sheet, (76, 76, 86), (x, y, CW, CH), 1)
+                st = verify(slug, pip, sub, dy)
+                allstats[(dy, slug)] = st
+                t = fl.render("%s   %d x %d" % (slug, *st["side"]), True,
+                              (240, 240, 246))
+                sheet.blit(t, t.get_rect(midtop=(x + CW // 2, y + CH + 8)))
+                c = fs.render("top y%d   bottom y%d" % (st["rect"][1], st["rect"][3]),
+                              True, (156, 154, 148))
+                sheet.blit(c, c.get_rect(midtop=(x + CW // 2, y + CH + 26)))
+                bad = st["clip_px"] > 0 or st["roof_crop"] > 0
+                m = ("Pip L%d R%d T%d B%d   roof %s   subtitle %dpx"
+                     % (*st["pip"],
+                        ("CUT %d" % st["roof_crop"]) if st["roof_crop"]
+                        else "+%d" % st["cottage"][2],
+                        st["subtitle_clear"]))
+                c2 = fs.render(m, True, (214, 106, 96) if bad else (128, 186, 132))
+                sheet.blit(c2, c2.get_rect(midtop=(x + CW // 2, y + CH + 44)))
 
         out = ("/home/user/skybit/docs/main-menu/harbour-post/"
                "profile-frame/square_showcase.png")
         os.makedirs(os.path.dirname(out), exist_ok=True)
         pygame.image.save(sheet, out)
         print("saved", out, sheet.get_size())
-        order = ["current"] + order
+        print("subtitle mass ends at y%d" % sub)
+        for dy in SHIFTS:
+            for s_ in order:
+                st = allstats[(dy, s_)]
+                print("  up%-3d %-3s rect=%s roof_cut=%d subtitle=%d tag_below_cloud=%d "
+                      "store=%d pip_clip=%d"
+                      % (dy, s_, st["rect"], st["roof_crop"], st["subtitle_clear"],
+                         st["tag_below_cloud"], st["store_clear"], st["clip_px"]))
     else:
         which = os.environ.get("OPTION", "L3")
-        out = os.environ.get("OUT", "/tmp/_pfsq_%s.png" % which)
-        pygame.image.save(build(float(os.environ.get("PHASE", "0.20")), which), out)
-        print("saved", out)
-
-    print("subtitle mass ends at y%d" % sub)
-    for s in order:
-        print("%-8s %s" % (s, stats[s]))
+        dy = int(os.environ.get("UP", "0"))
+        out = os.environ.get("OUT", "/tmp/_pfsq_%s_%d.png" % (which, dy))
+        pygame.image.save(build(float(os.environ.get("PHASE", "0.20")), which, dy), out)
+        print("saved", out, verify(which, pip, sub, dy))
