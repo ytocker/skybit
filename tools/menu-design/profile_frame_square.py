@@ -58,22 +58,27 @@ def _sq(left, top, side):
 # L1-L4 grow; L5 is the one that crops, and is the only way to be both low and
 # small.
 PRESETS = {
-    "L1": (_sq(31, 205, 120), "step - the shallowest drop; bottom just under the cloud"),
-    "L2": (_sq(28, 205, 126), "drop - one stop lower, centred on the parrot"),
-    "L3": (_sq(25, 205, 132), "deep - lower again; the cloud sits well inside now"),
-    "L4": (_sq(22, 205, 138), "lowest - bottom rule 17px off the STORE plank"),
-    "L5": (_sq(31, 223, 120), "tight - as low as L4 but small; sits hard on the roof"),
+    "L1": (_sq(22, 215, 138), "smallest square that still holds the whole roof"),
+    "L2": (_sq(19, 209, 144), "one stop up top - 12px over the roof"),
+    "L3": (_sq(16, 203, 150), "roomier again; 18px over the roof"),
+    "L4": (_sq(13, 197, 156), "largest before the right rule reaches the right rope"),
+    "L5": (_sq(29, 229, 124), "tight - smallest of the five; pays 8px of roof"),
 }
 def tag_for(fr):
     """On the frame's own bottom band, inside it, clear of the inner rule.
 
-    Left-aligned hard against the frame: at fr.left + 2 it laps the inner gold
-    rule and stops just short of the outer one, so it reads as bolted to that
-    side rather than floating near it.
+    Seated flush into the INNER rule's bottom-left corner — its first painted
+    column sits directly against the inner rule's left run, its last row
+    directly on that rule's bottom run. Nothing floats.
+
+    The frames are then sized so this lands the tag just under the cloud: with
+    every bottom pinned at y352 the tag occupies y325-346, three rows of sky
+    below the cloud's y321 base.
     """
+    inner = fr.inflate(-10, -10)
     t = pygame.Rect(0, 0, TAG_W, TAG_H)
-    t.left = fr.left + 2
-    t.bottom = fr.bottom - 8
+    t.left = inner.left + 1
+    t.bottom = inner.bottom - 1
     return t
 
 
@@ -280,13 +285,15 @@ def verify(slug, pip=None, sub=None):
     # min() over all four sides would just report that on purpose. Left is an
     # offset from the frame's outer rule; the others stay clearances.
     inner = fr.inflate(-10, -10)
-    fit = min(inner.right - 1 - (tag.right - 1), tag.top - inner.top,
-              inner.bottom - 1 - (tag.bottom - 1))
+    fit = min(inner.right - 1 - (tag.right - 1), tag.top - inner.top)
 
     # The frame's own bottom rule now runs below the cloud, so it crosses the
     # rope columns; report where rather than pretending it does not.
     crossings = sum(1 for sgn in (-1, 1)
                     if fr.left <= _rope_x(sgn, fr.bottom - 1) <= fr.right - 1)
+    # The right vertical can now reach past the right rope's run as well.
+    right_rope = min(_rope_x(1, y) - (fr.right - 1)
+                     for y in range(max(fr.top, 316), fr.bottom))
     return dict(
         side=(fr.width, fr.height),
         square=fr.width == fr.height,
@@ -301,7 +308,10 @@ def verify(slug, pip=None, sub=None):
         store_clear=STORE_TOP - (fr.bottom - 1),
         subtitle_clear=fr.top - sub,
         rope_crossings=crossings,
-        tag_left_of_frame=tag.left - fr.left,
+        right_rule_v_rope=round(right_rope, 1),
+        tag_touches_inner=(tag.left - 1 == inner.left,
+                           tag.bottom + 1 == inner.bottom),
+        tag_below_cloud=tag.top - (cloud.bottom - 1) - 1,
         tag_inside_frame=fit,
         tag_rope_clear=None if worst is None else round(worst, 1),
         tag_clears_pip=tag.top - max(py),
@@ -331,11 +341,11 @@ if __name__ == "__main__":
         sheet = pygame.Surface((PAD * 2 + n * CW + (n - 1) * GAP,
                                 PAD * 2 + HEAD + CH + LAB))
         sheet.fill((17, 17, 23))
-        sheet.blit(fh.render("SKYBIT · PROFILE frame · raised 10px, tag on the bottom-left",
+        sheet.blit(fh.render("SKYBIT · PROFILE frame · tag flush in the inner rule, just under the cloud",
                              True, (228, 204, 134)), (PAD, PAD))
         sheet.blit(fs.render(
-            "leftmost is the menu on this branch. Every option after it: a true square, raised 10px from the last round, "
-            "with the PROFILE tag on its bottom band and pushed hard against its left rule.",
+            "leftmost is the menu on this branch. Every option after it: a true square whose bottom is pinned at y352, "
+            "so the PROFILE tag - seated flush into the INNER rule's bottom-left corner - lands just under the cloud. Only the square's size varies.",
             True, (150, 148, 142)), (PAD, PAD + 26))
 
         y = PAD + HEAD
@@ -353,15 +363,16 @@ if __name__ == "__main__":
             sheet.blit(t, t.get_rect(midtop=(x + CW // 2, y + CH + 8)))
             c = fs.render(thesis, True, (156, 154, 148))
             sheet.blit(c, c.get_rect(midtop=(x + CW // 2, y + CH + 28)))
-            bad = (st["clip_px"] > 0 or st["roof_crop"] > 0
-                   or (st.get("tag_rope_clear") or 0) < -6)
+            # The rope running behind the tag is occlusion, not a defect —
+            # only a cut roof or a cut Pip turns the line red.
+            bad = st["clip_px"] > 0 or st["roof_crop"] > 0
             rc = st.get("tag_rope_clear")
-            m = ("Pip  L%d R%d T%d B%d    roof %s    tag over left rope %s"
+            m = ("Pip  L%d R%d T%d B%d    roof %s    rope hidden behind tag %s"
                  % (*st["pip"],
                     ("CROPPED %d" % st["roof_crop"]) if st["roof_crop"]
                     else "+%d" % st["cottage"][2],
                     "n/a" if rc is None else
-                    ("%dpx" % -rc if rc < 0 else "clear")))
+                    ("%dpx" % -rc if rc < 0 else "none")))
             c2 = fs.render(m, True, (214, 106, 96) if bad else (128, 186, 132))
             sheet.blit(c2, c2.get_rect(midtop=(x + CW // 2, y + CH + 46)))
 
