@@ -38,19 +38,11 @@ GOLD_MID, GOLD_BRIGHT, GOLD_PALE = B.GOLD_MID, B.GOLD_BRIGHT, B.GOLD_PALE
 GOLD_DEEP = B.GOLD_DEEP
 W, H = 360, 640
 
-BOTTOM = 324          # 3px under the cloud's measured base (y321)
+ROOF = 221            # cottage roof top — a frame below this crops it
+STORE_TOP = 359       # STORE plank's rotated bbox — the floor for any drop
 
-# The tag rides the cloud's lower-left lobe, inside the frame, rather than
-# hanging under it. One fixed rect for all five: it is anchored to the cloud,
-# which never moves, so the tag reads as pinned to the same spot however the
-# square around it is sized.
-#
-# The cloud is a lens, not a box. Its left edge runs x40 at y296, pinches to
-# x55 at y299, opens to x28 by y306, holds that to y315, then closes fast —
-# x38 at y316, x66 at y320. So the lowest a left-anchored tag can sit and stay
-# on cloud mass is a bottom edge at y316, and the 8px corner radius carries the
-# top-left arc over the y299-302 pinch.
-TAG = pygame.Rect(42, 295, 84, 22)
+TAG_W, TAG_H = 84, 22
+TAG_CX_MIN = 88       # keeps the tag's left edge off the x42 rope column
 
 
 def _sq(left, top, side):
@@ -58,18 +50,32 @@ def _sq(left, top, side):
 
 
 # slug: (rect, thesis)
+#
+# All five sit LOWER than the previous round, with the tag moved off the cloud
+# and down onto the frame's own bottom band. Two hard edges bracket how low a
+# square can go: the cottage roof starts at y221, and the STORE plank's rotated
+# bbox starts at y359. A frame that drops must therefore either grow — its top
+# is pinned just over the roof while its bottom runs down — or crop the roof.
+# L1-L4 grow; L5 is the one that crops, and is the only way to be both low and
+# small.
 PRESETS = {
-    "S1": (_sq(27, 217, 108), "crop - tightest square that still clears the roof"),
-    "S2": (_sq(25, 207, 118), "poise - a stop roomier, weighted to the cottage"),
-    "S3": (_sq(28, 199, 126), "parrot - centred on Pip; equal air either side of him"),
-    "S4": (_sq(16, 189, 136), "grand - largest that clears the subtitle"),
-    "S5": (_sq(28, 189, 136), "island - same size, pushed right to hold more cloud"),
+    "L1": (_sq(31, 215, 120), "step - the shallowest drop that still clears the roof"),
+    "L2": (_sq(28, 215, 126), "drop - one stop lower, centred on the parrot"),
+    "L3": (_sq(25, 215, 132), "deep - lower again; the cloud sits well inside now"),
+    "L4": (_sq(22, 215, 138), "lowest - bottom rule 7px off the STORE plank"),
+    "L5": (_sq(31, 233, 120), "crop - as low as L4 but small; pays for it in roof"),
 }
-
-
 def tag_for(fr):
-    """Same seat on the cloud for every option — see TAG."""
-    return pygame.Rect(TAG)
+    """On the frame's own bottom band, inside it, clear of the inner rule.
+
+    Centred on the frame, then pushed right off the left rope: the rope leaves
+    the cloud at x42/y316 and runs down to the STORE plank, so a tag centred on
+    a left-leaning square would sit on it.
+    """
+    t = pygame.Rect(0, 0, TAG_W, TAG_H)
+    t.centerx = max(fr.centerx, TAG_CX_MIN)
+    t.bottom = fr.bottom - 8
+    return t
 
 
 def draw_frame(surf, fr, tag):
@@ -152,6 +158,8 @@ def shipped_stats(fr, px):
              min(ys) - fr.top, fr.bottom - 1 - max(ys)),
         cottage=(0, 0, B.house_cottage_rect().top - fr.top),
         below_cloud=fr.bottom - 1 - (B.cloud_rect().bottom - 1),
+        roof_crop=max(0, fr.top - ROOF),
+        store_clear=STORE_TOP - (fr.bottom - 1),
     )
 
 
@@ -255,8 +263,9 @@ def verify(slug, pip=None, sub=None):
     px = [x for x, y in pip]
     py = [y for x, y in pip]
 
-    # The ropes only exist below their y316 cloud anchors, so only the tag's
-    # bottom rows can foul them.
+    # The ropes only exist below their y316 cloud anchors, and the 8px corner
+    # radius pulls the tag's end rows inside its rect, so measure the PAINTED
+    # pixels — the rect overstates the tag's reach.
     shape = pygame.Surface((W, H), pygame.SRCALPHA)
     pygame.draw.rect(shape, (255, 255, 255), tag, border_radius=8)
     worst = float("inf")
@@ -274,12 +283,10 @@ def verify(slug, pip=None, sub=None):
     fit = min(tag.left - inner.left, inner.right - 1 - (tag.right - 1),
               tag.top - inner.top, inner.bottom - 1 - (tag.bottom - 1))
 
-    house = B._intro.get_sprite("skyhouse_post")
-    hx, hy = B.house_topleft()
-    lay = pygame.Surface((W, H), pygame.SRCALPHA)
-    lay.blit(house, (hx, hy))
-    on = sum(1 for x in range(tag.left, tag.right)
-             for y in range(tag.top, tag.bottom) if lay.get_at((x, y))[3] > 8)
+    # The frame's own bottom rule now runs below the cloud, so it crosses the
+    # rope columns; report where rather than pretending it does not.
+    crossings = sum(1 for sgn in (-1, 1)
+                    if fr.left <= _rope_x(sgn, fr.bottom - 1) <= fr.right - 1)
     return dict(
         side=(fr.width, fr.height),
         square=fr.width == fr.height,
@@ -290,17 +297,18 @@ def verify(slug, pip=None, sub=None):
         cottage=(cot.left - fr.left, fr.right - 1 - (cot.right - 1),
                  cot.top - fr.top),
         below_cloud=fr.bottom - 1 - (cloud.bottom - 1),
-        cloud_spill_r=max(0, (cloud.right - 1) - (fr.right - 1)),
+        roof_crop=max(0, fr.top - ROOF),
+        store_clear=STORE_TOP - (fr.bottom - 1),
         subtitle_clear=fr.top - sub,
+        rope_crossings=crossings,
         tag_inside_frame=fit,
-        tag_on_cloud="%d%%" % round(100 * on / (tag.width * tag.height)),
         tag_rope_clear=None if worst is None else round(worst, 1),
-        tag_clears_pip=min(y for x, y in pip) if False else tag.top - max(py),
+        tag_clears_pip=tag.top - max(py),
     )
 
 
 if __name__ == "__main__":
-    order = ["S1", "S2", "S3", "S4", "S5"]
+    order = ["L1", "L2", "L3", "L4", "L5"]
     pip, sub = _pip_pixels(), _subtitle_bottom()
     stats = {s: verify(s, pip, sub) for s in order}
 
@@ -322,11 +330,11 @@ if __name__ == "__main__":
         sheet = pygame.Surface((PAD * 2 + n * CW + (n - 1) * GAP,
                                 PAD * 2 + HEAD + CH + LAB))
         sheet.fill((17, 17, 23))
-        sheet.blit(fh.render("SKYBIT · PROFILE frame · five squares, tag on the cloud",
+        sheet.blit(fh.render("SKYBIT · PROFILE frame · five lower squares, tag on the bottom band",
                              True, (228, 204, 134)), (PAD, PAD))
         sheet.blit(fs.render(
-            "leftmost is the menu on this branch. Every option after it: a true square, bottom edge 3px under "
-            "the cloud's base (y324), and the PROFILE tag seated on the cloud's lower-left lobe inside the frame.",
+            "leftmost is the menu on this branch. Every option after it: a true square dropped as low as it can go, "
+            "with the PROFILE tag inside it on its bottom band. Roof starts at y221 and the STORE plank at y359 - a lower square must grow, or crop.",
             True, (150, 148, 142)), (PAD, PAD + 26))
 
         y = PAD + HEAD
@@ -344,9 +352,12 @@ if __name__ == "__main__":
             sheet.blit(t, t.get_rect(midtop=(x + CW // 2, y + CH + 8)))
             c = fs.render(thesis, True, (156, 154, 148))
             sheet.blit(c, c.get_rect(midtop=(x + CW // 2, y + CH + 28)))
-            bad = st["clip_px"] > 0
-            m = "Pip  L%d R%d T%d B%d      roof gap %d      outside frame %d px" % (
-                *st["pip"], st["cottage"][2], st["clip_px"])
+            bad = st["clip_px"] > 0 or st["roof_crop"] > 0
+            m = ("Pip  L%d R%d T%d B%d     roof %s     STORE gap %d     Pip out %d px"
+                 % (*st["pip"],
+                    ("CROPPED %d" % st["roof_crop"]) if st["roof_crop"]
+                    else "+%d" % st["cottage"][2],
+                    st["store_clear"], st["clip_px"]))
             c2 = fs.render(m, True, (214, 106, 96) if bad else (128, 186, 132))
             sheet.blit(c2, c2.get_rect(midtop=(x + CW // 2, y + CH + 46)))
 
@@ -357,7 +368,7 @@ if __name__ == "__main__":
         print("saved", out, sheet.get_size())
         order = ["current"] + order
     else:
-        which = os.environ.get("OPTION", "S3")
+        which = os.environ.get("OPTION", "L3")
         out = os.environ.get("OUT", "/tmp/_pfsq_%s.png" % which)
         pygame.image.save(build(float(os.environ.get("PHASE", "0.20")), which), out)
         print("saved", out)
