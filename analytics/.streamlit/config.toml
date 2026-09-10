@@ -1,0 +1,18 @@
+# Streamlit theme + behaviour for the Skybit analytics dashboard.
+# Sky-blue accent matches the game's biome palette; wide layout for the
+# three tabs (Overview / Players & Retention / Gameplay & Balance).
+
+[theme]
+base = "dark"
+primaryColor = "#4DA3FF"
+backgroundColor = "#0F1B2D"
+secondaryBackgroundColor = "#16243B"
+textColor = "#E8EEF7"
+font = "sans serif"
+
+[server]
+headless = true
+runOnSave = false
+
+[browser]
+gatherUsageStats = false

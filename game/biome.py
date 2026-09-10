@@ -24,7 +24,7 @@ from game.draw import lerp_color
 # phase -> palette dict. Phases MUST be sorted ascending (0..1).
 
 _KEYFRAMES: list[tuple[float, dict]] = [
-    (0.00, dict(  # DAY — bright cyan sky, warm tan sandstone, lush green canopy
+    (0.00000, dict(  # DAY — bright cyan sky, warm tan sandstone, lush green canopy
         sky_top=(40, 110, 200),
         sky_mid=(90, 170, 230),
         sky_bot=(170, 220, 245),
@@ -43,7 +43,7 @@ _KEYFRAMES: list[tuple[float, dict]] = [
         foliage_accent=(255, 240, 120),
         star_alpha=0,
     )),
-    (0.18, dict(  # GOLDEN HOUR — amber warmth
+    (0.23125, dict(  # GOLDEN HOUR — amber warmth
         sky_top=(80, 120, 200),
         sky_mid=(220, 175, 140),
         sky_bot=(255, 210, 160),
@@ -62,7 +62,7 @@ _KEYFRAMES: list[tuple[float, dict]] = [
         foliage_accent=(255, 200, 80),
         star_alpha=0,
     )),
-    (0.32, dict(  # SUNSET — rose stone, autumn canopy
+    (0.36250, dict(  # SUNSET — rose stone, autumn canopy
         sky_top=(90, 50, 130),
         sky_mid=(230, 95, 120),
         sky_bot=(255, 160, 90),
@@ -81,7 +81,7 @@ _KEYFRAMES: list[tuple[float, dict]] = [
         foliage_accent=(255, 160, 80),
         star_alpha=20,
     )),
-    (0.48, dict(  # DUSK — lavender stone, teal foliage
+    (0.51250, dict(  # DUSK — lavender stone, teal foliage
         sky_top=(25, 20, 70),
         sky_mid=(70, 45, 130),
         sky_bot=(170, 95, 140),
@@ -100,7 +100,7 @@ _KEYFRAMES: list[tuple[float, dict]] = [
         foliage_accent=(180, 220, 200),
         star_alpha=130,
     )),
-    (0.62, dict(  # NIGHT — moonlit cool stone, dark teal canopy
+    (0.64375, dict(  # NIGHT — moonlit cool stone, dark teal canopy
         sky_top=(5, 8, 30),
         sky_mid=(15, 25, 70),
         sky_bot=(35, 55, 115),
@@ -119,7 +119,7 @@ _KEYFRAMES: list[tuple[float, dict]] = [
         foliage_accent=(160, 220, 230),
         star_alpha=235,
     )),
-    (0.78, dict(  # PREDAWN — cool pink stone, muted canopy
+    (0.79375, dict(  # PREDAWN — cool pink stone, muted canopy
         sky_top=(30, 30, 80),
         sky_mid=(70, 60, 140),
         sky_bot=(200, 130, 180),
@@ -138,7 +138,7 @@ _KEYFRAMES: list[tuple[float, dict]] = [
         foliage_accent=(200, 220, 180),
         star_alpha=90,
     )),
-    (0.90, dict(  # SUNRISE — peach stone, fresh canopy
+    (0.90625, dict(  # SUNRISE — peach stone, fresh canopy
         sky_top=(50, 100, 180),
         sky_mid=(255, 150, 150),
         sky_bot=(255, 220, 170),
@@ -157,7 +157,7 @@ _KEYFRAMES: list[tuple[float, dict]] = [
         foliage_accent=(255, 210, 130),
         star_alpha=0,
     )),
-    (1.00, dict(  # loop back to DAY
+    (1.00000, dict(  # loop back to DAY
         sky_top=(40, 110, 200),
         sky_mid=(90, 170, 230),
         sky_bot=(170, 220, 245),
@@ -180,13 +180,75 @@ _KEYFRAMES: list[tuple[float, dict]] = [
 
 
 # One full day-cycle every CYCLE_SECONDS seconds of gameplay.
-CYCLE_SECONDS = 300.0   # 5 minutes
+# The keyframe fractions above were authored against a 320s cycle (DAY spans
+# 0.00 -> 0.23125 = 74s). The clown event inserts content into the day; that
+# added run-time (config.DAY_EXTRA_SECONDS) is absorbed by the DAY phase so every
+# later time-of-day keeps its original wall-clock duration but starts later. We
+# grow the cycle by the same delta and remap each fraction:
+#     new_phase = (old_phase * BASE + DAY_EXTRA) / (BASE + DAY_EXTRA)   (i >= 1)
+# DAY stays at 0.0 and the wrap keyframe stays at 1.0.
+# Names parallel to _KEYFRAMES (the last keyframe is the wrap back to DAY).
+_KEYFRAME_NAMES = ["DAY", "GOLDEN HOUR", "SUNSET", "DUSK", "NIGHT",
+                   "PREDAWN", "SUNRISE", "DAY"]
+
+# Fraction of the (possibly extended) DAY span to hold at SOLID daytime before
+# the golden-hour fade begins. Without this, a single DAY→GOLDEN smoothstep
+# spans the whole — now much longer — day, so the sky drifts toward amber from
+# the very start. We deliberately keep this hold SHORT so the fade is already
+# reading on screen within the first ~25-30 pillars: most runs end early, and a
+# 60% hold left the sky frozen on solid blue until ~pillar 42. Only applied when
+# the day is extended. Pairs with NIGHT_BORROW_SECONDS below, which trims the
+# same daytime length and hands it to the night.
+DAY_HOLD_FRAC = 0.51
+
+# Seconds trimmed off the GOLDEN..NIGHT keyframes and handed to the
+# NIGHT→PREDAWN span: an EQUAL swap that pulls the whole evening earlier (so the
+# sky starts changing sooner) and makes the night correspondingly longer,
+# WITHOUT changing the total cycle. PREDAWN/SUNRISE stay put, so the predawn
+# snow squall and the day-end finale keep their pillars. ~26s ≈ 15 early pillars.
+# Only meaningful while the day is extended.
+NIGHT_BORROW_SECONDS = 26.0
+
+_BASE_CYCLE_SECONDS = 320.0
+from game.config import DAY_EXTRA_SECONDS as _DAY_EXTRA
+CYCLE_SECONDS = _BASE_CYCLE_SECONDS + _DAY_EXTRA
+
+if _DAY_EXTRA:
+    _last = len(_KEYFRAMES) - 1
+
+    def _remap(i, frac):
+        # DAY pinned to 0, wrap pinned to 1. The evening block (GOLDEN..NIGHT,
+        # indices 1-4) is pulled earlier by the borrow; PREDAWN/SUNRISE keep the
+        # full DAY_EXTRA shift, so the gap they leave behind lengthens the night.
+        if i == 0:
+            return 0.0
+        if i == _last:
+            return 1.0
+        extra = _DAY_EXTRA - (NIGHT_BORROW_SECONDS if 1 <= i <= 4 else 0.0)
+        return (frac * _BASE_CYCLE_SECONDS + extra) / CYCLE_SECONDS
+
+    _KEYFRAMES[:] = [(_remap(i, frac), pal)
+                     for i, (frac, pal) in enumerate(_KEYFRAMES)]
+    # Hold solid DAY for DAY_HOLD_FRAC of the day span, then fade to golden over
+    # the remainder — a DAY-coloured keyframe inserted just before golden hour.
+    _golden_phase = _KEYFRAMES[1][0]
+    _KEYFRAMES.insert(1, (_golden_phase * DAY_HOLD_FRAC, dict(_KEYFRAMES[0][1])))
+    _KEYFRAME_NAMES.insert(1, "")   # the hold is not a named time-of-day
+
+# Named phase boundaries (fraction, label) for any consumer that draws the
+# day cycle — excludes the unnamed DAY-hold and the wrap. Reads the LIVE
+# keyframes so it tracks the real (extended) day length.
+PHASE_BOUNDARIES = [
+    (frac, name) for (frac, _pal), name in zip(_KEYFRAMES, _KEYFRAME_NAMES)
+    if name and frac < 1.0
+]
 
 
 def phase_for_time(elapsed_seconds: float) -> float:
-    """Return a phase in [0,1). Offset 0.04 so t=0 sits in bright mid-morning
-    rather than cold dawn, matching the menu-screen mood."""
-    return ((elapsed_seconds / CYCLE_SECONDS) + 0.04) % 1.0
+    """Return a phase in [0,1). t=0 lands exactly on the DAY keyframe so
+    the first 30+ seconds of a run sit in bright daylight before the
+    transition toward golden hour starts to read on screen."""
+    return (elapsed_seconds / CYCLE_SECONDS) % 1.0
 
 
 def _blend(a: dict, b: dict, t: float) -> dict:
@@ -220,7 +282,16 @@ def palette_for_time(elapsed_seconds: float) -> dict:
 
 # ── cached-palette bucket helpers ────────────────────────────────────────────
 
-PHASE_BUCKETS = 32
+# The sky and every phase-tinted foreground strip (mountains, ground, pagoda
+# ornaments) bake once per bucket and reuse, so the bucket count is the temporal
+# resolution of the whole day cycle. At 32 the sunset — the fastest-changing arc
+# — only got ~9 nodes, so the sky's piecewise-linear cross-fade faceted and the
+# foreground tint snapped in visible ~10s steps. 120 makes each step ~2.7s with a
+# ~4x smaller colour delta, below the perceptual threshold. The count is now
+# decoupled from RAM: the accumulating per-bucket surface caches (sky_designs
+# ._sky_cache, draw._sky_b_cache, pagoda_ornaments._CELL_CACHE) are LRU-bounded,
+# since only the two adjacent buckets are ever needed per frame.
+PHASE_BUCKETS = 120
 
 
 def phase_bucket(phase: float) -> int:

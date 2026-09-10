@@ -1,0 +1,280 @@
+"""struck-denomination — store_card_v3 concept, round 2 headless render.
+
+Reads as a MINTED COIN. Round 2 shrinks the hero disc to R=25 @ CY=42 so the
+two coin lanes get real breathing room: an ~11px legend lane ABOVE (the skin
+name struck as a spaced coin legend) and a ~21px denomination lane BELOW. The
+tier read now lives IN the coin metal — a tier-tinted illuminated metal field
+inside the disc plus a strong double bezel (bright lip + milled groove) — so
+the gutter aura is demoted to a soft support tint rather than the primary tier
+signal. The denomination lane reads as a coin's milled edge: a thin rim arc
+under 10 radial milling ticks, with the price struck in cream INSIDE the band.
+
+Layout (162×100, body inset 6, SS=2):
+  disc R=25 @ CY=42 → top y17 (≈11px legend lane), bottom y67 (≈21px
+  denomination lane). Name centered in the legend lane, tracked out; price set
+  in cream just below the disc, inside the milled band radius.
+
+Headless (SDL dummy) → a 3-up RARE/EPIC/LEGENDARY review sheet at SS (324×200,
+no downscale) + a real-scale 1x strip (162×100). Not wired into the live store;
+writes docs/store_card_v3/struck-denomination/round_2.png.
+"""
+import os
+
+os.environ["SDL_VIDEODRIVER"] = "dummy"
+os.environ["SDL_AUDIODRIVER"] = "dummy"
+
+import math
+import sys
+
+sys.path.insert(0, "/home/user/skybit")
+
+import pygame
+
+pygame.init()
+pygame.display.set_mode((1, 1))
+
+from game.draw import lerp_color
+from game.hud import _font
+from game.store_cards import (
+    vgrad, drop_shadow, bevel_rim, top_sheen, contact_shadow,
+    cabochon, cabochon_glass, blit_thumb, facet_gem, plain_text,
+    font, m, SS, CABO_LO, CABO_HI, CARD_T, CARD_B,
+    CARD_RING_DEEP, CARD_RING_BRIGHT, GEM_R,
+)
+
+# LOCKED card constants (from store_cards).
+CARD_W, CARD_H = 162, 100
+CARD_RAD = 17
+_INSET = 6
+
+# The minted disc: R=25 @ CY=42 opens both coin lanes with real breathing room
+# (≈11px legend above, ≈21px denomination below) and widens the side gutters.
+R = 25
+CY = 42                                          # disc centre, logical y
+
+# Cream shared by the name AND the price — the legend/denomination sibling pair.
+CREAM = (246, 240, 216)
+
+
+def _coin_metal(surf, cx, cy, r, glow, deep, peak=112, base=62):
+    """A tier-tinted ILLUMINATED metal field inside the disc, drawn AFTER the
+    skin so it warms the parrot's dark top/bottom caps into coloured metal
+    instead of dead zones. Concentric rings run brightest at the centre (glow)
+    and darken to the rim (deep) for a struck-coin dome; the high alpha base
+    (not a dark lens) makes the disc read as lit coloured metal carrying the
+    tier — the primary tier signal now that the gutter aura is demoted."""
+    pad = 2
+    tint = pygame.Surface((r * 2 + pad * 2, r * 2 + pad * 2), pygame.SRCALPHA)
+    c = r + pad
+    for i in range(r, 0, -1):
+        f = i / r                                   # 1 at rim, 0 at centre
+        col = lerp_color(glow, deep, f ** 1.3)      # lit centre → deep rim
+        a = int(base + (peak - base) * f ** 1.6)    # base at centre, peak at rim
+        pygame.draw.circle(tint, (*col, a), (c, c), i, width=2)
+    tmask = pygame.Surface(tint.get_size(), pygame.SRCALPHA)
+    pygame.draw.circle(tmask, (255, 255, 255, 255), (c, c), r - m(1))
+    tint.blit(tmask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+    surf.blit(tint, (cx - c, cy - c))
+
+
+def _coin_bezel(surf, cx, cy, r, pal):
+    """TWO concentric bezel rings that give the coin a strong, 1×-surviving
+    edge: an outer bright lip at R+2 (the struck coin rim) and an inner milled
+    groove at R−1 (the shadowed channel just inside the lip)."""
+    pygame.draw.circle(surf, (*pal["gem"], 180), (cx, cy), r + m(2), width=m(2))
+    pygame.draw.circle(surf, (*pal["deep"], 120), (cx, cy), r - m(1), width=m(1))
+
+
+def _gutter_aura(surf, cx, cy, disc_r, glow_r, color, peak=70, layers=16):
+    """A feathered tier halo that lives ONLY beyond the disc rim, softly tinting
+    the side gutters. Demoted in round 2 (the coin metal now carries the tier),
+    so it supports the read without competing with the disc as the primary tier
+    signal. Normal alpha-carry blits so the colour survives compositing."""
+    for i in range(1, layers + 1):
+        r = int(disc_r + (glow_r - disc_r) * i / layers)
+        if r <= disc_r:
+            continue
+        a = int(peak * (1 - (i - 1) / layers) ** 1.6)
+        if a <= 0:
+            continue
+        w = max(2, int((glow_r - disc_r) / layers) + m(1.5))
+        g = pygame.Surface((r * 2 + 2, r * 2 + 2), pygame.SRCALPHA)
+        pygame.draw.circle(g, (*color, a), (r + 1, r + 1), r, width=w)
+        surf.blit(g, (cx - r - 1, cy - r - 1))
+
+
+def _legend_font(name, max_w):
+    """Coin-legend sizing: author at 9.5 logical, auto-shrink to 7.5 if the
+    tracked word overruns the legend lane. Tracking is baked into the width
+    estimate so a wide name doesn't kiss the card edge."""
+    tracking = m(1.0)
+    for size in (9.5, 7.5):
+        f = font(size)
+        w = sum(f.size(ch)[0] for ch in name) + tracking * max(0, len(name) - 1)
+        if w <= max_w or size == 7.5:
+            return f, tracking
+    return font(7.5), tracking
+
+
+def _milled_denomination(surf, cx, cy, price, pal):
+    """The denomination lane read as a coin's MILLED EDGE: a single thin rim arc
+    over the bottom 60° (5-to-7 o'clock) under 10 short radial milling ticks,
+    with the price value struck in CREAM just below the disc, INSIDE the band
+    radius so it sits as a sibling to the cream legend above — not painted onto
+    the arc. Pygame arc angles are standard-math (0 at 3-o'clock, CCW), so the
+    bottom 60° spans 240°→300° and the 270° low point is directly under the
+    disc centre."""
+    rr = m(R + 8)                                    # milled-edge radius
+    band = pygame.Rect(0, 0, rr * 2, rr * 2)
+    band.center = (cx, cy)
+    lo = math.radians(240)
+    hi = math.radians(300)
+    # thin rim base arc.
+    base = pygame.Surface(surf.get_size(), pygame.SRCALPHA)
+    pygame.draw.arc(base, (*pal["deep"], 160), band, lo, hi, m(3))
+    surf.blit(base, (0, 0))
+    # 10 short radial milling ticks evenly spaced across the 60° span.
+    tick_lo, tick_hi = rr - m(2), rr + m(2)          # m(4) long, centred on rr
+    for k in range(10):
+        ang = math.radians(240 + 60 * k / 9)
+        dx, dy = math.cos(ang), -math.sin(ang)       # y-down screen space
+        p0 = (cx + tick_lo * dx, cy + tick_lo * dy)
+        p1 = (cx + tick_hi * dx, cy + tick_hi * dy)
+        pygame.draw.line(surf, (*pal["glow"], 200), p0, p1, m(1))
+    # value struck in cream, pulled INSIDE the band (just below the disc bottom).
+    plain_text(surf, f"{price:,}", font(8), (cx, cy + m(R + 4)), CREAM,
+               shadow_a=150, keyline=(4, 4, 14), kw=m(1))
+
+
+def render_card(name, sid, pal, price):
+    """Draw ONE struck-denomination card onto a fresh SS panel (324×200) and
+    return it. Drawn directly at SS (no smoothscale) so the review sheet
+    inspects the geometry at author resolution."""
+    big = pygame.Surface((CARD_W * SS, CARD_H * SS), pygame.SRCALPHA)
+    rect = pygame.Rect(m(_INSET), m(_INSET),
+                       CARD_W * SS - 2 * m(_INSET), CARD_H * SS - 2 * m(_INSET))
+    rad = m(CARD_RAD)
+    cx, cy = rect.centerx, m(CY)
+
+    # 1. depth: soft multi-layer drop shadow (top-left light → offset down).
+    drop_shadow(big, rect, rad, blur=m(8), alpha=160, dy=m(4))
+    # 2. body gradient (indigo CARD_T → CARD_B).
+    big.blit(vgrad(rect.w, rect.h, rad, CARD_T, CARD_B, 252, gamma=1.15),
+             rect.topleft)
+    # 3. glossy top sheen.
+    top_sheen(big, rect, rad, m(30), peak=62)
+    # 4. bottom-right contact AO.
+    contact_shadow(big, rect, rad, m(9), alpha=120)
+    # 5. inner tray dark border + faint gold lane so the body edge frames the
+    #    coin even with the disc shrunk to R=25.
+    tray = rect.inflate(-m(7), -m(7))
+    trad = rad - m(4)
+    pygame.draw.rect(big, (10, 10, 24, 200), tray.inflate(m(2), m(2)),
+                     width=max(1, m(1)), border_radius=trad + m(1))
+    pygame.draw.rect(big, (*CARD_RING_BRIGHT, 90), tray, width=max(1, m(1)),
+                     border_radius=trad)
+
+    # 6. domed glass well → hero skin.
+    cabochon(big, cx, cy, m(R), CABO_LO, CABO_HI, ring=pal["gem"], ring_a=60)
+    blit_thumb(big, sid, cx, cy, m(R) * 1.5)
+
+    # 7. tier-tinted illuminated metal field, AFTER the skin so it warms the
+    #    parrot's dark top/bottom caps into coloured coin metal.
+    _coin_metal(big, cx, cy, m(R), pal["glow"], pal["deep"])
+
+    # 8. glass dome overlay (crescent sheen + gold bezel).
+    cabochon_glass(big, cx, cy, m(R), tint=pal["gem"])
+
+    # 9. the struck coin edge: bright outer lip + inner milled groove.
+    _coin_bezel(big, cx, cy, m(R), pal)
+
+    # 10. gutter aura — demoted support tint (coin metal now carries the tier).
+    _gutter_aura(big, cx, cy, m(R), m(R + 30), pal["glow"], peak=70, layers=16)
+
+    # 11. NAME struck as a coin legend in the lane above the disc — cream, tracked
+    #     out for a spaced/minted feel, dark keyline so it bites the body ground.
+    lf, trk = _legend_font(name.upper(), rect.w - m(14))
+    plain_text(big, name.upper(), lf, (cx, rect.y + m(5.5)), CREAM,
+               shadow_a=140, tracking=trk, keyline=(4, 4, 14), kw=m(1))
+
+    # 12. PRICE + milled coin-edge in the denomination lane below the disc.
+    _milled_denomination(big, cx, cy, price, pal)
+
+    # 13. crest gem — faceted tier badge, top-right corner.
+    facet_gem(big, rect.right - m(19), rect.y + m(19), m(GEM_R + 3),
+              pal["gem"], pal["deep"])
+
+    # 14. bevel rim + dark keyline LAST so the card frame stays crisp over the
+    #     halo that bleeds to the body edge.
+    pygame.draw.rect(big, (4, 5, 16), rect, width=max(1, m(2)), border_radius=rad)
+    bevel_rim(big, rect, rad, CARD_RING_DEEP, (*CARD_RING_BRIGHT, 235),
+              w=max(1, m(2.0)))
+    return big, (cx, cy)
+
+
+# ── review sheet ──────────────────────────────────────────────────────────────
+VARIANTS = [
+    ("RARE",      "skin_lorikeet", {"gem": (108, 188, 252), "glow": (60, 140, 230), "deep": (18, 44, 90)},  600,  "Lorikeet"),
+    ("EPIC",      "skin_prism",    {"gem": (194, 122, 248), "glow": (140, 40, 230), "deep": (44, 10, 80)}, 1400, "Prism"),
+    ("LEGENDARY", "skin_kitsune",  {"gem": (255, 202, 104), "glow": (220, 160, 40), "deep": (90, 50, 0)},  3500, "Kitsune"),
+]
+
+PANEL_W, PANEL_H = CARD_W * SS, CARD_H * SS   # 324 × 200 (SS panels, no downscale)
+MARGIN = 20
+GUTTER = 16
+HEADER_H = 30
+FOOTER_H = 24
+STRIP_LABEL_H = 20
+STRIP_H = CARD_H                              # real-scale 1x cards (162×100)
+
+sheet_w = MARGIN * 2 + PANEL_W * 3 + GUTTER * 2
+sheet_h = (MARGIN + HEADER_H + PANEL_H + FOOTER_H + STRIP_LABEL_H + STRIP_H
+           + MARGIN)
+sheet = pygame.Surface((sheet_w, sheet_h))
+sheet.fill((16, 17, 30))
+
+hfont = _font(22, True)
+ffont = _font(20, True)
+sfont = _font(16, True)
+htxt = hfont.render("store_card_v3 — struck-denomination — round 2", True,
+                    (236, 232, 214))
+sheet.blit(htxt, (MARGIN, MARGIN + (HEADER_H - htxt.get_height()) // 2))
+
+panel_y = MARGIN + HEADER_H
+panels = []
+centers = []
+for i, (tier, sid, pal, price, disp) in enumerate(VARIANTS):
+    px = MARGIN + i * (PANEL_W + GUTTER)
+    panel, ctr = render_card(disp, sid, pal, price)
+    panels.append(panel)
+    centers.append(ctr)
+    sheet.blit(panel, (px, panel_y))
+    ftxt = ffont.render(tier, True, (218, 214, 200))
+    sheet.blit(ftxt, (px + (PANEL_W - ftxt.get_width()) // 2,
+                      panel_y + PANEL_H + (FOOTER_H - ftxt.get_height()) // 2))
+
+# 1x real-scale strip: smoothscale each SS panel down to the live 162×100 card
+# so the sheet also shows how the card reads at true size.
+strip_label_y = panel_y + PANEL_H + FOOTER_H
+ltxt = sfont.render("real scale (1×, 162×100):", True, (200, 204, 220))
+sheet.blit(ltxt, (MARGIN, strip_label_y + (STRIP_LABEL_H - ltxt.get_height()) // 2))
+strip_y = strip_label_y + STRIP_LABEL_H
+for i, panel in enumerate(panels):
+    px = MARGIN + i * (PANEL_W + GUTTER)
+    small = pygame.transform.smoothscale(panel, (CARD_W, CARD_H))
+    sheet.blit(small, (px + (PANEL_W - CARD_W) // 2, strip_y))
+
+out = "/home/user/skybit/docs/store_card_v3/struck-denomination/round_2.png"
+os.makedirs(os.path.dirname(out), exist_ok=True)
+pygame.image.save(sheet, out)
+print("saved", out, sheet.get_size())
+
+# pixel samples: legend text, disc centre, gutter+15px, denomination band mid.
+for (tier, sid, pal, price, disp), panel, (cx, cy) in zip(VARIANTS, panels, centers):
+    legend_px = panel.get_at((cx, m(_INSET) + m(5)))[:3]
+    disc_px = panel.get_at((cx, cy))[:3]
+    gx = min(cx + m(R) + m(15), panel.get_width() - 1)
+    gutter_px = panel.get_at((gx, cy))[:3]
+    band_px = panel.get_at((cx, min(cy + m(R + 8) - m(1), panel.get_height() - 1)))[:3]
+    print(f"{tier:9s} legend {legend_px}  disc-centre {disc_px}  "
+          f"gutter+15 {gutter_px}  denom-band {band_px}")
