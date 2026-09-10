@@ -1551,6 +1551,47 @@ def _menu_profile_frame(surf):
     return fr
 
 
+_MENU_STAR_FIELD: "list | None" = None
+
+
+def _menu_star_field(stars):
+    """The overlay star field with the sparkles that fall on the island removed,
+    so they read as being BEHIND the cottage and Pip instead of twinkling on his
+    chest.
+
+    They cannot just be drawn earlier to get behind him. The night veil has to
+    keep landing ON the diorama to hold it dim, and the veil goes down before
+    the stars — draw the stars first and the veil dims them too. Dropping the
+    occluded ones puts them behind without touching that order.
+
+    The cottage never moves and Pip's idle hover stays inside a measured
+    envelope, so the surviving set is constant and is worked out once. Only the
+    menu uses it; every other overlay screen draws the full field, having no
+    diorama to sit behind.
+    """
+    global _MENU_STAR_FIELD
+    if _MENU_STAR_FIELD is None:
+        from game import intro as _intro
+        house = _intro.get_sprite("skyhouse_post")
+        hw, hh = house.get_size()
+        hx = int(W * 0.30) - hw // 2
+        hy = int(H * 0.42) - hh // 2
+        mask = pygame.mask.from_surface(house, 8)
+        # Pip's full idle-bob envelope, measured across 15s of world_idle_tick:
+        # he floats +-12px, so a star cleared at one phase of the hover would
+        # wink back on as he rises.
+        pip = pygame.Rect(58, 230, 65, 74)
+
+        def hidden(x, y):
+            if pip.collidepoint(x, y):
+                return True
+            lx, ly = x - hx, y - hy
+            return 0 <= lx < hw and 0 <= ly < hh and mask.get_at((lx, ly))
+
+        _MENU_STAR_FIELD = [st for st in stars if not hidden(st[0], st[1])]
+    return _MENU_STAR_FIELD
+
+
 _MENU_FURNITURE: "pygame.Surface | None" = None
 _MENU_FURNITURE_RECTS: "dict | None" = None
 
@@ -2344,7 +2385,10 @@ class HUD:
         dim.fill((6, 1, 21, 110))
         surf.blit(dim, (0, 0))
 
-        _draw_overlay_stars(surf, self._stars, self.title_t)
+        # Minus the handful that land on the cottage and Pip — see
+        # _menu_star_field. The veil above still dims the diorama; only the
+        # sparkles move behind it.
+        _draw_overlay_stars(surf, _menu_star_field(self._stars), self.title_t)
 
         # Mountain silhouette belongs to the background, drawn before the
         # foreground UI so the pill / profile card / chips sit cleanly
