@@ -36,7 +36,7 @@ _BRONZE_PALE = (228, 182, 130)
 _BRONZE_DEEP = (110, 64, 28)
 
 # Layout (logical px).
-_HEADER_H = 56          # taller: title + a global progress bar live here
+_HEADER_H = 56          # title + got/total counter live here
 _TAB_H    = 32          # FAME | SHAME segmented toggle, below the header
 _FOOTER_H = 54          # a grounded band for the real MENU button
 _CAT_H    = 30
@@ -500,24 +500,6 @@ class AchievementsScene:
 
         cnt = self._gilded_count(f"{got} / {total}", 14, accent_hi, accent_lo)
         surf.blit(cnt, (W - cnt.get_width() - 8, 6))
-
-        # Global progress bar for the active wall.
-        gbh = 6
-        gbx = _RULE_INSET
-        gbw = W - _RULE_INSET * 2
-        gby = _HEADER_H - 11
-        frac = (got / total) if total else 0.0
-        pygame.draw.rect(surf, (8, 5, 24), (gbx, gby, gbw, gbh), border_radius=gbh // 2)
-        pygame.draw.line(surf, (4, 2, 14), (gbx + 1, gby + 1), (gbx + gbw - 2, gby + 1), 1)
-        fw = int(gbw * max(0.0, min(1.0, frac)))
-        if fw > 0:
-            bar = pygame.Surface((fw, gbh), pygame.SRCALPHA)
-            for xx in range(fw):
-                t = xx / max(1, fw - 1)
-                bar.fill(lerp_color(accent_lo, accent, t), (xx, 0, 1, gbh))
-            surf.blit(bar, (gbx, gby))
-        pygame.draw.rect(surf, (*accent, 110), (gbx, gby, gbw, gbh),
-                         width=1, border_radius=gbh // 2)
 
         # FAME | SHAME segmented toggle, just below the header.
         self._draw_tab_bar(surf)
