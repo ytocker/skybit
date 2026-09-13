@@ -1,0 +1,3 @@
+VERDICT: SHIP-READY
+
+The r3 regression is closed cleanly: the downward crack-leak now reads as a contained SOUR-GREEN `(150,206,140)` zigzag wedge with the near-white GREEN_HOT filament confined to the short run by the eye-origin, so the additive stacking no longer sums to a white belly — on both the grayscale value check and the true-32px night chip the bone-cream whorl is unambiguously the brightest ring while the green leak sits mid-value as an accent, the iris pip stays the dim contained green it was at r3 (not re-brightened), nothing else moved, and it still reads unmistakably as a cosmic spiral egg with a curious slit-eye, distinct from sibling Hamaguri's fan-rib grin and the source Umibozu's jelly-dome.

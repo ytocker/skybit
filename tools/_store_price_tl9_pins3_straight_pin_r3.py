@@ -1,0 +1,165 @@
+"""Round-3 render for tl9 pins3: straight_pin (dressmaker pin — colored ball head + shaft)"""
+import os
+os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
+import sys
+sys.path.insert(0, "/home/user/skybit")
+import pygame
+pygame.init()
+pygame.display.set_mode((1, 1), pygame.NOFRAME)
+import game.store_cards as sc
+import game.store_data as sd
+from game.hud import _font as hud_font
+sd.load()
+
+FACE_W, FACE_H = 76, 88
+TILT = -7
+
+def _full(text):
+    digits = ''.join(c for c in text if c.isdigit())
+    return str(int(digits)) if digits else text
+
+def _price_glyph(text):
+    for fs in (15, 14, 13, 12, 11, 10, 9, 8):
+        raw = sc._stamp_bold(sc._glyph_base(text, sc.font(fs), 0), sc.m(1.0))
+        crushed = pygame.transform.smoothscale(raw, (max(1, int(raw.get_width() * 0.86)), raw.get_height()))
+        if crushed.get_width() <= 66:
+            return crushed
+    return crushed
+
+def _draw_price(face, text, affordable):
+    ink = (40, 30, 26) if affordable else (40, 40, 52)
+    rule_col = (56, 42, 30) if affordable else (40, 40, 52)
+    amt_mask = _price_glyph(text)
+    cy_amount = int(FACE_H * 0.52)
+    amt_r = amt_mask.get_rect(center=(FACE_W // 2, cy_amount))
+    amt_fill = amt_mask.copy()
+    amt_fill.fill((*ink, 255), special_flags=pygame.BLEND_RGBA_MULT)
+    face.blit(amt_fill, amt_r)
+    rule_y = cy_amount + amt_mask.get_height() // 2 + sc.m(2)
+    rule_w = min(amt_mask.get_width() + sc.m(4), FACE_W - sc.m(8))
+    rule_x = FACE_W // 2 - rule_w // 2
+    peak_h = max(3, sc.m(3))
+    min_h = max(1, sc.m(1))
+    pygame.draw.polygon(face, rule_col, [
+        (rule_x, rule_y), (rule_x + rule_w, rule_y + (peak_h - min_h) // 2),
+        (rule_x + rule_w, rule_y + (peak_h + min_h) // 2), (rule_x, rule_y + peak_h),
+    ])
+
+def _attachment(card, affordable):
+    sh_shadow = (144, 146, 154)
+    sh_mid    = (196, 198, 204)
+    sh_hi     = (226, 228, 232)
+    kl        = (24, 26, 34)
+    if affordable:
+        ball_shadow = (120,  22,  14)
+        ball_mid    = (180,  44,  28)
+        ball_hi     = (240, 110,  90)
+    else:
+        ball_shadow = ( 60,  62,  72)
+        ball_mid    = ( 96, 100, 112)
+        ball_hi     = (168, 172, 182)
+
+    # shaft — NW light: hi on LEFT (x13), shadow on RIGHT (x15)
+    pygame.draw.line(card, kl,        (14, 15), (14, 28), 4)
+    pygame.draw.line(card, sh_hi,     (13, 15), (13, 28), 1)   # LEFT highlight — NW light
+    pygame.draw.line(card, sh_mid,    (14, 15), (14, 28), 2)   # main body
+    pygame.draw.line(card, sh_shadow, (15, 15), (15, 28), 1)   # RIGHT shadow
+
+    # needle tip — taper to point instead of circle blob
+    pygame.draw.line(card, kl,     (13, 27), (14, 30), 2)
+    pygame.draw.line(card, kl,     (15, 27), (14, 30), 2)
+    pygame.draw.line(card, sh_mid, (14, 27), (14, 29), 1)
+
+    # ball head — center (14,7), NW light
+    pygame.draw.circle(card, kl,          (14, 7), 7)    # kl outline
+    pygame.draw.circle(card, ball_mid,    (14, 7), 6)    # main fill
+    pygame.draw.circle(card, ball_shadow, (16, 10), 3)   # BOTTOM-RIGHT shadow (not center)
+    pygame.draw.circle(card, ball_hi,     (12, 5), 2)    # small tight top-left specular
+
+def my_price_chip(surf, cx, cy, text, h, variant=sc.PRICE_VARIANT, **kw):
+    affordable = (variant != "locked")
+    text = _full(text)
+    rad = sc.m(3)
+    face = pygame.Surface((FACE_W, FACE_H), pygame.SRCALPHA)
+    brect = pygame.Rect(0, 0, FACE_W, FACE_H)
+    if affordable:
+        body = sc.vgrad_stops(FACE_W, FACE_H, rad, [(0.0, (248, 238, 210)), (1.0, (224, 204, 166))], 255, gamma=1.04)
+        face.blit(body, (0, 0))
+        sc.bevel_rim(face, brect, rad, (80, 52, 12, 200), (255, 240, 190, 200), w=max(1, sc.m(1.2)))
+    else:
+        body = sc.vgrad_stops(FACE_W, FACE_H, rad, [(0.0, (156, 160, 176)), (1.0, (88, 92, 112))], 255, gamma=1.02)
+        face.blit(body, (0, 0))
+        sc.bevel_rim(face, brect, rad, (54, 58, 74, 200), (214, 218, 232, 200), w=max(1, sc.m(1.2)))
+    _draw_price(face, text, affordable)
+    rot = pygame.transform.rotate(face, TILT)
+    surf.blit(rot, rot.get_rect(center=(44, 60)))
+
+sc.price_chip = my_price_chip
+
+def render_card_1x(sid, affordable=True):
+    variant = sc.PRICE_VARIANT if affordable else "locked"
+    big = pygame.Surface((sc.CARD_W * sc.SS, sc.CARD_H * sc.SS), pygame.SRCALPHA)
+    inset = sc.m(sc._INSET)
+    rect = pygame.Rect(inset, inset, sc.CARD_W * sc.SS - 2 * inset, sc.CARD_H * sc.SS - 2 * inset)
+    sc.draw_card(big, sid, rect, equipped=False, secret=False, variant=variant)
+    card = pygame.transform.smoothscale(big, (sc.CARD_W, sc.CARD_H))
+    _attachment(card, affordable)
+    return card
+
+SLUG = "straight_pin"
+skins = [("skin_mummy", True), ("skin_mummy", False), ("skin_kitsune", True), ("skin_kitsune", False)]
+cards = [render_card_1x(sid, aff) for sid, aff in skins]
+labels = ["mummy aff", "mummy lock", "kitsune aff", "kitsune lock"]
+
+PAD, GAP, HEADER_H, LABEL_H = 20, 12, 40, 20
+CW, CH = sc.CARD_W, sc.CARD_H
+sheet_w = PAD + len(cards) * CW + (len(cards) - 1) * GAP + PAD
+sheet_h = PAD + HEADER_H + CH + GAP + LABEL_H + 100 * 2 + GAP + PAD
+BG = (8, 8, 20)
+sheet = pygame.Surface((sheet_w, sheet_h))
+sheet.fill(BG)
+
+fh = hud_font(18)
+fl = hud_font(12)
+title = fh.render(f"tl9 pins3: {SLUG} — round 3", True, (240, 224, 180))
+sheet.blit(title, (PAD, PAD // 2))
+
+y = PAD + HEADER_H
+x = PAD
+for i, card in enumerate(cards):
+    sheet.blit(card, (x, y))
+    lbl = fl.render(labels[i], True, (190, 196, 210))
+    sheet.blit(lbl, (x, y + CH + 4))
+    x += CW + GAP
+
+y += CH + GAP + LABEL_H
+for i in range(2):
+    cx = PAD + i * (80 * 2 + GAP)
+    crop = cards[i].subsurface(pygame.Rect(0, 0, 80, 100))
+    zoomed = pygame.transform.smoothscale(crop, (80 * 2, 100 * 2))
+    sheet.blit(zoomed, (cx, y))
+
+aff_card = cards[0]
+lock_card = cards[1]
+found_dark = False
+for px in range(14, 42):
+    for py in range(22, 44):
+        r, g, b, *_ = aff_card.get_at((px, py))
+        if r < 100 and g < 100 and b < 100:
+            print(f"dark numeral at ({px},{py}) = ({r},{g},{b})")
+            found_dark = True
+            break
+    if found_dark:
+        break
+assert found_dark, "no dark numeral pixel found in aff card tag zone"
+
+aff_px = aff_card.get_at((20, 35))[:3]
+lock_px = lock_card.get_at((20, 35))[:3]
+print(f"aff:{aff_px} lock:{lock_px} PASS")
+assert aff_px != lock_px, "aff/lock cards look identical"
+
+out = f"docs/store_price_tl9_pins3/{SLUG}/round_3.png"
+os.makedirs(os.path.dirname(out), exist_ok=True)
+pygame.image.save(sheet, out)
+print(f"saved {sheet_w}x{sheet_h} -> {out}")

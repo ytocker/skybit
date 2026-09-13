@@ -5,3 +5,10 @@ dist/
 *.spec
 skybit_save.json
 skybit_scores.json
+skybit_store.json
+tools/screenshots/
+node_modules/
+*-pygbag.py
+analytics/.streamlit/secrets.toml
+.claude/settings.local.json
+docs/snow_full_cover/_*.png

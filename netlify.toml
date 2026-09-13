@@ -1,0 +1,58 @@
+[build]
+  command = "pip install 'pygbag==0.9.2' && python -m pygbag --build main.py && python inject_theme.py"
+  publish = "build/web"
+
+[build.environment]
+  PYTHON_VERSION = "3.11"
+
+# Loading on mobile:
+#
+# Previously this site set Cross-Origin-Embedder-Policy: credentialless to
+# enable SharedArrayBuffer (used by pygbag's threaded audio path). But:
+#   * iOS / mobile Safari does NOT implement COEP: credentialless. Loading
+#     hung forever — pygbag's runtime waited for cross-origin isolation
+#     that never arrived, and the user never reached "Ready to start".
+#   * This codebase doesn't use pygame.mixer in the browser anyway:
+#     game/audio.py routes browser playback through window.skyPlay,
+#     a Web Audio API path that doesn't need SAB.
+#
+# So we drop COEP entirely (single-threaded pygbag is fine for this game)
+# and keep only COOP for window-isolation hardening. SharedArrayBuffer
+# becomes unavailable, which has no impact on Skybit's audio.
+#
+# Content-Security-Policy is kept narrow (only Supabase + pygbag CDN are
+# whitelisted), with 'unsafe-inline' / 'unsafe-eval' for the Pyodide
+# bootstrap and the inline bridge IIFE.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cross-Origin-Opener-Policy   = "same-origin"
+    Content-Security-Policy      = "default-src 'self'; connect-src 'self' https://*.supabase.co https://pygame-web.github.io; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://pygame-web.github.io; worker-src 'self' blob:; img-src 'self' data: blob:; media-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+
+# Always revalidate index.html and the bundle artifacts. The previous
+# stuck-loading reports on Android also matched the classic stale-cache
+# pattern: an old broken version of skybit.apk / skybit.tar.gz lived in
+# the browser cache and was served back even after we redeployed. With
+# no-cache the browser must check freshness on every load, so a redeploy
+# (or the watchdog's "TAP TO RELOAD" cache-bust) actually replaces the
+# bad artifact. WASM/pygbag prebuilts are immutable per release and can
+# still be cached aggressively by the browser default.
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate"
+
+[[headers]]
+  for = "/*.apk"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate"
+
+[[headers]]
+  for = "/*.tar.gz"
+  [headers.values]
+    Cache-Control = "no-cache, must-revalidate"
+
+[[headers]]
+  for = "/*.wasm"
+  [headers.values]
+    Content-Type = "application/wasm"

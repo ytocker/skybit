@@ -1,0 +1,334 @@
+name: Deploy main (/) + v5_skybit (/v5/) + v5_skybit_powerups_final (/v5_powerups/) + v5_graphics_additions (/v5_graphics_additions/) + v5_skybit_merge_graphics (/v5_test/) + v5_skybit_merge_graphics_sky_changes (/v5_test_sky/) + v5_skybit_enrich (/v5_event_test/) + v5_integration (/v5_integration/) to GitHub Pages
+
+# One Pages site per repo means a single artifact replaces the whole
+# deploy each time. To keep main (root URL), v5_skybit (/v5/), and
+# v5_skybit_powerups_final (/v5_powerups/) all reachable, every
+# triggered run rebuilds ALL THREE branches and ships them as one
+# combined artifact. This file is intentionally identical on main,
+# v5_skybit, and v5_skybit_powerups_final so a push to any branch
+# produces the same deploy.
+#
+# EXCEPTION — v5_test (/v5_test/): the v5_skybit_merge_graphics branch
+# is added to this workflow ONLY on that branch as a throwaway test
+# deploy. It is deliberately NOT synced to the other deploy branches, so
+# /v5_test/ stays live only until the next push to one of the canonical
+# deploy branches (whose workflows don't build it) replaces the combined
+# artifact. Drop this exception when the branch folds into a formal
+# version.
+#
+# EXCEPTION — v5_test_sky (/v5_test_sky/): same throwaway arrangement for
+# the v5_skybit_merge_graphics_sky_changes branch (Karst sky activation).
+# Added ONLY on that branch, NOT synced anywhere; /v5_test_sky/ stays live
+# only until the next push to a canonical deploy branch replaces the
+# combined artifact. Drop when this folds into a formal version.
+#
+# EXCEPTION — v5_event_test (/v5_event_test/): same throwaway arrangement for
+# the v5_skybit_enrich branch — a scripted event test that auto-launches in the
+# browser: the clown event (clown → dice → route) followed by the Skull-King
+# event (a king-skull rolls a difficulty 6-10 → a hard route of stacked-skull
+# totems) → fall. Added ONLY on that branch, NOT synced anywhere; /v5_event_test/
+# stays live only until the next push to a canonical deploy branch replaces the
+# combined artifact. This is the ONE deploy that also stages pure-Python look-dev
+# modules (the clown/die/route renderers AND the stacked-skull engine + recipes
+# the demo lazily imports) — see the Stage step. Drop when this folds into a
+# formal version.
+#
+# Pygbag 0.9.2 has no built-in include / exclude flag — it bundles
+# every file in the directory it runs in. Without staging the
+# bundle would include docs/ (~24 MB of design exploration PNGs),
+# archive/ (old UI redesigns), tools/ (snapshot scripts) and other
+# non-runtime trees, ballooning the player-facing download to
+# ~33 MB even though the runtime only needs ~1 MB. Each branch
+# therefore gets a "Stage" step that copies main.py, inject_theme.py,
+# pyproject.toml, and the game/ tree (which contains all live
+# runtime assets) into a fresh `<branch>_stage` dir; pygbag and
+# inject_theme.py then run from that minimal stage instead of the
+# full checkout.
+
+on:
+  push:
+    branches: [main, v5_skybit, v5_skybit_powerups_final, v5_graphics_additions, v5_skybit_merge_graphics, v5_skybit_merge_graphics_sky_changes, v5_skybit_enrich, v5_integration]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main_src
+
+      - name: Checkout v5_skybit
+        uses: actions/checkout@v4
+        with:
+          ref: v5_skybit
+          path: v5_src
+
+      - name: Checkout v5_skybit_powerups_final
+        uses: actions/checkout@v4
+        with:
+          ref: v5_skybit_powerups_final
+          path: v5f_src
+
+      - name: Checkout v5_graphics_additions
+        uses: actions/checkout@v4
+        with:
+          ref: v5_graphics_additions
+          path: v5g_src
+
+      - name: Checkout v5_skybit_merge_graphics (test deploy)
+        uses: actions/checkout@v4
+        with:
+          ref: v5_skybit_merge_graphics
+          path: v5t_src
+
+      - name: Checkout v5_skybit_merge_graphics_sky_changes (test deploy)
+        uses: actions/checkout@v4
+        with:
+          ref: v5_skybit_merge_graphics_sky_changes
+          path: v5ts_src
+
+      - name: Checkout v5_skybit_enrich (event-test deploy)
+        uses: actions/checkout@v4
+        with:
+          ref: v5_skybit_enrich
+          path: v5et_src
+
+      - name: Checkout v5_integration
+        uses: actions/checkout@v4
+        with:
+          ref: v5_integration
+          path: v5i_src
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pygbag
+        run: pip install pygame 'pygbag==0.9.2' pytest
+
+      - name: Run unit tests on every deploy branch
+        # Tests live in each branch's full checkout (not in the
+        # staged minimal tree). If any branch's pytest suite fails,
+        # the deploy is halted — better to leave the previous
+        # deploy live than ship a regression to all three URLs.
+        run: |
+          for src in main_src v5_src v5f_src v5g_src v5t_src v5ts_src v5et_src v5i_src; do
+            if [ -d "$src/tests" ]; then
+              echo "=== $src/tests ==="
+              ( cd "$src" && python -m pytest tests/ -q ) || exit 1
+            else
+              echo "=== $src: no tests/ dir, skipping ==="
+            fi
+          done
+
+      - name: Stage minimal source for each branch
+        run: |
+          # Copy only runtime-needed files into <branch>_stage. game/
+          # holds all live assets (fonts + audio OGGs + KFC logo) per
+          # the project's "ONLY vendored fonts + KFC logo + sound OGGs"
+          # convention, so a directory copy is enough — no per-file
+          # allowlist to maintain. Adding a new powerup or any new
+          # file inside game/ is automatically picked up by the next
+          # build with no workflow change.
+          for src in main_src v5_src v5f_src v5g_src v5t_src v5ts_src v5et_src v5i_src; do
+            stage="${src%_src}_stage"
+            mkdir -p "$stage"
+            cp "$src/main.py"          "$stage/main.py"
+            cp "$src/inject_theme.py"  "$stage/inject_theme.py"
+            cp "$src/pyproject.toml"   "$stage/pyproject.toml"
+            cp -r "$src/game"          "$stage/game"
+            echo "$stage:"; du -sh "$stage"
+          done
+          # v5_event_test is the ONE exception to "game/ only": its scripted demo
+          # (clown event + the Skull-King second event) lazily imports the look-dev
+          # renderers AND the stacked-skull engine. Stage the needed PURE-PYTHON
+          # modules (a few hundred KB; the design PNGs are excluded so the bundle
+          # stays small). Chains:
+          #   clown  : jester_variants -> clown_dice + warren_mockup ; warren_routes -> warren_mockup
+          #   route  : warren_all -> warren_routes2..5 (hard band 6-10)
+          #   skulls : game/pillar_skull -> pillar_engine -> render_skull_king_stack
+          #            -> render_switchbig + new8/classic8/ornaments ; 20 pillar recipes ; die
+          # __init__.py makes tools/ an unambiguous package under the emscripten path.
+          mkdir -p v5et_stage/tools
+          for t in render_jester_variants render_clown_dice render_warren_mockup \
+                   render_warren_routes render_warren_routes2 render_warren_routes3 \
+                   render_warren_routes4 render_warren_routes5 render_warren_all \
+                   render_skull_king_stack; do
+            cp "v5et_src/tools/$t.py" "v5et_stage/tools/$t.py"
+          done
+          touch v5et_stage/tools/__init__.py
+          # stacked-skull art: every .py under the skull tree (engine + 20 recipes +
+          # new8/classic8/ornaments + the die), paths preserved, PNGs excluded; plus
+          # the chosen king-skull design the engine reuses for its skull/palette fns.
+          ( cd v5et_src && find docs/skull_king_stack -name '*.py' -print0 \
+              | tar --null -cf - -T - ) | ( cd v5et_stage && tar -xf - )
+          mkdir -p v5et_stage/docs/skybit_devil/batch2/asthi_ringeye
+          cp v5et_src/docs/skybit_devil/batch2/asthi_ringeye/render_switchbig.py \
+             v5et_stage/docs/skybit_devil/batch2/asthi_ringeye/
+          echo "v5et_stage extras:"; du -sh v5et_stage/tools v5et_stage/docs
+
+      - name: Build main WASM bundle
+        working-directory: main_stage
+        run: python -m pygbag --build main.py
+
+      - name: Inject theme + Supabase into main
+        working-directory: main_stage
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: python inject_theme.py
+
+      - name: Build v5_skybit WASM bundle
+        working-directory: v5_stage
+        run: python -m pygbag --build main.py
+
+      - name: Inject theme + Supabase into v5_skybit
+        working-directory: v5_stage
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: python inject_theme.py
+
+      - name: Build v5_skybit_powerups_final WASM bundle
+        working-directory: v5f_stage
+        run: python -m pygbag --build main.py
+
+      - name: Inject theme + Supabase into v5_skybit_powerups_final
+        working-directory: v5f_stage
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: python inject_theme.py
+
+      - name: Build v5_graphics_additions WASM bundle
+        working-directory: v5g_stage
+        run: python -m pygbag --build main.py
+
+      - name: Inject theme + Supabase into v5_graphics_additions
+        working-directory: v5g_stage
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: python inject_theme.py
+
+      - name: Build v5_skybit_merge_graphics WASM bundle (test deploy)
+        working-directory: v5t_stage
+        run: python -m pygbag --build main.py
+
+      - name: Inject theme + Supabase into v5_skybit_merge_graphics
+        working-directory: v5t_stage
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: python inject_theme.py
+
+      - name: Build v5_skybit_merge_graphics_sky_changes WASM bundle (test deploy)
+        working-directory: v5ts_stage
+        run: python -m pygbag --build main.py
+
+      - name: Inject theme + Supabase into v5_skybit_merge_graphics_sky_changes
+        working-directory: v5ts_stage
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: python inject_theme.py
+
+      - name: Build v5_skybit_enrich WASM bundle (event-test deploy)
+        working-directory: v5et_stage
+        run: python -m pygbag --build main.py
+
+      - name: Inject theme + Supabase into v5_skybit_enrich
+        working-directory: v5et_stage
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: python inject_theme.py
+
+      - name: Build v5_integration WASM bundle
+        working-directory: v5i_stage
+        run: python -m pygbag --build main.py
+
+      - name: Inject theme + Supabase into v5_integration
+        working-directory: v5i_stage
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: python inject_theme.py
+
+      - name: Combine main (root) + v5_skybit (/v5/) + v5_skybit_powerups_final (/v5_powerups/) + v5_graphics_additions (/v5_graphics_additions/) + v5_skybit_merge_graphics (/v5_test/) + v5_skybit_merge_graphics_sky_changes (/v5_test_sky/) + v5_skybit_enrich (/v5_event_test/) + v5_integration (/v5_integration/)
+        run: |
+          mkdir -p combined
+          cp -r main_stage/build/web/. combined/
+          mkdir -p combined/v5
+          cp -r v5_stage/build/web/. combined/v5/
+          mkdir -p combined/v5_powerups
+          cp -r v5f_stage/build/web/. combined/v5_powerups/
+          mkdir -p combined/v5_graphics_additions
+          cp -r v5g_stage/build/web/. combined/v5_graphics_additions/
+          mkdir -p combined/v5_test
+          cp -r v5t_stage/build/web/. combined/v5_test/
+          mkdir -p combined/v5_test_sky
+          cp -r v5ts_stage/build/web/. combined/v5_test_sky/
+          mkdir -p combined/v5_event_test
+          cp -r v5et_stage/build/web/. combined/v5_event_test/
+          mkdir -p combined/v5_integration
+          cp -r v5i_stage/build/web/. combined/v5_integration/
+          # GitHub Pages routes through Jekyll by default, which skips
+          # paths beginning with `_`. Pygbag emits `_pythons.js`,
+          # `_packages/`, etc. — the marker disables Jekyll for the
+          # whole site (one at root is enough).
+          touch combined/.nojekyll
+
+      - name: Report bundle sizes + size guard
+        # Hard ceiling per .apk. Today's minimal bundle is ~544 KB
+        # (just main.py + game/) so 5 MB leaves ~9x headroom for
+        # legit growth (new sprites, audio, etc.) while still catching
+        # the kind of silent bloat that put 33 MB of design PNGs +
+        # archive + tools into the player-facing download. Raise the
+        # threshold deliberately if a genuine asset push exceeds it.
+        run: |
+          MAX_BYTES=$((5 * 1024 * 1024))
+          fail=0
+          echo "=== built bundle sizes ==="
+          for stage in main_stage v5_stage v5f_stage v5g_stage v5t_stage v5ts_stage v5et_stage v5i_stage; do
+            apk=$(ls "$stage"/build/web/*.apk 2>/dev/null | head -1)
+            if [ -f "$apk" ]; then
+              bytes=$(stat -c%s "$apk")
+              printf '  %-12s  %-8s  (%d bytes)\n' "$stage" "$(du -h "$apk" | awk '{print $1}')" "$bytes"
+              if [ "$bytes" -gt "$MAX_BYTES" ]; then
+                echo "::error::$apk exceeds the 5 MB bundle ceiling ($bytes > $MAX_BYTES bytes). Something heavy slipped into the Stage step's copy list — audit the staging block in this workflow."
+                fail=1
+              fi
+            fi
+          done
+          if [ "$fail" = "1" ]; then exit 1; fi
+          echo "=== combined deploy artifact ==="
+          du -sh combined
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: combined
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

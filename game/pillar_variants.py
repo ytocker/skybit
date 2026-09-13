@@ -1,152 +1,17 @@
 """
-Pillar visual variants (7 styles selected from the sketch options).
+Shared pillar vegetation + ornament helpers.
 
-Each Pipe picks a variant deterministically from its seed. Silhouettes and
-decorations are visual-only; collision stays axis-aligned via Pipe.top_rect
-and Pipe.bot_rect. Stone palette and foliage are biome-tinted by the caller.
+These draw_* primitives (moss, ferns, vines, prayer flags, cairns, lanterns,
+ribbons, …) are biome-tinted, collision-free decoration drawn by the pagoda
+pillars (game/pillar_pagodas.py + game/pagoda_ornaments.py) and by the
+archived sandstone variants (archive/sandstone_pillars.py).
 """
 import math, random
 import pygame
 
 from game.draw import (
-    get_stone_pillar_body,
-    silhouette_top_spire, silhouette_bottom_spire, silhouette_blit,
-    draw_wuling_pine, draw_moss_strand, draw_side_shrub,
+    draw_wuling_pine, _shade_c, _accent_under_foliage,
 )
-
-
-# ── Bottom-pillar silhouette shapes ─────────────────────────────────────────
-
-def sil_bot_stout(w, h):
-    return [(0, 0), (w, 0), (int(w * 0.94), int(h * 0.20)),
-            (int(w * 0.90), int(h * 0.50)), (int(w * 0.86), int(h * 0.80)),
-            (int(w * 0.80), h), (int(w * 0.20), h),
-            (int(w * 0.14), int(h * 0.80)), (int(w * 0.10), int(h * 0.50)),
-            (int(w * 0.06), int(h * 0.20))]
-
-
-def sil_bot_slender(w, h):
-    return [(0, 0), (w, 0), (int(w * 0.80), int(h * 0.25)),
-            (int(w * 0.74), int(h * 0.60)), (int(w * 0.66), int(h * 0.85)),
-            (int(w * 0.60), h), (int(w * 0.40), h),
-            (int(w * 0.34), int(h * 0.85)), (int(w * 0.26), int(h * 0.60)),
-            (int(w * 0.20), int(h * 0.25))]
-
-
-def sil_bot_lean(w, h):
-    lean = int(w * 0.06)
-    return [(lean, 0), (w, 0), (int(w * 0.92), int(h * 0.25)),
-            (int(w * 0.88), int(h * 0.55)), (int(w * 0.82), int(h * 0.82)),
-            (int(w * 0.78), h), (int(w * 0.22), h),
-            (int(w * 0.12) - lean, int(h * 0.82)), (int(w * 0.06) - lean, int(h * 0.55)),
-            (int(w * 0.00), int(h * 0.25))]
-
-
-def sil_bot_shelf(w, h):
-    return [(0, 0), (w, 0), (int(w * 0.92), int(h * 0.22)),
-            (int(w * 0.86), int(h * 0.50)), (int(w * 0.82), int(h * 0.62)),
-            (int(w * 0.96), int(h * 0.66)), (int(w * 0.88), int(h * 0.85)),
-            (int(w * 0.80), h), (int(w * 0.20), h),
-            (int(w * 0.12), int(h * 0.85)), (int(w * 0.04), int(h * 0.66)),
-            (int(w * 0.18), int(h * 0.62)), (int(w * 0.14), int(h * 0.50)),
-            (int(w * 0.08), int(h * 0.22))]
-
-
-def sil_bot_eroded(w, h):
-    return [(0, 0), (w, 0), (int(w * 0.96), int(h * 0.18)),
-            (int(w * 0.88), int(h * 0.40)), (w, int(h * 0.55)),
-            (int(w * 0.92), int(h * 0.68)), (int(w * 0.84), int(h * 0.82)),
-            (int(w * 0.78), h), (int(w * 0.22), h),
-            (int(w * 0.14), int(h * 0.82)), (int(w * 0.08), int(h * 0.68)),
-            (0, int(h * 0.55)), (int(w * 0.10), int(h * 0.40)),
-            (int(w * 0.04), int(h * 0.18))]
-
-
-def sil_bot_blunt(w, h):
-    return [(0, 0), (w, 0), (w, int(h * 0.18)),
-            (int(w * 0.94), int(h * 0.45)), (int(w * 0.90), int(h * 0.75)),
-            (int(w * 0.82), h), (int(w * 0.18), h),
-            (int(w * 0.10), int(h * 0.75)), (int(w * 0.06), int(h * 0.45)),
-            (0, int(h * 0.18))]
-
-
-# Top-pillar silhouette variants (hang-down shape, tip pointing downward).
-# Each mirrors a bottom-pillar shape so a variant is recognisable top AND bottom.
-
-def sil_top_slender(w, h):
-    # narrower top pillar, tapers to sharper fang
-    return [(0, 0), (w, 0),
-            (int(w * 0.80), int(h * 0.25)),
-            (int(w * 0.74), int(h * 0.60)),
-            (int(w * 0.66), int(h * 0.85)),
-            (int(w * 0.60), h), (int(w * 0.40), h),
-            (int(w * 0.34), int(h * 0.85)),
-            (int(w * 0.26), int(h * 0.60)),
-            (int(w * 0.20), int(h * 0.25))]
-
-
-def sil_top_lean(w, h):
-    lean = int(w * 0.06)
-    return [(0, 0), (w, 0),
-            (int(w * 0.92), int(h * 0.25)),
-            (int(w * 0.88), int(h * 0.55)),
-            (int(w * 0.82), int(h * 0.82)),
-            (int(w * 0.78) + lean, h), (int(w * 0.22) + lean, h),
-            (int(w * 0.12), int(h * 0.82)),
-            (int(w * 0.06), int(h * 0.55)),
-            (0, int(h * 0.25))]
-
-
-def sil_top_shelf(w, h):
-    return [(0, 0), (w, 0),
-            (int(w * 0.92), int(h * 0.22)),
-            (int(w * 0.86), int(h * 0.50)),
-            (int(w * 0.82), int(h * 0.62)),
-            (int(w * 0.96), int(h * 0.66)),
-            (int(w * 0.88), int(h * 0.85)),
-            (int(w * 0.80), h), (int(w * 0.20), h),
-            (int(w * 0.12), int(h * 0.85)),
-            (int(w * 0.04), int(h * 0.66)),
-            (int(w * 0.18), int(h * 0.62)),
-            (int(w * 0.14), int(h * 0.50)),
-            (int(w * 0.08), int(h * 0.22))]
-
-
-def sil_top_eroded(w, h):
-    return [(0, 0), (w, 0),
-            (int(w * 0.96), int(h * 0.18)),
-            (int(w * 0.88), int(h * 0.40)),
-            (w, int(h * 0.55)),
-            (int(w * 0.92), int(h * 0.68)),
-            (int(w * 0.84), int(h * 0.82)),
-            (int(w * 0.78), h), (int(w * 0.22), h),
-            (int(w * 0.14), int(h * 0.82)),
-            (int(w * 0.08), int(h * 0.68)),
-            (0, int(h * 0.55)),
-            (int(w * 0.10), int(h * 0.40)),
-            (int(w * 0.04), int(h * 0.18))]
-
-
-def sil_top_blunt(w, h):
-    return [(0, 0), (w, 0),
-            (w, int(h * 0.18)),
-            (int(w * 0.94), int(h * 0.45)),
-            (int(w * 0.90), int(h * 0.75)),
-            (int(w * 0.82), h), (int(w * 0.18), h),
-            (int(w * 0.10), int(h * 0.75)),
-            (int(w * 0.06), int(h * 0.45)),
-            (0, int(h * 0.18))]
-
-
-def sil_top_wide_stout(w, h):
-    return [(0, 0), (w, 0),
-            (int(w * 0.94), int(h * 0.20)),
-            (int(w * 0.90), int(h * 0.50)),
-            (int(w * 0.86), int(h * 0.80)),
-            (int(w * 0.80), h), (int(w * 0.20), h),
-            (int(w * 0.14), int(h * 0.80)),
-            (int(w * 0.10), int(h * 0.50)),
-            (int(w * 0.06), int(h * 0.20))]
 
 
 # ── Density vegetation helpers ──────────────────────────────────────────────
@@ -282,14 +147,30 @@ def draw_stupa(surf, cx, base_y):
     pygame.draw.polygon(surf, (220, 180, 60), [(cx, base_y - 22), (cx - 3, base_y - 18), (cx + 3, base_y - 18)])
 
 
+_INCENSE_CACHE: dict = {}
+
+
+def _incense_smoke_sprite(length):
+    """The incense wisp is a fixed sin-curve fade (no time/palette input), so it
+    bakes once per `length` rather than allocating ~`length` tiny surfaces every
+    call (this ran ~32 allocations/frame across the night braziers)."""
+    spr = _INCENSE_CACHE.get(length)
+    if spr is None:
+        spr = pygame.Surface((8, length + 1), pygame.SRCALPHA)
+        ry = length - 1
+        puff = pygame.Surface((4, 2), pygame.SRCALPHA)
+        for i in range(length):
+            t = i / max(1, length)
+            off = int(math.sin(t * 6) * 2)
+            a = int(140 * (1 - t))
+            puff.fill((230, 230, 230, a))
+            spr.blit(puff, (off + 2, ry - i))
+        _INCENSE_CACHE[length] = spr
+    return spr
+
+
 def draw_incense_smoke(surf, x, y, length=20):
-    for i in range(length):
-        t = i / max(1, length)
-        off = int(math.sin(t * 6) * 2)
-        a = int(140 * (1 - t))
-        s = pygame.Surface((4, 2), pygame.SRCALPHA)
-        s.fill((230, 230, 230, a))
-        surf.blit(s, (x + off - 2, y - i))
+    surf.blit(_incense_smoke_sprite(length), (x - 4, y - (length - 1)))
 
 
 def draw_bird_sil(surf, cx, cy, size=5):
@@ -337,18 +218,55 @@ def draw_terrace_wall(surf, cx, y, width=36):
 
 
 def draw_cascading_vine(surf, x, y, length, palette):
-    dark, mid, top = palette['foliage_dark'], palette['foliage_mid'], palette['foliage_top']
-    for i in range(length):
-        t = i / max(1, length - 1)
-        off = int(math.sin(t * 4) * 2)
-        pygame.draw.line(surf, dark, (x + off, y + i), (x + off, y + i + 1), 2)
-    for frac, r in ((0.25, 3), (0.55, 4), (0.85, 4)):
-        py = y + int(frac * length)
-        px = x + int(math.sin(frac * 4) * 2)
-        pygame.draw.circle(surf, dark, (px, py), r + 1)
-        pygame.draw.circle(surf, mid, (px, py), r)
-        pygame.draw.circle(surf, top, (px - 1, py - 1), max(1, r - 2))
-        pygame.draw.circle(surf, (255, 180, 120), (px + 1, py + 1), 1)
+    """A CLEAR draped silhouette spilling over a front-left lip: one thicker
+    primary strand + one shorter secondary, 3-4 readable teardrop leaf nodes, a
+    curling tendril tip, and one small bloom where the vine grips the rim. `(x,y)`
+    is the rim attachment point; the strand falls and curls outward. The bloom +
+    leaf-tip highlight are routed through _accent_under_foliage so no decor leaf
+    out-glows the coin at night. Signature unchanged (the near-lane caller still
+    draws it on a scratch + dims it, which now stacks safely under the cap)."""
+    dark = palette['foliage_dark']
+    mid  = palette['foliage_mid']
+    top  = palette['foliage_top']
+    leaf_lt = _accent_under_foliage(top, palette)
+
+    def strand(x0, y0, ln, sway, width, nodes):
+        pts = [(x0, y0)]
+        for i in range(1, ln + 1):
+            t = i / ln
+            px = x0 - int(math.sin(t * 2.0) * sway) - int(t * 3)
+            py = y0 + int(t * (ln + 6))
+            pts.append((px, py))
+        pygame.draw.lines(surf, _shade_c(dark, -14), False, pts, width + 1)
+        pygame.draw.lines(surf, dark, False, pts, width)
+        for ni in range(nodes):
+            idx = 1 + (ni + 1) * (len(pts) - 2) // (nodes + 1)
+            px, py = pts[idx]
+            side = -1 if ni % 2 == 0 else 1
+            lx = px + side * 3
+            pygame.draw.polygon(surf, mid,
+                                [(px, py - 1), (lx, py - 2),
+                                 (lx + side, py + 1), (px, py + 2)])
+            pygame.draw.line(surf, leaf_lt, (px, py - 1), (lx, py - 1), 1)
+        return pts
+
+    # Primary draped strand — longest, spilling furthest over the lip. Length
+    # tracks the `length` arg so the pillar eaves and the near-lane both scale.
+    ln = max(8, length)
+    primary = strand(x, y, ln, 4, 2, 3)
+    strand(x + 3, y + 1, max(5, ln - 4), 3, 1, 2)
+    # The top two leaf pixels tuck just behind/at the rim so the vine visibly
+    # grips the edge with no floating gap (handled here by anchoring the strand
+    # AT (x, y); a small grip leaf sits right at the attachment).
+    pygame.draw.polygon(surf, mid, [(x, y), (x - 3, y - 1), (x - 2, y + 2)])
+    pygame.draw.line(surf, leaf_lt, (x, y - 1), (x - 3, y - 1), 1)
+    # Curling tendril tip at the very end of the primary strand.
+    ex, ey = primary[-1]
+    pygame.draw.lines(surf, dark, False,
+                      [(ex, ey), (ex + 2, ey + 2), (ex, ey + 3)], 1)
+    # One small bloom tucked at the rim attachment, value-capped under foliage.
+    pygame.draw.circle(surf, _accent_under_foliage((240, 196, 124), palette),
+                       (x - 1, y + 2), 1)
 
 
 def draw_ladder(surf, x, top_y, bot_y):
@@ -442,383 +360,4 @@ def draw_ribbons_tied(surf, cx, cy, n=4, width=12, seed=0):
             tx = cx + dx + int(math.sin(t * 3 + seed) * 2)
             py = ty + 2 + j * 2
             pygame.draw.rect(surf, col, (tx - 1, py, 2, 2))
-
-
-# ── Variant decoration scripts ──────────────────────────────────────────────
-#
-# Each variant receives:
-#   surf            target surface
-#   top_rect        top pillar axis-aligned rect (y starts at 0)
-#   bot_rect        bottom pillar axis-aligned rect
-#   palette         full biome palette (stone_* + foliage_* keys)
-#   seed            per-pipe deterministic seed
-#
-# Positions inside the decoration are computed relative to rect y-coords so
-# the same variant works across every gap height the game can spawn.
-
-
-def _veg_pattern_walk(surf, rect, palette, seed, is_top):
-    """Original-style distributed vegetation walk along a pillar."""
-    pattern = ((32, -1, 'pine_med'), (62, +1, 'moss'), (92, -1, 'pine_small'),
-               (122, +1, 'shrub'), (152, -1, 'moss'), (185, +1, 'pine_small'),
-               (215, -1, 'shrub'), (248, +1, 'moss'), (282, -1, 'pine_small'),
-               (315, +1, 'shrub'), (348, -1, 'moss'))
-    rng = random.Random(seed)
-    tip_y = rect.bottom if is_top else rect.y
-    sign = -1 if is_top else +1
-    for offset, side, kind in pattern:
-        y = tip_y + sign * offset
-        if not (rect.y + 6 < y < rect.bottom - 6):
-            break
-        if side < 0:
-            ax = rect.x + 2
-        else:
-            ax = rect.x + rect.width - 2
-        ledge_w = 12 if kind in ('pine_med', 'shrub') else 9
-        ledge_rect = pygame.Rect(ax - (ledge_w if side > 0 else 0), y - 2, ledge_w, 4)
-        pygame.draw.ellipse(surf, palette['stone_dark'], ledge_rect.inflate(2, 1))
-        pygame.draw.ellipse(surf, palette['stone_light'], ledge_rect.inflate(-2, -1))
-        h_wobble = rng.randint(-6, 8)
-        lean_jitter = rng.randint(-4, 4)
-        if kind == 'pine_med':
-            draw_wuling_pine(surf, ax, y - 1, height=24 + h_wobble, palette=palette,
-                             lean=side * 5 + lean_jitter, direction='up', layers=4)
-        elif kind == 'pine_small':
-            draw_wuling_pine(surf, ax, y, height=15 + h_wobble // 2, palette=palette,
-                             lean=side * 3 + lean_jitter, direction='up', layers=3)
-        elif kind == 'shrub':
-            draw_side_shrub(surf, ax, y - 1, palette, scale=0.85 + rng.random() * 0.45)
-        elif kind == 'moss':
-            draw_moss_strand(surf, ax, y, length=16 + rng.randint(0, 10),
-                             palette=palette, jitter_seed=offset + seed)
-
-
-def decorate_original(surf, top_rect, bot_rect, palette, seed):
-    # Preserves the current in-game look exactly.
-    top_cx = top_rect.x + top_rect.width // 2
-    bot_cx = bot_rect.x + bot_rect.width // 2
-    # Hanging pine on top-pillar fang
-    draw_wuling_pine(surf, top_cx - 4, top_rect.bottom - 4, height=34,
-                     palette=palette, lean=-12, direction='down', layers=4)
-    # Peak pine + secondary side pine on bottom pillar
-    draw_wuling_pine(surf, bot_cx + 2, bot_rect.y + 2, height=58,
-                     palette=palette, lean=14, direction='up', layers=6)
-    draw_wuling_pine(surf, bot_rect.x + 6, bot_rect.y + 28, height=26,
-                     palette=palette, lean=-5, direction='up', layers=4)
-    _veg_pattern_walk(surf, top_rect, palette, seed, is_top=True)
-    _veg_pattern_walk(surf, bot_rect, palette, seed, is_top=False)
-
-
-def decorate_lungta(surf, top_rect, bot_rect, palette, seed):
-    tcx = top_rect.x + top_rect.width // 2
-    bcx = bot_rect.x + bot_rect.width // 2
-    peak_x, peak_y = bcx + 2, bot_rect.y
-    draw_pine_trio(surf, peak_x, peak_y, palette, seed=seed)
-    # Heavy moss cascade along the top pillar's underside
-    for off in range(-22, 24, 4):
-        draw_moss_strand(surf, tcx + off, top_rect.bottom - 10,
-                         12 + abs(off) % 8, palette, jitter_seed=seed + off)
-    if top_rect.height > 60:
-        draw_moss_patch(surf, tcx, top_rect.bottom - 34, 28, 10, palette, seed=seed)
-    # Side shrubs along the bottom pillar
-    if bot_rect.height > 120:
-        for i, sc in enumerate((1.0, 0.9, 1.0)):
-            y = bot_rect.y + 70 + i * 60
-            if y > bot_rect.bottom - 20: break
-            side = -1 if i % 2 == 0 else 1
-            sx = bcx + side * (bot_rect.width // 2 - 10)
-            draw_side_shrub(surf, sx, y, palette, scale=sc)
-    # Prayer flag strings across the gap
-    draw_prayer_flags(surf, tcx - 28, top_rect.bottom - 48,
-                      peak_x + 12, peak_y - 48, n=8)
-    if top_rect.height > 80:
-        draw_prayer_flags(surf, tcx + 28, top_rect.bottom - 32,
-                          peak_x - 4, peak_y - 28, n=5)
-    # Peak cairn WITH red pennant — variant signature, always visible
-    draw_cairn(surf, peak_x - 18, peak_y + 4, n=4, pennant=True)
-    if bot_rect.height > 80:
-        draw_cairn(surf, bcx + bot_rect.width // 2 - 4, bot_rect.bottom - 4,
-                   n=3, pennant=True)
-    # Climbing vine + ground cover
-    if bot_rect.height > 100:
-        draw_climbing_vine(surf, bot_rect.x + 8, bot_rect.y + 40,
-                           bot_rect.bottom - 16, palette, seed=seed)
-        draw_grass_bed(surf, bcx, bot_rect.bottom - 2, bot_rect.width - 10,
-                       14, palette, seed=seed)
-
-
-def decorate_darchog(surf, top_rect, bot_rect, palette, seed):
-    tcx = top_rect.x + top_rect.width // 2
-    bcx = bot_rect.x + bot_rect.width // 2
-    peak_x, peak_y = bcx + 2, bot_rect.y
-    draw_pine_trio(surf, peak_x, peak_y, palette, seed=seed)
-    # Heavy moss cascade
-    for off in range(-20, 22, 4):
-        draw_moss_strand(surf, tcx + off, top_rect.bottom - 10,
-                         12 + abs(off) % 8, palette, jitter_seed=seed + off)
-    # HUGE hero darchog pole rising from peak — main signature of variant
-    draw_darchog_pole(surf, peak_x + 4, peak_y - 2, height=96, banner_color=(200, 90, 40))
-    # Companion pole with different-colored banner
-    draw_darchog_pole(surf, peak_x - 16, peak_y + 14, height=70, banner_color=(180, 40, 60))
-    # 2 stupas at base
-    if bot_rect.height > 110:
-        draw_stupa(surf, bcx - 12, bot_rect.bottom - 4)
-        draw_stupa(surf, bcx + 12, bot_rect.bottom - 4)
-    # Side shrubs
-    if bot_rect.height > 120:
-        for i, sc in enumerate((1.0, 0.9, 1.0, 0.8)):
-            y = bot_rect.y + 52 + i * 48
-            if y > bot_rect.bottom - 20: break
-            side = 1 if i % 2 == 0 else -1
-            sx = bcx + side * (bot_rect.width // 2 - 10)
-            draw_side_shrub(surf, sx, y, palette, scale=sc)
-    # Climbing vine + grass
-    if bot_rect.height > 100:
-        draw_climbing_vine(surf, bot_rect.x + 6, bot_rect.y + 36,
-                           bot_rect.bottom - 14, palette, seed=seed + 3)
-        draw_grass_bed(surf, bcx, bot_rect.bottom - 2, bot_rect.width - 10,
-                       12, palette, seed=seed)
-    # Distant bird silhouettes
-    for dx, dy in [(-44, 20), (38, 36), (-32, 56)]:
-        if tcx + dx > 2 and tcx + dx < tcx * 2 - 2 and dy < top_rect.bottom - 10:
-            draw_bird_sil(surf, tcx + dx, dy, size=4)
-
-
-def decorate_babylon(surf, top_rect, bot_rect, palette, seed):
-    tcx = top_rect.x + top_rect.width // 2
-    bcx = bot_rect.x + bot_rect.width // 2
-    peak_x, peak_y = bcx + 2, bot_rect.y
-    # Smaller pine crown + companion
-    draw_wuling_pine(surf, peak_x, peak_y + 2, 38, palette, lean=4, layers=4)
-    draw_wuling_pine(surf, peak_x - 12, peak_y + 16, 28, palette, lean=-4, layers=3)
-    # Terraces at roughly 1/3 and 2/3 of the bottom pillar
-    if bot_rect.height > 100:
-        for frac in (0.30, 0.58, 0.82):
-            ty = int(bot_rect.y + bot_rect.height * frac)
-            draw_terrace_wall(surf, bcx, ty, width=min(bot_rect.width - 8, 58))
-            # Cascading vines spilling over each terrace
-            for vx in (-22, -8, 8, 22):
-                vl = int(bot_rect.height * 0.15)
-                draw_cascading_vine(surf, bcx + vx, ty + 2, vl, palette)
-            # Fern bed on top of the terrace
-            draw_ground_ferns(surf, bcx, ty - 2, width=bot_rect.width - 12,
-                              n=3, palette=palette, seed=seed + ty)
-        # Ladder between two terraces
-        top_frac_y = int(bot_rect.y + bot_rect.height * 0.32)
-        mid_frac_y = int(bot_rect.y + bot_rect.height * 0.56)
-        draw_ladder(surf, bcx + 14, top_frac_y, mid_frac_y)
-    # Small pine hanging on top pillar's fang
-    draw_wuling_pine(surf, tcx - 4, top_rect.bottom - 4, 28, palette,
-                     lean=-10, direction='down', layers=4)
-    # Flowers + grass at base
-    if bot_rect.height > 80:
-        draw_flower_bed(surf, bcx, bot_rect.bottom - 2, bot_rect.width - 10,
-                        14, seed=seed)
-        draw_grass_bed(surf, bcx, bot_rect.bottom - 2, bot_rect.width - 10,
-                       14, palette, seed=seed)
-
-
-def decorate_monastery(surf, top_rect, bot_rect, palette, seed):
-    tcx = top_rect.x + top_rect.width // 2
-    bcx = bot_rect.x + bot_rect.width // 2
-    peak_x, peak_y = bcx + 2, bot_rect.y
-    # Monastery clings to the peak ledge — always visible, signature element
-    draw_monastery(surf, bcx - 2, peak_y + 2)
-    # Smaller pine tucked beside the monastery
-    draw_wuling_pine(surf, peak_x + 16, peak_y + 12, 34, palette, lean=6, layers=4)
-    # Prayer flag line from monastery to top pillar's fang
-    draw_prayer_flags(surf, bcx - 10, peak_y - 4, tcx, top_rect.bottom - 4, n=6)
-    # Second flag line across mid-gap for extra signature
-    if bot_rect.height > 100:
-        draw_prayer_flags(surf, bcx + 20, peak_y + 16, tcx + 8, top_rect.bottom + 6, n=5)
-    # Moss cascade on top pillar
-    for off in range(-20, 22, 4):
-        draw_moss_strand(surf, tcx + off, top_rect.bottom - 10,
-                         12 + abs(off) % 6, palette, jitter_seed=seed + off)
-    if top_rect.height > 50:
-        draw_moss_patch(surf, tcx, top_rect.bottom - 32, 28, 10, palette, seed=seed)
-    # Side shrubs (below the peak monastery)
-    if bot_rect.height > 110:
-        for i, sc in enumerate((1.0, 0.9, 0.9)):
-            y = bot_rect.y + 50 + i * 60
-            if y >= bot_rect.bottom - 20: continue
-            side = 1 if i % 2 == 0 else -1
-            sx = bcx + side * (bot_rect.width // 2 - 10)
-            draw_side_shrub(surf, sx, y, palette, scale=sc)
-    # Ground cover
-    if bot_rect.height > 80:
-        draw_climbing_vine(surf, bot_rect.x + bot_rect.width - 8, bot_rect.y + 30,
-                           bot_rect.bottom - 14, palette, seed=seed + 1)
-        draw_grass_bed(surf, bcx, bot_rect.bottom - 2, bot_rect.width - 10,
-                       12, palette, seed=seed)
-        draw_flower_bed(surf, bcx, bot_rect.bottom - 3, bot_rect.width - 16,
-                        10, seed=seed)
-
-
-def decorate_lantern(surf, top_rect, bot_rect, palette, seed):
-    tcx = top_rect.x + top_rect.width // 2
-    bcx = bot_rect.x + bot_rect.width // 2
-    peak_x, peak_y = bcx + 2, bot_rect.y
-    draw_pine_trio(surf, peak_x, peak_y, palette, seed=seed)
-    # HERO RED LANTERN — huge, hangs from top pillar's fang into the gap.
-    # This is the variant's signature, always visible.
-    draw_paper_lantern(surf, tcx, top_rect.bottom - 2, strand=14, scale=1.6, color='red')
-    # Gold companion lantern off to the side
-    draw_paper_lantern(surf, tcx - 16, top_rect.bottom - 4, strand=24, scale=0.9, color='gold')
-    draw_paper_lantern(surf, tcx + 16, top_rect.bottom - 4, strand=24, scale=0.9, color='gold')
-    # Small red lanterns also perched on the peak
-    draw_paper_lantern(surf, peak_x - 14, peak_y + 2, strand=4, scale=0.7, color='red')
-    draw_paper_lantern(surf, peak_x + 14, peak_y + 2, strand=4, scale=0.7, color='red')
-    # Moss strands
-    for off in range(-18, 20, 4):
-        draw_moss_strand(surf, tcx + off, top_rect.bottom - 12,
-                         10 + abs(off) % 6, palette, jitter_seed=seed + off)
-    # Bougainvillea / magenta climbing specks along bottom pillar sides
-    if bot_rect.height > 80:
-        steps = max(6, bot_rect.height // 14)
-        for i in range(steps):
-            dy = bot_rect.y + 20 + i * 14
-            if dy > bot_rect.bottom - 8: break
-            for dx in (bot_rect.x + 6, bot_rect.x + bot_rect.width - 8):
-                pygame.draw.circle(surf, (220, 60, 140), (dx, dy), 2)
-                pygame.draw.circle(surf, (245, 130, 180), (dx + 1, dy - 1), 1)
-    # Plaque + incense at base
-    if bot_rect.height > 100:
-        plaque_rect = pygame.Rect(bcx - 8, bot_rect.bottom - 18, 16, 16)
-        pygame.draw.rect(surf, (160, 125, 55), plaque_rect)
-        pygame.draw.rect(surf, (220, 180, 80), plaque_rect.inflate(-2, -2))
-        for i in range(3):
-            pygame.draw.line(surf, (120, 85, 25),
-                             (bcx - 5, bot_rect.bottom - 14 + i * 4),
-                             (bcx + 5, bot_rect.bottom - 14 + i * 4), 1)
-        draw_incense_smoke(surf, bcx - 16, bot_rect.bottom - 20, length=18)
-        draw_incense_smoke(surf, bcx + 16, bot_rect.bottom - 20, length=18)
-        draw_grass_bed(surf, bcx, bot_rect.bottom - 2, bot_rect.width - 10,
-                       12, palette, seed=seed)
-
-
-def decorate_overgrown(surf, top_rect, bot_rect, palette, seed):
-    tcx = top_rect.x + top_rect.width // 2
-    bcx = bot_rect.x + bot_rect.width // 2
-    peak_x, peak_y = bcx + 2, bot_rect.y
-    # BIG broadleaf canopy on peak (no pine — replaces it) — signature element
-    pygame.draw.line(surf, (90, 60, 35), (peak_x, peak_y + 2), (peak_x, peak_y - 28), 3)
-    for (dx, dy, sz) in [(0, 0, 46), (-14, 8, 32), (14, 10, 34), (-6, -10, 26), (10, -14, 24)]:
-        pygame.draw.circle(surf, (30, 90, 45), (peak_x + dx, peak_y - 32 + dy), sz // 2 + 2)
-        pygame.draw.circle(surf, (60, 150, 70), (peak_x + dx, peak_y - 32 + dy), sz // 2)
-        pygame.draw.circle(surf, (130, 210, 100), (peak_x + dx - 2, peak_y - 34 + dy),
-                           max(4, sz // 2 - 6))
-    # Strangler fig cascading down one side
-    if bot_rect.height > 100:
-        draw_strangler_fig(surf, bot_rect.x + 4, bot_rect.y + 24, bot_rect.bottom - 8)
-    # Masonry blocks + stone face + ferns on ledges
-    if bot_rect.height > 80:
-        draw_masonry_blocks(surf, bcx, bot_rect.y + 20, bot_rect.bottom - 10,
-                            bot_rect.width, seed=seed)
-    if bot_rect.height > 120:
-        draw_stone_face(surf, bcx + 10, bot_rect.y + bot_rect.height // 2)
-    # Fern banks at intervals
-    if bot_rect.height > 100:
-        for frac in (0.35, 0.60, 0.85):
-            fy = int(bot_rect.y + bot_rect.height * frac)
-            if fy > bot_rect.bottom - 10: continue
-            draw_fern_cluster(surf, bcx - 12, fy, 6, palette, seed=seed + fy)
-            draw_fern_cluster(surf, bcx + 14, fy - 2, 5, palette, seed=seed + fy + 1)
-    # Orchid specks
-    rng = random.Random(seed)
-    for _ in range(6):
-        ox = bcx + rng.randint(-bot_rect.width // 2 + 6, bot_rect.width // 2 - 6)
-        oy = rng.randint(bot_rect.y + 30, bot_rect.bottom - 10)
-        pygame.draw.circle(surf, (220, 150, 200), (ox, oy), 2)
-        pygame.draw.circle(surf, (250, 200, 230), (ox + 1, oy - 1), 1)
-    # Moss on top pillar
-    if top_rect.height > 40:
-        draw_moss_patch(surf, tcx, top_rect.bottom - 20, 32, 14, palette, seed=seed)
-    # Drifting bird
-    draw_bird_sil(surf, tcx + 30, max(20, top_rect.y + 40), size=4)
-
-
-def decorate_menhir(surf, top_rect, bot_rect, palette, seed):
-    tcx = top_rect.x + top_rect.width // 2
-    bcx = bot_rect.x + bot_rect.width // 2
-    peak_x, peak_y = bcx + 2, bot_rect.y
-    # Big rowan tree with lots of red berries — variant signature, always at peak
-    pygame.draw.line(surf, (90, 60, 40), (peak_x, peak_y + 2), (peak_x + 3, peak_y - 36), 3)
-    for rx, ry, sz in [(-10, -14, 9), (10, -18, 8), (-3, -28, 7), (14, -10, 7),
-                         (-12, -24, 6), (6, -34, 6), (-6, -6, 5)]:
-        pygame.draw.circle(surf, (40, 120, 55), (peak_x + rx, peak_y + ry), sz)
-        pygame.draw.circle(surf, (80, 170, 80), (peak_x + rx - 1, peak_y + ry - 1), max(2, sz - 2))
-        pygame.draw.circle(surf, (200, 40, 40), (peak_x + rx + 2, peak_y + ry + 1), 2)
-    # Spiral glow carving right at the peak face — always visible
-    draw_spiral_glow(surf, bcx - 10, peak_y + 18, radius=10)
-    # Spiral glow carvings scaled to pillar height
-    if bot_rect.height > 70:
-        centres = [(0, 0.45, 12), (-16, 0.28, 7), (14, 0.70, 9)]
-        for dx, frac, r in centres:
-            sy = int(bot_rect.y + bot_rect.height * frac)
-            if sy > bot_rect.bottom - 10: continue
-            draw_spiral_glow(surf, bcx + dx, sy, radius=r)
-    # Tied ribbons at upper body
-    draw_ribbons_tied(surf, bcx, bot_rect.y + 10, n=4, width=20, seed=seed)
-    if bot_rect.height > 110:
-        draw_ribbons_tied(surf, bcx + 10, bot_rect.y + bot_rect.height // 2 - 20,
-                          n=4, width=18, seed=seed + 1)
-    # Offering cairn + candle at base
-    if bot_rect.height > 80:
-        draw_cairn(surf, bcx - 14, bot_rect.bottom - 2, n=3, pennant=False)
-        pygame.draw.rect(surf, (240, 230, 210), (bcx + 14, bot_rect.bottom - 10, 4, 8))
-        g = pygame.Surface((10, 10), pygame.SRCALPHA)
-        pygame.draw.circle(g, (255, 220, 120, 180), (5, 5), 4)
-        surf.blit(g, (bcx + 11, bot_rect.bottom - 16))
-    # Heather tufts + moss + raven
-    if bot_rect.height > 60:
-        for dx in range(-bot_rect.width // 2 + 6, bot_rect.width // 2 - 4, 5):
-            for k in range(2):
-                pygame.draw.line(surf, (150, 90, 140),
-                                 (bcx + dx + k, bot_rect.bottom - 2),
-                                 (bcx + dx + k - 1, bot_rect.bottom - 8), 1)
-                pygame.draw.circle(surf, (200, 140, 190),
-                                   (bcx + dx + k, bot_rect.bottom - 10), 1)
-    if top_rect.height > 40:
-        draw_moss_patch(surf, tcx, top_rect.bottom - 20, 28, 12, palette, seed=seed)
-    draw_raven(surf, tcx - 6, max(20, top_rect.y + 24))
-
-
-# ── Variant registry + dispatcher ───────────────────────────────────────────
-
-_VARIANTS = (
-    # (top silhouette, bottom silhouette, decorate function)
-    (silhouette_top_spire, silhouette_bottom_spire, decorate_original),
-    (silhouette_top_spire, silhouette_bottom_spire, decorate_lungta),
-    (sil_top_slender,      sil_bot_slender,         decorate_darchog),
-    (sil_top_shelf,        sil_bot_shelf,           decorate_babylon),
-    (sil_top_lean,         sil_bot_lean,            decorate_monastery),
-    (sil_top_wide_stout,   sil_bot_stout,           decorate_lantern),
-    (sil_top_eroded,       sil_bot_eroded,          decorate_overgrown),
-    (sil_top_blunt,        sil_bot_blunt,           decorate_menhir),
-)
-
-VARIANT_COUNT = len(_VARIANTS)
-
-
-def _paint_stone(surf, rect, polygon_fn, palette, body_seed):
-    if rect.height <= 0:
-        return
-    body = get_stone_pillar_body(
-        rect.width, max(1, rect.height),
-        palette['stone_light'], palette['stone_mid'],
-        palette['stone_dark'], palette['stone_accent'],
-        body_seed=body_seed,
-    )
-    polygon = polygon_fn(rect.width, rect.height)
-    silhouette_blit(surf, body, polygon, rect.topleft, shadow_alpha=110)
-
-
-def draw_pillar_pair(surf, top_rect, bot_rect, palette, seed):
-    """Paint both pillar bodies + decorate according to the variant keyed by seed."""
-    variant_id = seed % VARIANT_COUNT
-    top_sil, bot_sil, decorate = _VARIANTS[variant_id]
-    _paint_stone(surf, top_rect, top_sil, palette, seed)
-    _paint_stone(surf, bot_rect, bot_sil, palette, seed + 1)
-    decorate(surf, top_rect, bot_rect, palette, seed)
 
