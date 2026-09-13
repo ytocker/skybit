@@ -408,11 +408,7 @@ def _draw_chevron(surf, rect, direction) -> None:
 def _slot_of(sid: str) -> str:
     """The equip slot a store card belongs to (its catalog ``kind``), so the
     equipped-accent + tap-to-equip logic works for parcels as well as skins."""
-    if sid == store_catalog.PARCEL_BASE:
-        return "parcel"
-    if sid == store_catalog.BASE_SKIN or not store_catalog.exists(sid):
-        return "skin"
-    return store_catalog.kind(sid)
+    return store_data.slot_of(sid)
 
 
 class StoreScene:

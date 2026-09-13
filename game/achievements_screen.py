@@ -91,6 +91,12 @@ class AchievementsScene:
         self.tab_fame_rect: "pygame.Rect | None" = None
         self.tab_shame_rect: "pygame.Rect | None" = None
         self.menu_btn_rect: "pygame.Rect | None" = None
+        # When hosted inside ProfileScene, embedded_top is the y the FAME/SHAME
+        # pill starts at instead of _HEADER_H, and this scene's own title block
+        # + footer/MENU button are skipped entirely (the host draws those once,
+        # shared with its other tab) — None means "standalone", unchanged from
+        # every prior behavior.
+        self.embedded_top: "int | None" = None
         # Oddities one-shot guards: scrolling the Fame list to its foot and
         # visiting the Shame wall each unlock a hidden badge, once per session.
         self._saw_bottom = False
@@ -173,8 +179,11 @@ class AchievementsScene:
         self._scroll_vel *= math.exp(-_DECAY_K * dt)
 
     # ── content build (cached) ───────────────────────────────────────────
+    def _tab_bar_y(self) -> int:
+        return _HEADER_H if self.embedded_top is None else self.embedded_top
+
     def _viewport(self) -> "tuple[int, int]":
-        top = _HEADER_H + _TAB_H
+        top = self._tab_bar_y() + _TAB_H
         bot = H - _FOOTER_H
         return top, bot
 
@@ -393,7 +402,7 @@ class AchievementsScene:
 
     # ── tab bar ──────────────────────────────────────────────────────────
     def _draw_tab_bar(self, surf) -> None:
-        y = _HEADER_H
+        y = self._tab_bar_y()
         band = pygame.Surface((W, _TAB_H), pygame.SRCALPHA)
         band.fill((*_NIGHT_DEEP, 235))
         surf.blit(band, (0, y))
@@ -489,30 +498,35 @@ class AchievementsScene:
         accent_lo = _BRONZE_DEEP if is_shame else _GOLD_DEEP
         accent_hi = (228, 182, 130) if is_shame else _GOLD_PALE
 
-        hdr = pygame.Surface((W, _HEADER_H), pygame.SRCALPHA)
-        hdr.fill((*_NIGHT_DEEP, 235))
-        surf.blit(hdr, (0, 0))
-        _outlined_text(surf, "HALL OF SHAME" if is_shame else "HALL OF FAME",
-                       (W // 2, 16), size=22, px=2, shadow_offset=(2, 3))
-        uw = 152
-        ux = W // 2 - uw // 2
-        pygame.draw.line(surf, accent, (ux, 30), (ux + uw, 30), 2)
+        if self.embedded_top is None:
+            hdr = pygame.Surface((W, _HEADER_H), pygame.SRCALPHA)
+            hdr.fill((*_NIGHT_DEEP, 235))
+            surf.blit(hdr, (0, 0))
+            _outlined_text(surf, "HALL OF SHAME" if is_shame else "HALL OF FAME",
+                           (W // 2, 16), size=22, px=2, shadow_offset=(2, 3))
+            uw = 152
+            ux = W // 2 - uw // 2
+            pygame.draw.line(surf, accent, (ux, 30), (ux + uw, 30), 2)
 
-        cnt = self._gilded_count(f"{got} / {total}", 14, accent_hi, accent_lo)
-        surf.blit(cnt, (W - cnt.get_width() - 8, 6))
+            cnt = self._gilded_count(f"{got} / {total}", 14, accent_hi, accent_lo)
+            surf.blit(cnt, (W - cnt.get_width() - 8, 6))
 
-        # FAME | SHAME segmented toggle, just below the header.
+        # FAME | SHAME segmented toggle, just below the header (or at
+        # embedded_top, when hosted inside ProfileScene).
         self._draw_tab_bar(surf)
 
-        # Footer — a grounded band carrying the real MENU button (a secondary
-        # navy+gold pill, matching the run-summary MAIN MENU). A full-width gold
-        # hairline divides the list from the footer so the button sits in its
-        # own band; the recessed scrollbar already signals "drag to scroll".
-        fy = H - _FOOTER_H
-        ftr = pygame.Surface((W, _FOOTER_H), pygame.SRCALPHA)
-        ftr.fill((*_NIGHT_DEEP, 236))
-        surf.blit(ftr, (0, fy))
-        pygame.draw.line(surf, (*_GOLD_BRIGHT, 120), (0, fy), (W, fy), 1)
-        self.menu_btn_rect = _outline_pill_btn(
-            surf, (W // 2, fy + _FOOTER_H // 2), "MENU",
-            size=15, min_width=150)
+        if self.embedded_top is None:
+            # Footer — a grounded band carrying the real MENU button (a
+            # secondary navy+gold pill, matching the run-summary MAIN MENU). A
+            # full-width gold hairline divides the list from the footer so the
+            # button sits in its own band; the recessed scrollbar already
+            # signals "drag to scroll". Skipped when embedded — the host draws
+            # one shared footer instead.
+            fy = H - _FOOTER_H
+            ftr = pygame.Surface((W, _FOOTER_H), pygame.SRCALPHA)
+            ftr.fill((*_NIGHT_DEEP, 236))
+            surf.blit(ftr, (0, fy))
+            pygame.draw.line(surf, (*_GOLD_BRIGHT, 120), (0, fy), (W, fy), 1)
+            self.menu_btn_rect = _outline_pill_btn(
+                surf, (W // 2, fy + _FOOTER_H // 2), "MENU",
+                size=15, min_width=150)

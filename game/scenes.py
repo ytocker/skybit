@@ -415,6 +415,7 @@ STATE_ACHV_EARNED = 10
 STATE_SETTINGS = 11
 STATE_ABOUT = 12
 STATE_STORE = 13
+STATE_PROFILE = 14
 
 # Background cloud depth slots: (base_x, base_y, scale). Geometry is fixed so the
 # parallax-depth spread stays good; all slots share one cloud design per run,
@@ -456,8 +457,14 @@ class App:
         # skips it). Lives until the player taps once on the help screen.
         self.powerup_help: object | None = None
         # Achievements screen — built lazily when opened from the menu,
-        # torn down on dismiss. Owns its own scroll/drag state.
+        # torn down on dismiss. Owns its own scroll/drag state. (Kept for
+        # its render/tap-handling code, which ProfileScene reuses in
+        # "embedded" mode; the menu's PROFILE tap no longer opens this
+        # directly — see _open_profile.)
         self.achievements: object | None = None
+        # PROFILE — the shared WARDROBE/ACHIEVEMENTS parent, built lazily on
+        # the menu PROFILE tap and torn down on dismiss.
+        self.profile: object | None = None
         # Coin store — the lagoon-hub landing + category grids, built lazily on
         # the menu STORE tap and torn down on BACK. Owns its own hub/category
         # navigation + buy-confirm state.
@@ -670,12 +677,13 @@ class App:
                     and self.hud.menu_settings_rect.collidepoint(pos):
                 self._open_settings()
                 return
-            # The framed Pip diorama is the Profile entry; its records
-            # (achievements) open behind it. Checked before START so a tap
-            # inside the frame can't fall through to starting a run.
+            # The framed Pip diorama is the Profile entry — WARDROBE (what's
+            # owned) and ACHIEVEMENTS (records), as two tabs of one screen.
+            # Checked before START so a tap inside the frame can't fall
+            # through to starting a run.
             if pos and self.hud.menu_profile_rect \
                     and self.hud.menu_profile_rect.collidepoint(pos):
-                self._open_achievements()
+                self._open_profile()
                 return
             if pos and self.hud.menu_store_rect \
                     and self.hud.menu_store_rect.collidepoint(pos):
@@ -769,6 +777,18 @@ class App:
 
     def _close_achievements(self):
         self.achievements = None
+        self.state = STATE_MENU
+        self._cooldown_t = 0.25
+
+    # ── profile (wardrobe + achievements, shared chrome) ────────────────────
+    def _open_profile(self):
+        from game.profile_screen import ProfileScene
+        self.profile = ProfileScene()
+        self.state = STATE_PROFILE
+        self._cooldown_t = 0.25
+
+    def _close_profile(self):
+        self.profile = None
         self.state = STATE_MENU
         self._cooldown_t = 0.25
 
@@ -918,6 +938,46 @@ class App:
             return
         if mb and mb.collidepoint(pos) and self._cooldown_t <= 0:
             self._close_achievements()
+
+    def _handle_profile_event(self, e):
+        """Pointer/wheel/key routing for the PROFILE screen (WARDROBE +
+        ACHIEVEMENTS tabs). Full (x, y) is threaded through — unlike the
+        achievements-only handler above, WARDROBE's item grid needs the x
+        coordinate too, not just vertical scroll."""
+        sc = self.profile
+        if sc is None:
+            self.state = STATE_MENU
+            return
+        if e.type == pygame.KEYDOWN:
+            if e.key == pygame.K_ESCAPE or self._cooldown_t <= 0:
+                self._close_profile()
+            return
+        if e.type == pygame.MOUSEWHEEL:
+            sc.scroll_by(-e.y * 56)
+        elif e.type == pygame.MOUSEBUTTONDOWN:
+            sc.pointer_down(e.pos)
+        elif e.type == pygame.MOUSEMOTION:
+            if e.buttons[0]:
+                sc.pointer_move(e.pos)
+        elif e.type == pygame.MOUSEBUTTONUP:
+            if sc.pointer_up():
+                self._profile_tap_or_close(sc, e.pos)
+        elif e.type == pygame.FINGERDOWN:
+            sc.pointer_down((int(e.x * W), int(e.y * H)))
+        elif e.type == pygame.FINGERMOTION:
+            sc.pointer_move((int(e.x * W), int(e.y * H)))
+        elif e.type == pygame.FINGERUP:
+            if sc.pointer_up():
+                self._profile_tap_or_close(sc, (int(e.x * W), int(e.y * H)))
+
+    def _profile_tap_or_close(self, sc, pos):
+        """A stationary tap resolves through ProfileScene's own dispatch
+        (view-pill, then the active tab's own controls); the MENU button
+        dismisses (gated by the entry cooldown, same as every other
+        owner-scene dismiss)."""
+        result = sc.tap_or_close(pos)
+        if result == "close" and self._cooldown_t <= 0:
+            self._close_profile()
 
     # ── achievement-earned screen (end of run) ────────────────────────────────
     def _continue_from_achv_earned(self):
@@ -1149,6 +1209,11 @@ class App:
         if self.state == STATE_ACHIEVEMENTS:
             self._handle_achievements_event(e)
             return
+        # PROFILE (wardrobe + achievements) likewise fully owns pointer +
+        # wheel + key input while open.
+        if self.state == STATE_PROFILE:
+            self._handle_profile_event(e)
+            return
         # The end-of-run earned screen likewise owns all pointer/wheel/key input
         # (scroll/drag/continue) while it's up.
         if self.state == STATE_ACHV_EARNED:
@@ -1257,6 +1322,11 @@ class App:
         if self.state == STATE_ACHIEVEMENTS:
             if self.achievements is not None:
                 self.achievements.update(dt)
+            self._cooldown_t = max(0.0, self._cooldown_t - dt)
+            return
+        if self.state == STATE_PROFILE:
+            if self.profile is not None:
+                self.profile.update(dt)
             self._cooldown_t = max(0.0, self._cooldown_t - dt)
             return
         if self.state == STATE_SETTINGS:
@@ -1655,6 +1725,10 @@ class App:
         if self.state == STATE_ACHIEVEMENTS and self.achievements is not None:
             from game import achievements as _ach
             self.achievements.render(self.screen, 1 / 60, _ach.load())
+            return
+        # PROFILE paints its own night background + WARDROBE/ACHIEVEMENTS content.
+        if self.state == STATE_PROFILE and self.profile is not None:
+            self.profile.render(self.screen)
             return
         # End-of-run earned screen paints its own full-screen night + card stack.
         if self.state == STATE_ACHV_EARNED and self.achv_earned is not None:

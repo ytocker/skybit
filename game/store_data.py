@@ -245,6 +245,19 @@ def _slot_key(slot: str) -> str:
     return "equipped_skin" if slot == "skin" else "equipped_" + slot
 
 
+def slot_of(item_id: str) -> "str | None":
+    """The equip slot an item belongs to (its catalog ``kind``), with the
+    two free base defaults special-cased since they aren't in the catalog.
+    Shared by every screen that shows an equipped/owned accent so the
+    slot-membership rule (and its skin-slot-is-shared-across-groups
+    behavior) lives in one place."""
+    if item_id == store_catalog.PARCEL_BASE:
+        return "parcel"
+    if item_id == store_catalog.BASE_SKIN or not store_catalog.exists(item_id):
+        return "skin"
+    return store_catalog.kind(item_id)
+
+
 def equipped(slot: str) -> "str | None":
     """The id worn in ``slot`` (one of _EQUIP_SLOTS). Skin defaults to the
     base parrot; the other slots default to None (= the run's procedural
