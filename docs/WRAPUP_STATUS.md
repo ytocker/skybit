@@ -131,14 +131,147 @@ currently produce no deploy.
 
 **Fix.** Add the branch and give it a sub-path.
 
-### 7. Two wallets coexist — P0, small
+### 7. Two player records coexist, and the wrong one is wired up — P0
 
-`game/achievements.py` carries an unused wallet scaffold — a derived balance and a spend
-function — that nothing calls. It is superseded by `store_data.py`.
+`game/achievements.py` and `game/store_data.py` each keep their own player record, in
+separate storage keys, with different data models. Only the achievements one syncs to the
+cloud. Only the store one is wired to the UI.
 
-**Fix.** Remove the unused API. **Leave the persisted keys in the save blob** and let the
-existing coercion ignore them; that blob is already live on real devices, so dropping
-fields risks a migration incident for no gain.
+They are not redundant — **they disagree about how a balance should be stored**, and the
+one that is wired up has the weaker model. See *The player record* below; this is the
+section that matters most for the per-user requirement, and it corrects an earlier reading
+that treated the achievements record as dead scaffolding to delete.
+
+**Fix.** Unify onto one record with the achievements ledger semantics and the store's UI
+wiring. Do not simply delete either side.
+
+---
+
+## The player record
+
+The requirement is one durable, traceable record per player: how many coins they have, how
+they got them, what they've unlocked, what they've bought — surviving reloads, reinstalls
+and second devices. This section is the design for that, and it is the part of the wrap-up
+with the most subtlety in it.
+
+### The core problem: a balance cannot be merged
+
+`store_data.py` stores `wallet` as a plain integer. That is the natural thing to write and
+it is not safely synchronisable. Two devices, both offline:
+
+- Device A earns 100. Its wallet says 100.
+- Device B spends 100 on a skin. Its wallet says 0.
+
+When they sync, there is no rule that recovers the truth. Take the higher value and the
+purchase was free. Take the lower and the earnings vanish. Take the most recent and the
+answer depends on clock skew. **A mutable balance carries no information about how it got
+there, so no merge function can be correct.**
+
+`achievements.py` already solves this, and it is the reason that record should not be
+treated as dead code. It never stores a balance. It stores two grow-only counters —
+lifetime coins earned, lifetime coins spent — and derives:
+
+```
+balance = coins_earned − coins_spent
+```
+
+Both inputs only ever increase, so merging is well-defined: take the element-wise maximum
+of each counter and re-derive. The result is order-independent, safe to apply twice, and
+cannot be corrupted by a replayed sync. The same file already applies the matching rules
+to the rest of the record: unlocked achievements and owned items are grow-only sets merged
+by union on earliest timestamp, and equipped slots are a mutable choice resolved
+last-write-wins. That is the right model. It is simply not the one the store uses.
+
+**So the unification runs in the direction opposite to what it first appears:** keep
+`store_data.py`'s UI wiring and catalog integration, adopt `achievements.py`'s ledger
+semantics, and collapse both into a single record under a single storage key with a single
+sync path.
+
+### Counting per device, not just per record
+
+Element-wise maximum has one known flaw: concurrent earning under-counts. Earn 50 on a
+phone and 50 on a laptop while both are offline, and the merge yields 50, not 100.
+
+The fix is small — key each counter by install rather than keeping one number:
+
+```
+coins_earned: { install_a: 120, install_b: 50 }   →  total = 170
+```
+
+Merge by taking the max per install, then summing. Concurrent earning on different devices
+now adds up correctly, and the merge keeps every property that made the simple counter
+safe. This is a standard grow-only counter and it costs a few lines over the naive version.
+
+The bias is worth stating plainly: this design can **under**-credit in exotic cases and can
+never **over**-credit. For a cosmetics economy that is the correct direction to err.
+
+### Traceability: the ledger
+
+Counters give a correct total but no history, and the ask includes seeing how a balance was
+arrived at. Add an append-only ledger table keyed by user: timestamp, kind
+(`run_reward` / `daily` / `purchase` / `grant`), delta, item id, and the run it came from.
+
+That buys three things at once:
+
+- **A player-facing history** — "where did my coins go" answered in-game.
+- **An independent check.** The server can sum the ledger and compare it to the client's
+  reported balance. Drift is then *visible* without being *enforced* — consistent with the
+  client-authoritative decision, because the ledger is an audit log, not a gate.
+- **Economy tuning data.** Sources and sinks, per player, over time — which is exactly
+  what the balance pass needs and what the analytics dashboard can already consume.
+
+Run earnings are in fact already traceable: the `plays` table records per-run coins today.
+Purchases are the missing half.
+
+### Identity: what makes it *per user*
+
+Everything above still sits behind a rewritable browser-local UUID, which is per browser
+profile, not per person. Supabase anonymous sign-in replaces it with a durable user and an
+id usable in row-level security, so each player's row is genuinely theirs — closing the
+hole the current schema comment openly documents. Linking an email or Google identity later
+upgrades that same user in place, so adding real accounts needs no data migration and no
+re-keying of anything described here.
+
+### The reset hazards — "erased when the game loads"
+
+This is worth being precise about, because the failure the user is guarding against is
+already latent in the code and the coin fix is about to make it live.
+
+`store_data`'s load and save are asymmetric. Save refuses to write when the bridge is
+absent. **Load does not — it returns a fresh default state on any failure**, and the module
+caches that for the rest of the session. So a single transient failure to read produces a
+zeroed wallet in memory, and the very next mutation persists those zeros over the player's
+real data. Today nothing calls the mutation path, so the bug is dormant. Wiring the coin
+faucet arms it.
+
+The rules that close this class of bug:
+
+1. **Distinguish "empty" from "failed to load."** Only the first may be saved over. A
+   failed read must mark the record unsafe to write and retry, never silently substitute
+   defaults.
+2. **Never let a blank record overwrite a populated one** — locally or in the cloud. A
+   fresh install syncing before its first pull must not clobber the server copy.
+3. **Merge on pull, never replace.** With the semantics above this is safe by
+   construction; with a mutable balance it never is.
+4. **Degrade, don't destroy.** Blocked storage — private windows, cleared site data — must
+   fall back to in-memory for the session rather than writing a reset.
+5. **Migrate additively.** Unknown fields from a newer build are preserved, not dropped, so
+   a player moving between builds doesn't lose progress. The existing coercion already
+   drops unknown keys; that becomes a hazard the moment two versions are live at once.
+
+### What this looks like in sequence
+
+1. Fix the web bridge so the record persists at all (gap 2). Nothing below is observable
+   until this lands.
+2. Wire the coin faucet (gap 1) — but apply hazard rule 1 first, or the faucet's first
+   write can zero a wallet.
+3. Collapse the two records into one, on the counter-and-ledger model.
+4. Add anonymous auth and per-user row-level security.
+5. Sync the unified record, merging on pull.
+6. Add the ledger table and the in-game history view.
+
+Steps 1 and 2 are the fifteen-line fix. Steps 3 through 6 are the actual per-user system,
+and they are worth doing in that order — each is safe to ship on its own.
 
 ---
 
@@ -208,7 +341,9 @@ project, not a wrap-up step.
 | A1 | Web store persistence | Store survives reload | `inject_theme.py` | S | **P0** | — |
 | A2 | Coin faucet | Wallet can grow | `game/scenes.py`, `tests/` | S | **P0** | A1 |
 | A3 | Daily reward | A reason to return | `game/store_hub.py`, `game/scenes.py` | S | P0 | A2 |
-| A4 | Retire duplicate wallet | One wallet, not two | `game/achievements.py` | S | P0 | — |
+| A4 | Load/save hazard guard | A failed read can't zero a wallet | `game/store_data.py` | S | **P0** | before A2 |
+| A6 | Unify the player record | One record, counter + ledger model | `store_data.py`, `achievements.py` | M | P1 | A2 |
+| C4 | Coin ledger + history view | Traceable balance | schema, store UI | M | P1 | C1 |
 | A5 | Economy balance pass | Earned, not grindy | `game/store_catalog.py`, `config.py` | M | P0 | A2 |
 | B1 | Deploy wiring | Branch ships | `.github/workflows/pages.yml` | S | **P0** | — |
 | B2 | PWA shell | Installable, offline | `inject_theme.py`, new assets | M | **P0** | B1 |
@@ -220,8 +355,10 @@ project, not a wrap-up step.
 | D1 | TWA + Play listing | The app | new shell | M | P1 | B2 |
 | E | Account upgrade | Portable identity | auth layer | L | P2 | C1 |
 
-**Sequence:** A1 → A2 first, alone. Then the rest of A and all of B in parallel. C is
-independent of both and should land after A is verified. D follows B2. E is later.
+**Sequence:** A1 → A4 → A2 first, alone — A4 goes before A2, because the faucet's first
+write is what arms the reset hazard. Then the rest of A and all of B in parallel. C is
+independent of both and should land after A is verified. A6 and C4 together are the
+per-user record described above. D follows B2. E is later.
 
 ### On the balance pass
 
