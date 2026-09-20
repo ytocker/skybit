@@ -379,7 +379,7 @@ WEATHER_WET_ON_RI      = 0.18   # rain intensity at/above which paving wets up
 WEATHER_WET_RISE_RATE  = 0.45   # per-second wetness build while raining hard
 WEATHER_WET_DRY_RATE   = 0.18   # per-second dry-out once the rain eases
 
-WEATHER_CROWD_RAIN_MIN   = 0.22  # crowd-density multiplier at heaviest rain
+WEATHER_CROWD_RAIN_MIN   = 0.08  # crowd-density multiplier at heaviest rain
 WEATHER_CROWD_SNOW_MIN   = 0.06  # crowd-density multiplier at snow-squall peak
 WEATHER_UMBRELLA_RAIN_AT = 0.12  # rain intensity at which umbrellas appear in the crowd
 

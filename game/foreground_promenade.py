@@ -127,10 +127,18 @@ def _weather_crowd_factor(phase):
     """Crowd-density multiplier for the weather: 1.0 in clear skies, falling as
     rain/snow worsen — the street empties out in a storm. Takes the HARSHER of
     the two so a downpour and a squall don't compound into a ghost town earlier
-    than intended; the snow squall bottoms out near-empty."""
+    than intended; the snow squall bottoms out near-empty.
+
+    The RAIN term is concave (sqrt), because a linear one emptied the street
+    only at the very peak: at rain 0.35 it still kept 73% of the crowd and at
+    0.53 — visibly heavy — 59%, so every second of rain except the crest read
+    as a busy street wearing umbrellas. People leave at the first real rain,
+    not at the worst of it. SNOW stays LINEAR on purpose: its ramp covers the
+    dragon dancing through the first flakes, and the same curve there would
+    thin the festival's closing crowd from ~13 to ~9 figures."""
     ri = rain_intensity(phase)
     wi = storm_intensity(phase)
-    rain_f = 1.0 - (1.0 - WEATHER_CROWD_RAIN_MIN) * ri
+    rain_f = 1.0 - (1.0 - WEATHER_CROWD_RAIN_MIN) * math.sqrt(ri)
     snow_f = 1.0 - (1.0 - WEATHER_CROWD_SNOW_MIN) * wi
     return min(rain_f, snow_f)
 
@@ -2186,7 +2194,16 @@ def _place_scenarios(surf, w, scroll, pal, t, roster, density, x0=40):
             # (a stall row runs hot, a green walk runs sparse) and reorders the
             # hour's roster to the block's taste — the spatial ebb and flow.
             wx = k * _SCENARIO_PERIOD + x0
-            d_here = min(1.0, density * _wk.density_mult(wx, _CUR_PHASE))
+            # A crossing is busy because people cross there and a stall row
+            # because people shop there — in a downpour they do neither, so
+            # the block multiplier (up to 2.05x) relaxes toward 1.0 as the
+            # rain builds. Without this the emptiest stretch of the storm
+            # still had one busy block re-inflating an effective 0.15 to 0.29.
+            bm = _wk.density_mult(wx, _CUR_PHASE)
+            wet = min(1.0, _CUR_RAIN)
+            if wet > 0.0 and bm > 1.0:
+                bm = 1.0 + (bm - 1.0) * (1.0 - wet)
+            d_here = min(1.0, density * bm)
             if r.random() > d_here:         # stable per-slot inclusion
                 return None
             roster_b = _wk.filter_roster(wx, _CUR_PHASE, roster)
