@@ -2194,16 +2194,7 @@ def _place_scenarios(surf, w, scroll, pal, t, roster, density, x0=40):
             # (a stall row runs hot, a green walk runs sparse) and reorders the
             # hour's roster to the block's taste — the spatial ebb and flow.
             wx = k * _SCENARIO_PERIOD + x0
-            # A crossing is busy because people cross there and a stall row
-            # because people shop there — in a downpour they do neither, so
-            # the block multiplier (up to 2.05x) relaxes toward 1.0 as the
-            # rain builds. Without this the emptiest stretch of the storm
-            # still had one busy block re-inflating an effective 0.15 to 0.29.
-            bm = _wk.density_mult(wx, _CUR_PHASE)
-            wet = min(1.0, _CUR_RAIN)
-            if wet > 0.0 and bm > 1.0:
-                bm = 1.0 + (bm - 1.0) * (1.0 - wet)
-            d_here = min(1.0, density * bm)
+            d_here = min(1.0, density * _wk.density_mult(wx, _CUR_PHASE))
             if r.random() > d_here:         # stable per-slot inclusion
                 return None
             roster_b = _wk.filter_roster(wx, _CUR_PHASE, roster)

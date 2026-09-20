@@ -58,30 +58,17 @@ class _Ent:
                  "state", "timer", "target_vel", "accel", "wave", "depth")
 
 
-def _pick_kind(rain=0.0):
+def _pick_kind():
     # People dominate; the dog is a STRAY — an occasional sighting, not a
     # fifth of the street (at 20% the fast re-crossing dogs read as a pack).
-    #
-    # The stray is also RAIN-SHY. The share used to be a flat 7% in any
-    # weather, so a dog was exactly as likely to trot down the street in a
-    # downpour as in sunshine — it only thinned in proportion to everyone
-    # else, never faster. A stray takes cover long before a commuter with an
-    # umbrella does, so its share collapses as the rain builds and the odds
-    # it gave up go back to the people still out.
-    dog_share = 0.07 * max(0.0, 1.0 - 1.35 * min(1.0, rain))
     r = random.random()
-    if r >= 1.0 - dog_share:
-        return "dog"
-    # Re-normalise what's left so the people keep their 46:25:22 split at any
-    # dog share — the stray's odds go back to the crowd, they don't reshuffle
-    # it. Keeping the dog at the TOP of the range means a dry street deals the
-    # exact same kind for the exact same draw as before this change.
-    rest = r / max(1e-6, 1.0 - dog_share)
-    if rest < 0.46 / 0.93:
+    if r < 0.46:
         return "stroller"
-    if rest < 0.71 / 0.93:
+    if r < 0.71:
         return "kids"
-    return "elder"
+    if r < 0.93:
+        return "elder"
+    return "dog"
 
 
 def _market_now(phase):
@@ -123,9 +110,9 @@ class SidewalkCrowd:
 
     def _spawn(self, scroll, phase):
         self._id += 1
+        kind = _pick_kind()
         rain = getattr(pr, "_CUR_RAIN", 0.0)
         snow = getattr(pr, "_CUR_SNOW", 0.0)
-        kind = _pick_kind(rain)
         variant = _fv.select_variant(
             _FAMILY[kind], _fv.slot_seed(self._id, _SALT[kind]),
             _fv.beat_for_phase(phase), _fv.weather_bucket(rain, snow))
