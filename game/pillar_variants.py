@@ -99,8 +99,11 @@ def draw_pine_trio(surf, peak_x, peak_y, palette, seed=0):
 _FLAG_COLORS = [(70, 140, 230), (245, 245, 245), (230, 70, 70), (80, 180, 90), (245, 210, 70)]
 
 
-def draw_prayer_flags(surf, x1, y1, x2, y2, n=7):
-    mx, my = (x1 + x2) // 2, max(y1, y2) + 14
+def draw_prayer_flags(surf, x1, y1, x2, y2, n=7, sag=14):
+    # `sag` is the rope's dip at mid-span. It defaults to the original fixed 14
+    # so the pillar-gap ornament path is unchanged; a long street span between
+    # two pagodas needs a deeper curve or the rope reads as a taut wire.
+    mx, my = (x1 + x2) // 2, max(y1, y2) + sag
     steps = 30
     pts = []
     for i in range(steps + 1):

@@ -2038,6 +2038,12 @@ def _roster_for(phase):
         return (_scene_quiet, _scene_rest, _scene_campfire)
     return (_scene_food_tea, _scene_sweeper, _scene_quiet, _scene_vendor)  # FIRST LIGHT — tea + brooms first
 
+# A strand longer than this is not strung at all. Real pillar spacing is
+# 340-343px in steady state and 431 at the top of the newbie ramp; the gaps
+# this excludes are the phantom-relief stretches, which run ~1366px.
+_BUNTING_MAX_SPAN = 520
+
+
 def _overhead_busy(world_x, phase):
     """True unless the owning block's personality is one of the quiet/green/works
     lows. The hanging decorations (bunting, lantern garland) used to draw
@@ -2056,11 +2062,34 @@ def _dressing(surf, w, scroll, pal, phase):
     # entry: the strand scrolls in/out span-by-span instead of the whole row
     # flashing at the phase-window edge.
     bunting_win = (p >= 0.924 or p < 0.416)                      # daytime bunting
-    for xl, xr, k in sp._garland_spans(scroll, w, period=149, x0=20):
-        if sp._slot_latch(('bunting',), k, lambda k=k: (
-                bunting_win and _overhead_busy(20 + k * 149, phase))):
-            draw_prayer_flags(surf, int(xl), GROUND_Y - 118,
-                              int(xr), GROUND_Y - 116, n=5)
+    # The strand hangs pagoda to pagoda. It used to ride its own 149px lattice,
+    # which put both ends in open sky — nothing in the street reaches y477 (the
+    # tallest lamp tops at 503), so every span visibly terminated in mid-air.
+    # The pillars are the only thing at this height, and they share the street's
+    # scroll axis exactly (both at mult 1.0 off bg_scroll), so a rope tied to
+    # them never drifts. Ends sit level now: two pagodas are the same height, so
+    # the old 2px tilt — an artifact of arbitrary lattice endpoints — is gone.
+    anchors = signal('pillar_anchors', ())
+    for (idx, ax), (_, bx) in zip(anchors, anchors[1:]):
+        span = bx - ax
+        # Too far apart to string: phantom-relief stretches (clown gauntlet,
+        # cycle finale) leave ~1366px between VISIBLE pillars. Skipping leaves
+        # the rope ending at the previous pagoda rather than crossing the void.
+        if not 0 < span <= _BUNTING_MAX_SPAN:
+            continue
+        # Pillars are tracked well past both screen edges, so ~5% of pairs are
+        # wholly off-view; the lattice this replaced culled for free.
+        if bx < -10 or ax > w + 10:
+            continue
+        if not sp._slot_latch(('bunting',), idx, lambda ax=ax, span=span: (
+                bunting_win and _overhead_busy(scroll + ax + span * 0.5, phase))):
+            continue
+        # Flag pitch and rope dip track the span, so the 72px warren gauntlet
+        # doesn't become solid cloth and a 341px street span doesn't read taut.
+        n = max(2, min(12, round(span / 30.0)))
+        draw_prayer_flags(surf, int(ax), GROUND_Y - 118,
+                          int(bx), GROUND_Y - 118, n=n,
+                          sag=int(max(10.0, min(34.0, span * 0.09))))
     sp._latch_prune(('bunting',))
     # Exactly one hanging layer is possible at any hour: this window is the
     # complement of the bunting's, so the street wears cloth flags by day and

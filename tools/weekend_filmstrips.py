@@ -17,7 +17,7 @@ import pygame
 pygame.init()
 pygame.display.set_mode((1, 1))
 
-from game.config import W, H, GROUND_Y                      # noqa: E402
+from game.config import W, H, GROUND_Y, PIPE_W              # noqa: E402
 from game import biome as _biome                            # noqa: E402
 from game import foreground                                 # noqa: E402
 from game import foreground_promenade as pr                 # noqa: E402
@@ -26,6 +26,7 @@ from tools._family_showcase import (_build_background, _draw_pillars,  # noqa: E
                                     _gold_coin, _font)
 
 CYCLE = 393.5
+_PILLAR_SPACING = 341        # measured steady-state pillar pitch
 
 # (t, chapter label, extra signal overrides)
 CHECKPOINTS = [
@@ -68,8 +69,16 @@ def _frame(t, extra):
     foreground.reset_street()
     crowd = SidewalkCrowd()
     foreground.set_crowd(crowd)
+    # The prayer-flag row hangs between gameplay pillars, which this harness
+    # does not simulate — without anchors the sheet would show a bare sky and
+    # misrepresent the build. Synthesise a steady-state pillar row (the measured
+    # 341px spacing) so the daytime frames show the bunting as it really ships.
+    first = int((scroll - 400) // _PILLAR_SPACING)
+    anchors = tuple((k * _PILLAR_SPACING,
+                     int(k * _PILLAR_SPACING - scroll) + PIPE_W // 2)
+                    for k in range(first, first + int((W + 800) / _PILLAR_SPACING) + 2))
     sig = dict(clown_active=False, newbie_calm=t < 19.0, score=int(t),
-               near_misses=0, finale_active=False,
+               near_misses=0, finale_active=False, pillar_anchors=anchors,
                wetness=_wetness(t), snow_cover=_snow_cover(t))
     sig.update(extra)
     foreground.set_world_signals(**sig)

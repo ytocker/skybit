@@ -19,6 +19,7 @@ from game.hud import HUD, _font
 from game import audio
 from game import play_log
 from game.config import BIRD_X, SCROLL_BASE, SPAWN_GRACE
+from game.config import PIPE_W
 
 # One persistent full-screen overlay reused for every play-scene tint
 # (slow-mo / KFC / ghost / hit-flash) so an active effect costs a fill+blit
@@ -1671,7 +1672,24 @@ class App:
                                        self.world.weather.wetness,
                                        self.world.weather.snow_cover)
         w = self.world
+        # Anchor points for the street's prayer-flag bunting, as plain numbers so
+        # the street still never touches a gameplay object. int(p.x) is the exact
+        # integer the pillar blits at, so a rope end is pixel-locked to the pagoda
+        # rather than a frame off. Phantoms are invisible and must not anchor a
+        # rope; the menu draws no pillars at all AND scrolls its pipes at half the
+        # background rate, so it publishes nothing and the row simply stays down.
+        #
+        # The first element is a per-pillar identity for the street's span latch.
+        # It is world x, not spawn_index: only the phantom and clown-route paths
+        # assign spawn_index, so every ordinary pillar carries the default 0 and
+        # would collide. Pillars and the background share one scroll axis, which
+        # makes x + bg_scroll constant for a pillar's whole life (measured drift
+        # 1e-9 px over 321 pillars).
+        anchors = () if self.state == STATE_MENU else tuple(
+            (int(p.x + w.bg_scroll), int(p.x) + PIPE_W // 2)
+            for p in w.pipes if not p.is_phantom)
         foreground.set_world_signals(
+            pillar_anchors=anchors,
             clown_active=bool(w.clown_event is not None
                               and w.clown_event.phase in ("enter", "rolling")),
             newbie_calm=w.pipes_spawned < 5,
