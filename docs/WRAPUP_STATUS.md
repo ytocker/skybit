@@ -26,8 +26,14 @@ thousand lines of already-written, already-tested store code from dead weight in
 game's retention loop. **Nothing else in this document has that ratio. Do them first, do
 them alone, and verify in a real browser before touching anything else.**
 
-After that, three things stand between here and "shipped": real per-user identity (which
-is what "coins per user" actually requires), a PWA shell, and deploy wiring.
+After that, the thing standing between here and "shipped" is **durable identity** — the
+one requirement behind "coins counted per user," and the one the current architecture
+cannot satisfy at all. Browser-written storage is erased by iOS Safari after seven days
+away, taking the player's ID with it, which makes a server-side copy of the data useless
+on its own. The fix is a server-set cookie on a real domain, and it is why these games
+have their own domain in the first place. See *The player record*.
+
+Alongside that: a PWA shell and deploy wiring.
 
 ---
 
@@ -90,31 +96,31 @@ file — which is why this has gone unnoticed.
 **Fix.** Add the two missing cases, mirroring the `ach_load` / `ach_save` pattern already
 in that file. The Python side needs no change; it already speaks this protocol.
 
-### 3. No real per-user identity — P1
+### 3. The player ID is not durable — P0 for the link
 
-Identity today is a UUID in `localStorage`. There is no auth. The `profiles` table is
-anon-key read/write with an unconditional check — the schema's own comment concedes that
-any client can read or overwrite any row, and that true per-account isolation requires
-real auth.
+Identity today is a UUID written by JavaScript into `localStorage`, with no server
+involvement. The `profiles` table is anon-key read/write with an unconditional check — the
+schema's own comment concedes that any client can read or overwrite any row.
 
-**Impact.** This is the actual blocker on "coins counted per user." A rewritable
-browser-local UUID is not a user. It is lost on clearing site data, in private windows,
-and on every other device.
+**Impact.** This is the actual blocker on "coins counted per user," and it is worse than
+it looks. Script-written storage — `localStorage`, IndexedDB, `document.cookie` — is
+**deleted by iOS Safari after seven days without a visit**. No clearing, no private mode,
+no user action: a casual player who returns after two weeks is wiped.
 
-**Fix.** Supabase anonymous sign-in, which yields a durable user and a JWT claim usable in
-row-level security. Keep the existing UUID purely as a migration key. Later, linking an
-email or Google identity upgrades that same user in place, so no data migration is needed
-to add real accounts.
+And because the *ID* is stored the same fragile way as the data, putting the data on a
+server does not help on its own. The row survives; nobody can prove it's theirs. An
+orphaned row and a lost player are the same outcome.
 
-### 4. The wallet has no cloud sync — P1
+**Fix.** A server-set cookie on a real first-party domain. See *The player record*.
 
-Achievements sync to Supabase. The wallet does not. Even the working native wallet is
-device-local and dies with the device.
+### 4. The record has nowhere durable to live — P0 for the link
 
-**Fix.** A sync mirroring the achievements one: push on change, pull at boot. The merge
-rule matters more than the transport — take the higher balance and the **union** of owned
-items, never "server wins," which would wipe purchases made during an offline session.
-Sync stays best-effort and must never block a purchase.
+Achievements mirror to Supabase; the wallet does not. But the deeper issue is that there
+is no server-held record at all — only browser-local copies with a best-effort backup,
+reachable solely from the browser that wrote them.
+
+**Fix.** Make the server the source of truth and the browser a cache, rather than syncing
+two peers. See below.
 
 ### 5. No app packaging exists — P0 for the app track
 
@@ -149,129 +155,126 @@ wiring. Do not simply delete either side.
 
 ## The player record
 
-The requirement is one durable, traceable record per player: how many coins they have, how
-they got them, what they've unlocked, what they've bought — surviving reloads, reinstalls
-and second devices. This section is the design for that, and it is the part of the wrap-up
-with the most subtlety in it.
+The requirement, stated plainly: **a player opens the link, plays, leaves, comes back a
+month later on the same device, and their coins, purchases and achievements are still
+there — having never signed up, never been prompted, never been asked to remember
+anything.**
 
-### The core problem: a balance cannot be merged
+This is a solved, ordinary pattern for casual web games. It is also not achievable with
+the architecture the game has today, for a reason that is easy to miss.
 
-`store_data.py` stores `wallet` as a plain integer. That is the natural thing to write and
-it is not safely synchronisable. Two devices, both offline:
+### Why browser storage alone cannot do it
 
-- Device A earns 100. Its wallet says 100.
-- Device B spends 100 on a skin. Its wallet says 0.
+Everything the game currently persists is written by JavaScript: `localStorage`, and
+`document.cookie` if it were used. **iOS Safari deletes all script-written storage after
+seven days without a visit.** Not on clearing data, not in private mode — automatically,
+for an ordinary player who simply didn't come back that week.
 
-When they sync, there is no rule that recovers the truth. Take the higher value and the
-purchase was free. Take the lower and the earnings vanish. Take the most recent and the
-answer depends on clock skew. **A mutable balance carries no information about how it got
-there, so no merge function can be correct.**
+The trap is that this applies to the *player's ID* as much as to the data. Move the data
+to a server and the row survives, but the returning player can no longer prove which row
+is theirs. An orphaned row and a wiped player are indistinguishable from the player's
+side.
 
-`achievements.py` already solves this, and it is the reason that record should not be
-treated as dead code. It never stores a balance. It stores two grow-only counters —
-lifetime coins earned, lifetime coins spent — and derives:
+So the durability problem is not "where does the data live." It is **"what carries the
+identity, and does that thing survive."**
 
-```
-balance = coins_earned − coins_spent
-```
+### What works: a server-set cookie on your own domain
 
-Both inputs only ever increase, so merging is well-defined: take the element-wise maximum
-of each counter and re-derive. The result is order-independent, safe to apply twice, and
-cannot be corrupted by a replayed sync. The same file already applies the matching rules
-to the rest of the record: unlocked achievements and owned items are grow-only sets merged
-by union on earliest timestamp, and equipped slots are a mutable choice resolved
-last-write-wins. That is the right model. It is simply not the one the store uses.
+A cookie set by a **server**, via a `Set-Cookie` response header on a genuine first-party
+domain, is exempt from the seven-day cap. It persists up to **400 days** — the ceiling
+Chrome enforces too, so that is the practical maximum everywhere.
 
-**So the unification runs in the direction opposite to what it first appears:** keep
-`store_data.py`'s UI wiring and catalog integration, adopt `achievements.py`'s ledger
-semantics, and collapse both into a single record under a single storage key with a single
-sync path.
+Crucially, **the cookie is refreshed on every visit**, so the clock restarts each time the
+player returns. Only continuous absence beyond the cap loses it. A month away is nothing.
 
-### Counting per device, not just per record
+This is why these games have their own domain. It is not branding. On a shared host such
+as `*.github.io`, the game shares an origin with every other project on that host and
+cannot own its cookie properly. **A domain is a functional prerequisite of durable
+identity, not a polish item.**
 
-Element-wise maximum has one known flaw: concurrent earning under-counts. Earn 50 on a
-phone and 50 on a laptop while both are offline, and the merge yields 50, not 100.
+### The design
 
-The fix is small — key each counter by install rather than keeping one number:
+1. **A real domain**, over HTTPS.
+2. **One small serverless endpoint.** On a request with no cookie it mints a UUID and
+   replies with `Set-Cookie: player=<uuid>; Max-Age=<400d>; HttpOnly; Secure;
+   SameSite=Lax`. Every subsequent request carries it automatically, with no client code
+   involved. `HttpOnly` also means page scripts cannot read or forge it.
+3. **The server holds the record** — coin balance, owned items, equipped slots,
+   achievements, lifetime stats — keyed by that ID.
+4. **The game fetches on load and writes on change** through that endpoint.
+5. **`localStorage` becomes a cache only.** It makes startup instant and keeps the game
+   playable offline, but it is never the source of truth. When the two disagree, the
+   server wins.
 
-```
-coins_earned: { install_a: 120, install_b: 50 }   →  total = 170
-```
+The player's experience is that the link simply remembers them. No login, no prompt, no
+code to keep.
 
-Merge by taking the max per install, then summing. Concurrent earning on different devices
-now adds up correctly, and the merge keeps every property that made the simple counter
-safe. This is a standard grow-only counter and it costs a few lines over the naive version.
+### What this simplifies
 
-The bias is worth stating plainly: this design can **under**-credit in exotic cases and can
-never **over**-credit. For a cosmetics economy that is the correct direction to err.
+The earlier draft of this document designed for two peer copies reconciling — merge rules,
+grow-only counters, per-install accounting, last-write-wins on equips. **With one
+server-held record, none of that is needed.** There is a single copy and a single writer,
+so there is nothing to merge.
 
-### Traceability: the ledger
+Two things are still worth keeping from that thinking:
 
-Counters give a correct total but no history, and the ask includes seeing how a balance was
-arrived at. Add an append-only ledger table keyed by user: timestamp, kind
-(`run_reward` / `daily` / `purchase` / `grant`), delta, item id, and the run it came from.
+- **Derive the balance from an append-only ledger** rather than storing a mutable integer.
+  Each credit and debit is a row — `+120 run_reward`, `+75 daily`, `−280 purchase`. Balance
+  is their sum. This is how financial systems work, and it buys the traceability the brief
+  asked for: a player-facing history, a reconstructable balance when something goes wrong,
+  and real source/sink data for tuning the economy. A bare integer discards all of that the
+  moment it is wrong.
+- **Idempotency keys on writes.** A run ends, the network retries, the player is credited
+  twice. Each transaction carries a client-generated id and the server ignores repeats.
+  Non-optional once writes cross a network.
 
-That buys three things at once:
+### Honest limits
 
-- **A player-facing history** — "where did my coins go" answered in-game.
-- **An independent check.** The server can sum the ledger and compare it to the client's
-  reported balance. Drift is then *visible* without being *enforced* — consistent with the
-  client-authoritative decision, because the ledger is an audit log, not a gate.
-- **Economy tuning data.** Sources and sinks, per player, over time — which is exactly
-  what the balance pass needs and what the analytics dashboard can already consume.
+These apply to every no-login game, including the ones this pattern is modelled on:
 
-Run earnings are in fact already traceable: the `plays` table records per-run coins today.
-Purchases are the missing half.
+- **A different browser or device is a different player.** Cookies don't travel. Only a
+  login fixes this, and a login is out of scope by decision.
+- **Clearing cookies loses the record.** That is a deliberate act and rare — unlike
+  Safari's automatic seven-day purge, which is the failure actually worth engineering
+  against.
+- **Private windows start fresh every time.**
 
-### Identity: what makes it *per user*
+For a free game with a cosmetic-only economy these are acceptable. What is not acceptable
+is silent loss for a player who did nothing wrong, and the server cookie removes exactly
+that case.
 
-Everything above still sits behind a rewritable browser-local UUID, which is per browser
-profile, not per person. Supabase anonymous sign-in replaces it with a durable user and an
-id usable in row-level security, so each player's row is genuinely theirs — closing the
-hole the current schema comment openly documents. Linking an email or Google identity later
-upgrades that same user in place, so adding real accounts needs no data migration and no
-re-keying of anything described here.
+Two hedges worth taking anyway, both free:
 
-### The reset hazards — "erased when the game loads"
+- **Offer a backup link at a moment of investment** — after a first purchase or a
+  milestone, never at first launch. One tap to copy a URL carrying the ID. Most players
+  will never see it; it exists for the invested few. Do not *ask* players to save anything.
+- **Keep re-earning fast.** A wipe should be a shrug, not a reason to quit. This argues
+  against long grinds at the top of the price curve while durability is imperfect.
 
-This is worth being precise about, because the failure the user is guarding against is
-already latent in the code and the coin fix is about to make it live.
+### Where to run it
 
-`store_data`'s load and save are asymmetric. Save refuses to write when the bridge is
-absent. **Load does not — it returns a fresh default state on any failure**, and the module
-caches that for the rest of the session. So a single transient failure to read produces a
-zeroed wallet in memory, and the very next mutation persists those zeros over the player's
-real data. Today nothing calls the mutation path, so the bug is dormant. Wiring the coin
-faucet arms it.
+**Cloudflare Workers** is the natural home: 100k requests/day free, and no auto-pause.
+**Supabase Edge Functions** also work (500k invocations/month free) and the project is
+already on Supabase — but free Supabase projects pause after seven days without traffic,
+which would silently take the game offline unless a scheduled ping keeps them warm. This
+repo already runs GitHub Actions, so that ping is cheap if this route is taken.
 
-The rules that close this class of bug:
+Either way the running cost is zero. The domain, roughly $10–15/year, is the only real
+expense in the whole design — and it is the part that buys the durability.
 
-1. **Distinguish "empty" from "failed to load."** Only the first may be saved over. A
-   failed read must mark the record unsafe to write and retry, never silently substitute
-   defaults.
-2. **Never let a blank record overwrite a populated one** — locally or in the cloud. A
-   fresh install syncing before its first pull must not clobber the server copy.
-3. **Merge on pull, never replace.** With the semantics above this is safe by
-   construction; with a mutable balance it never is.
-4. **Degrade, don't destroy.** Blocked storage — private windows, cleared site data — must
-   fall back to in-memory for the session rather than writing a reset.
-5. **Migrate additively.** Unknown fields from a newer build are preserved, not dropped, so
-   a player moving between builds doesn't lose progress. The existing coercion already
-   drops unknown keys; that becomes a hazard the moment two versions are live at once.
+### Sequence
 
-### What this looks like in sequence
+1. **Register the domain and point the deploy at it.** A prerequisite, not polish.
+2. **Stand up the identity endpoint** — mint and refresh the cookie, read and write the
+   record.
+3. **Fix the web bridge** (gap 2) so the client can persist at all.
+4. **Wire the coin faucet** (gap 1) — after step 2, so coins are born durable instead of
+   being migrated later.
+5. **Move the record server-side**, with `localStorage` demoted to a cache.
+6. **Add the ledger and the in-game history view.**
 
-1. Fix the web bridge so the record persists at all (gap 2). Nothing below is observable
-   until this lands.
-2. Wire the coin faucet (gap 1) — but apply hazard rule 1 first, or the faucet's first
-   write can zero a wallet.
-3. Collapse the two records into one, on the counter-and-ledger model.
-4. Add anonymous auth and per-user row-level security.
-5. Sync the unified record, merging on pull.
-6. Add the ledger table and the in-game history view.
-
-Steps 1 and 2 are the fifteen-line fix. Steps 3 through 6 are the actual per-user system,
-and they are worth doing in that order — each is safe to ship on its own.
+Steps 3 and 4 remain the fifteen-line fix and can ship before the rest. Doing step 1 and 2
+first is what makes them permanent rather than provisional.
 
 ---
 
@@ -281,21 +284,30 @@ and they are worth doing in that order — each is safe to ship on its own.
 
 **Goal:** a public URL good enough to submit to a casual-games portal.
 
-1. Wire this branch into the deploy workflow.
-2. Build the PWA shell — manifest, icons, service worker, portrait lock.
-3. Fix boot UX. The real review risk is not file size, it is the Python-runtime boot
+1. **Register the domain and deploy to it.** Everything durable depends on this, and it is
+   also what makes the URL shareable as a product rather than a project path.
+2. Wire this branch into the deploy workflow.
+3. Build the PWA shell — manifest, icons, service worker, portrait lock. Installing also
+   exempts the game from Safari's storage purge, so this hardens identity as well.
+4. Fix boot UX. The real review risk is not file size, it is the Python-runtime boot
    pause. A loading screen that looks like a hang fails review regardless of correctness.
    Measure time-to-interactive on a mid-range Android before submitting.
-4. Submit. **CrazyGames first** — open intake, review in a day or two, non-exclusive, so
+5. Submit. **CrazyGames first** — open intake, review in a day or two, non-exclusive, so
    it forecloses nothing. **Poki is invite-only**; apply in parallel and do not sequence on
    it.
 
-**Known risk:** GitHub Pages cannot set COOP/COEP headers. Confirm the build does not need
-them; if it does, repoint the existing Netlify workflow at this branch rather than
-standing up new infrastructure. Portals may also need the Supabase host allowlisted.
+**Known risks.** GitHub Pages cannot set custom headers, which matters both for COOP/COEP
+(confirm the build doesn't need them) and for the identity endpoint, which must live
+somewhere that can set cookies — a Worker or an edge function, not the static host.
+Portals may also need the backend host allowlisted.
 
-**Shipped means:** a stable URL, installable, that survives a hard reload with the
-player's coins and purchases intact, submitted to at least one portal.
+Note that on a portal the game is framed under *their* domain, so the cookie is theirs to
+scope, not yours. Portal traffic should use the portal's own account and cloud-save SDK
+where one exists; your domain remains the durable home for direct traffic.
+
+**Shipped means:** a stable URL on your own domain that a player can leave for a month,
+return to, and find their coins and purchases intact — verified on iOS Safari, not just
+desktop Chrome.
 
 ### Track B — the app
 
@@ -314,7 +326,13 @@ account is a one-time $25.
 
 ---
 
-## Two judgement calls worth recording
+## Three judgement calls worth recording
+
+**No accounts, ever — durability comes from the cookie, not from a login.** Asking a
+casual player to sign up, or to save a restore code, is friction they will not accept and
+a responsibility they will not take. The server-set cookie delivers the "it just remembers
+me" behaviour without either. A backup link exists only as an opportunistic offer to
+already-invested players, never as a step anyone is walked through.
 
 **Client-authoritative wallet, server-durable.** Coins buy cosmetics. There is no
 real-money path, no trading, no competitive advantage, and no leaderboard coupling.
@@ -342,23 +360,30 @@ project, not a wrap-up step.
 | A2 | Coin faucet | Wallet can grow | `game/scenes.py`, `tests/` | S | **P0** | A1 |
 | A3 | Daily reward | A reason to return | `game/store_hub.py`, `game/scenes.py` | S | P0 | A2 |
 | A4 | Load/save hazard guard | A failed read can't zero a wallet | `game/store_data.py` | S | **P0** | before A2 |
-| A6 | Unify the player record | One record, counter + ledger model | `store_data.py`, `achievements.py` | M | P1 | A2 |
-| C4 | Coin ledger + history view | Traceable balance | schema, store UI | M | P1 | C1 |
-| A5 | Economy balance pass | Earned, not grindy | `game/store_catalog.py`, `config.py` | M | P0 | A2 |
+| A5 | Economy balance pass | Earned, not grindy | `game/store_catalog.py`, `config.py` | M | P0 | A2, C2 |
 | B1 | Deploy wiring | Branch ships | `.github/workflows/pages.yml` | S | **P0** | — |
 | B2 | PWA shell | Installable, offline | `inject_theme.py`, new assets | M | **P0** | B1 |
 | B3 | Boot UX | Survives portal review | `inject_theme.py` | M | P0 | B2 |
 | B4 | Portal submission | Live on CrazyGames | — (ops) | S | P1 | A, B |
-| C1 | Anonymous auth + RLS | Real per-user identity | `inject_theme.py`, schema | M | P1 | — |
-| C2 | Wallet cloud sync | Survives device loss | `game/store_data.py` | M | P1 | C1 |
-| C3 | Close the `profiles` hole | Per-row isolation | schema | S | P1 | C1 |
+| C0 | **Register the domain** | Durable identity is possible at all | DNS, deploy target | S | **P0** | — |
+| C1 | Identity endpoint | Cookie minted + refreshed server-side | new serverless fn | M | **P0** | C0 |
+| C2 | Server-held record | One source of truth | `store_data.py`, `achievements.py`, schema | M | **P0** | C1 |
+| C3 | Retire the anon-key tables | Close the open-row hole | schema | S | P1 | C2 |
+| C4 | Ledger + history view | Traceable balance | schema, store UI | M | P1 | C2 |
+| C5 | Backup link offer | Safety valve for the invested | store UI | S | P2 | C1 |
 | D1 | TWA + Play listing | The app | new shell | M | P1 | B2 |
-| E | Account upgrade | Portable identity | auth layer | L | P2 | C1 |
 
-**Sequence:** A1 → A4 → A2 first, alone — A4 goes before A2, because the faucet's first
-write is what arms the reset hazard. Then the rest of A and all of B in parallel. C is
-independent of both and should land after A is verified. A6 and C4 together are the
-per-user record described above. D follows B2. E is later.
+**Sequence:** A1 → A4 → A2 first and alone — A4 before A2, because the faucet's first write
+is what arms the reset hazard. That is the fifteen-line fix and it is worth shipping on its
+own to see the store come alive.
+
+In parallel, **C0 and C1 are the real unlock for the link version** and should start
+immediately, because the domain has lead time and everything durable depends on it. C2
+then moves the record server-side; once it lands, the browser copy is only a cache and the
+seven-day problem is gone.
+
+B runs alongside throughout. A5 waits for both A2 and C2, since tuning an economy against
+telemetry needs the telemetry to be attributable to durable players. D follows B2.
 
 ### On the balance pass
 
@@ -371,7 +396,14 @@ is a healthy first-unlock curve to start from.
 
 ## Not worth doing
 
+- **Accounts, logins, or an OAuth provider** — ruled out by decision; the cookie covers it.
+- **Asking players to save a restore code** — a casual player will not, and should not have
+  to. Offer a backup link to the already-invested; never make it a step.
+- **Cross-device sync, and the merge machinery it implies** — it requires a login, which is
+  out of scope. One device, one record, no merge.
 - **Server-validated coin earning** — see the judgement call above. Revisit only on IAP.
+- **Device fingerprinting to recover a lost ID** — unreliable, privacy-hostile, and it
+  would fail portal and store review.
 - **iOS, Capacitor, Electron, Tauri** — not this pass.
 - **Rewriting the anti-cheat** — it correctly scopes itself to the leaderboard.
 - **Per-coin autosave** — a storage write per pickup, on the hot path.
@@ -405,3 +437,17 @@ Verification for the economy work is specifically a **browser** test: play a run
 coin count, die, open the store, confirm the balance rose by exactly that much, buy
 something, then **hard-reload** and confirm it all survived. Native passing proves nothing
 here — native already worked.
+
+Verification for the identity work has to be done where it actually fails. Desktop Chrome
+will pass whatever you build, because its storage is not evicted; it proves nothing. The
+real tests are:
+
+- **iOS Safari, after the purge window.** Play, leave for more than seven days, return.
+  Everything should still be there. This is the test the whole design exists to pass, and
+  it cannot be shortcut — though you can approximate it by clearing script storage while
+  leaving cookies intact.
+- **Cookie present and durable.** Confirm the cookie is `HttpOnly` and `Secure`, that page
+  scripts cannot read it, and that its expiry is pushed forward on each visit.
+- **Cold load.** A browser with no cookie gets a fresh ID and a clean record — and a
+  browser with one never gets a fresh ID by accident. Silently minting a second ID for an
+  existing player is the failure mode that looks exactly like data loss.
