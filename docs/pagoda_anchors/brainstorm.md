@@ -85,3 +85,18 @@ read as "the street lamp, but taller" — the complaint in reverse.
 ## Designer's picks
 `sutra-stele` (slimmest, safest), `paifang-gate` (strongest narrative fix),
 `mini-to` (hero shot, highest risk).
+
+## Appendix — resolving the lamp collision (decided at integration)
+
+The post cannot move: it is pinned to the rope endpoint, and moving it
+re-creates the exact defect being fixed. So the lamp yields. Two options,
+measured over the 37399px lattice repeat (298 lamps, 252 post slots):
+
+| resolution | outcome |
+|---|---|
+| suppress the colliding lamp | **86/298 lamps deleted (28.9%)** at 22px clearance — a large loss of night light |
+| **nudge the colliding lamp** | all 86 resolve; **max shift 22px, mean 11.3px**; no lamp lost, no new lamp-to-lamp collision (>=40px kept) |
+
+Nudging wins: the shift is small enough to be invisible at this scale, it is
+a pure deterministic function of world x so it latches cleanly, and it keeps
+every `add_light_spot` the night lighting depends on.
