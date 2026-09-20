@@ -261,6 +261,21 @@ def draw_kid(surf, cx, base_y, v, night, t):
         pygame.draw.line(surf, _shade(sc, -28), (sr.left, sr.top), (cx - body_w * 0.4, body_y + 1), 1)
 
 
+    # ── HELD UMBRELLA (rain rows only) ────────────────────────────────────
+    # Same contract as ped_cast's: the canopy comes from the row's own
+    # palette and its size is derived from THIS figure's head radius, so a
+    # child's brolly scales down without a second set of numbers. Deferred
+    # import because the kit imports this module.
+    if "umbrella" in v.accessory:
+        from game import weekend_kit as _wkit
+        _ucol = pf(P.get("canopy", (236, 224, 210)))
+        _ur = int(head_r * 2.5)
+        _uy = hy - int(head_r * 2.7)
+        _usc = max(0.5, _ur / 8.0)
+        _wkit.draw_umbrella8(surf, hx, _uy, 0, night=0.0, scale=_usc,
+                             pole_len=max(6, int((hy - (_uy + 1)) / _usc)),
+                             wind=0.5, color=_ucol)
+
 # ── ELDERS — robe/padded body, outline built from stance + accessory (~16-18px) ─
 ELDER_H = 17
 
@@ -477,6 +492,21 @@ def draw_elder(surf, cx, base_y, v, night, t):
             pygame.draw.circle(surf, grn, (int(br.left + bwid * gx), br.top), 1)
 
 
+    # ── HELD UMBRELLA (rain rows only) ────────────────────────────────────
+    # Same contract as ped_cast's: the canopy comes from the row's own
+    # palette and its size is derived from THIS figure's head radius, so a
+    # child's brolly scales down without a second set of numbers. Deferred
+    # import because the kit imports this module.
+    if "umbrella" in v.accessory:
+        from game import weekend_kit as _wkit
+        _ucol = pf(P.get("canopy", (236, 224, 210)))
+        _ur = int(head_r * 2.5)
+        _uy = hy - int(head_r * 2.7)
+        _usc = max(0.5, _ur / 8.0)
+        _wkit.draw_umbrella8(surf, hx, _uy, 0, night=0.0, scale=_usc,
+                             pole_len=max(6, int((hy - (_uy + 1)) / _usc)),
+                             wind=0.5, color=_ucol)
+
 # ── VENDORS — standing working cast, must read chest-up behind a counter ──────
 VEND_H = 17
 
@@ -673,6 +703,21 @@ def draw_vendor(surf, cx, base_y, v, night, t):
                         math.radians(0), math.radians(180), max(1, head_r // 3))
 
 
+    # ── HELD UMBRELLA (rain rows only) ────────────────────────────────────
+    # Same contract as ped_cast's: the canopy comes from the row's own
+    # palette and its size is derived from THIS figure's head radius, so a
+    # child's brolly scales down without a second set of numbers. Deferred
+    # import because the kit imports this module.
+    if "umbrella" in v.accessory:
+        from game import weekend_kit as _wkit
+        _ucol = pf(P.get("canopy", (236, 224, 210)))
+        _ur = int(head_r * 2.5)
+        _uy = hy - int(head_r * 2.7)
+        _usc = max(0.5, _ur / 8.0)
+        _wkit.draw_umbrella8(surf, hx, _uy, 0, night=0.0, scale=_usc,
+                             pole_len=max(6, int((hy - (_uy + 1)) / _usc)),
+                             wind=0.5, color=_ucol)
+
 # ── pools → foreground_variants rows ──────────────────────────────────────────
 _B = fv
 _BW_KID = {_B.BEAT_MARKET: 1.4, _B.BEAT_MORNING: 1.0, _B.BEAT_GOLDEN: 1.1,
@@ -684,12 +729,19 @@ _BW_VENDOR = {_B.BEAT_MARKET: 2.4, _B.BEAT_MORNING: 1.8, _B.BEAT_GOLDEN: 1.0,
 # A padded winter mass must never turn up on a warm market day — snow-only, zero
 # elsewhere (same gating idea as ped_cast's _WW buckets).
 _WW_SNOW = {_B.WB_CLEAR: 0.0, _B.WB_RAIN: 0.0, _B.WB_SNOW: 1.0}
+# Rain rows: the only ones eligible once it is raining (see _V's default, which
+# locks every ordinary row OUT of rain). Mirrors ped_cast's _WW_RAIN.
+_WW_RAIN = {_B.WB_CLEAR: 0.0, _B.WB_RAIN: 1.0, _B.WB_SNOW: 0.0}
+# An ordinary row is barred from RAIN only. Deliberately NOT a full clear-preset:
+# zeroing WB_SNOW too would empty these pools in the squall, where they are
+# currently the whole cast, and the snow look is not being changed here.
+_WW_DRY = {_B.WB_RAIN: 0.0}
 
 
 def _V(palette, *, pose=(), acc=(), attrs=None, bw=None, ww=None):
     return fv.Variant(palette=palette, pose=frozenset(pose), accessory=frozenset(acc),
                       attrs=dict(attrs or {}), beat_weights=dict(bw or {}),
-                      weather_weights=dict(ww or {}))
+                      weather_weights=dict(_WW_DRY if ww is None else ww))
 
 
 def _build_kids():
@@ -714,6 +766,18 @@ def _build_kids():
            pose=("run",), acc=("satchel",), attrs=dict(age=0.95), bw=_BW_KID),
         _V(dict(shirt=(232, 176, 96), pants=(68, 58, 50), hair=(44, 34, 28), hair_style="sidetails", skin="warm"),
            pose=("squat",), attrs=dict(age=0.35), bw=_BW_KID),
+        # RAIN — the only kid rows live once it is raining. Muted canopies so a
+        # brolly never out-reads the coin; ages kept low so the umbrella is
+        # comically oversized on the smallest of them.
+        _V(dict(shirt=(96, 140, 190), pants=(60, 54, 56), hair=(44, 34, 28), hair_style="bowl", skin="fair",
+                canopy=(150, 138, 102)),
+           pose=("run",), acc=("umbrella",), attrs=dict(age=0.5), bw=_BW_KID, ww=_WW_RAIN),
+        _V(dict(shirt=(200, 120, 110), pants=(64, 56, 50), hair=(50, 40, 32), hair_style="sidetails", skin="tan",
+                canopy=(116, 132, 150)),
+           acc=("umbrella",), attrs=dict(age=0.75), bw=_BW_KID, ww=_WW_RAIN),
+        _V(dict(shirt=(126, 166, 122), pants=(58, 52, 48), hair=(38, 30, 26), hair_style="tuft", skin="warm",
+                canopy=(176, 156, 120)),
+           pose=("tiptoe",), acc=("umbrella",), attrs=dict(age=0.4), bw=_BW_KID, ww=_WW_RAIN),
     ]
 
 
@@ -739,6 +803,17 @@ def _build_elders():
            acc=("fan",), attrs=dict(stance="seated", height=0.96, build=1.05), bw=_BW_ELDER),
         _V(dict(robe=(100, 96, 108), robe_dk=(62, 60, 70), fur=(216, 208, 194), sash=(186, 180, 160), hair=(208, 206, 198), skin="fair", head="cap", cap=(106, 88, 70), tea=(224, 218, 206)),
            acc=("teacup", "beard"), attrs=dict(stance="upright", height=0.98, build=1.12, padded=True), bw=_BW_ELDER, ww=_WW_SNOW),
+        # RAIN — an elder does not hurry, so the brolly is the whole costume
+        # change: the robe palette is the family's own, only the canopy is new.
+        _V(dict(robe=(92, 100, 132), robe_dk=(58, 64, 94), sash=(196, 184, 148), hair=(206, 204, 198),
+                skin="warm", head="bun", canopy=(150, 138, 102)),
+           acc=("umbrella", "beard"), attrs=dict(stance="upright", height=1.0, build=1.0), bw=_BW_ELDER, ww=_WW_RAIN),
+        _V(dict(robe=(106, 120, 106), robe_dk=(68, 82, 70), sash=(200, 178, 138), hair=(204, 202, 196),
+                skin="tan", head="cap", cap=(114, 92, 68), canopy=(116, 132, 150)),
+           acc=("umbrella",), attrs=dict(stance="upright", height=0.98, build=1.06), bw=_BW_ELDER, ww=_WW_RAIN),
+        _V(dict(robe=(112, 92, 82), robe_dk=(72, 56, 50), sash=(192, 168, 130), hair=(208, 206, 198),
+                skin="deep", head="bun", canopy=(176, 156, 120)),
+           acc=("umbrella", "beard"), attrs=dict(stance="upright", height=0.96, build=1.1), bw=_BW_ELDER, ww=_WW_RAIN),
     ]
 
 
@@ -764,6 +839,17 @@ def _build_vendors():
            acc=("rolled", "towel"), attrs=dict(pose="wok", height=0.98, build=1.16), bw=_BW_VENDOR),
         _V(dict(shirt=(112, 128, 96), shirt_dk=(72, 88, 62), apron=(208, 198, 176), pants=(62, 58, 48), hair=(44, 34, 28), skin="ruddy", hat="cloth", hat_c=(148, 104, 88)),
            acc=("rolled",), attrs=dict(pose="weigh", height=0.96, build=1.22), bw=_BW_VENDOR),
+        # RAIN — a vendor keeps working, so the brolly is wedged over the stall
+        # while the free hand still calls/ladles. Poses reuse the shipped set.
+        _V(dict(shirt=(138, 92, 78), shirt_dk=(96, 60, 50), apron=(208, 196, 174), pants=(66, 58, 50),
+                hair=(46, 36, 30), skin="tan", hat="none", canopy=(150, 138, 102)),
+           acc=("umbrella", "rolled"), attrs=dict(pose="call", height=1.0, build=1.06), bw=_BW_VENDOR, ww=_WW_RAIN),
+        _V(dict(shirt=(80, 118, 118), shirt_dk=(50, 80, 80), apron=(202, 192, 172), pants=(62, 56, 48),
+                hair=(40, 32, 28), skin="warm", hat="none", canopy=(116, 132, 150)),
+           acc=("umbrella",), attrs=dict(pose="ladle", height=1.04, build=0.96), bw=_BW_VENDOR, ww=_WW_RAIN),
+        _V(dict(shirt=(146, 122, 76), shirt_dk=(100, 82, 50), apron=(206, 194, 170), pants=(62, 56, 46),
+                hair=(50, 40, 32), skin="deep", hat="none", canopy=(176, 156, 120)),
+           acc=("umbrella", "towel"), attrs=dict(pose="fan", height=0.98, build=1.14), bw=_BW_VENDOR, ww=_WW_RAIN),
     ]
 
 
