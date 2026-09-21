@@ -36,8 +36,8 @@ from game import foreground_props as sp
 from game import foreground_weekend as _wk
 from game import weekend_kit as _wkit
 from game import biome as _biome
-from game.config import (W, H, WEATHER_CROWD_RAIN_MIN, WEATHER_CROWD_SNOW_MIN,
-                         WEATHER_UMBRELLA_RAIN_AT)
+from game.config import (W, H, PIPE_W, WEATHER_CROWD_RAIN_MIN,
+                         WEATHER_CROWD_SNOW_MIN, WEATHER_UMBRELLA_RAIN_AT)
 from game.weather import rain_intensity, storm_intensity, wind_intensity
 from game.pillar_variants import draw_prayer_flags
 from game import foreground_zbuffer as _zbuf
@@ -1921,6 +1921,7 @@ def reset_run():
     global _CALM_UNTIL
     _CALM_UNTIL = -1.0
     _SIG.clear()
+    _BUNTING_ANCHORS.clear()
 
 
 def street_calm(t):
@@ -2042,6 +2043,14 @@ def _roster_for(phase):
 # 340-343px in steady state and 431 at the top of the newbie ramp; the gaps
 # this excludes are the phantom-relief stretches, which run ~1366px.
 _BUNTING_MAX_SPAN = 520
+# Below this a "span" is two anchors for what is really one pillar, not a gap
+# worth stringing; the tightest real spacing is the 72px clown warren.
+_BUNTING_MIN_SPAN = 40
+
+# {pillar world x -> its exact screen x while alive}. Outlives the pillars so a
+# rope always has a left-hand anchor; pruned once a slot is far enough left
+# that no rope reaching it could still be on screen.
+_BUNTING_ANCHORS: dict = {}
 
 
 def _overhead_busy(world_x, phase):
@@ -2069,26 +2078,51 @@ def _dressing(surf, w, scroll, pal, phase):
     # scroll axis exactly (both at mult 1.0 off bg_scroll), so a rope tied to
     # them never drifts. Ends sit level now: two pagodas are the same height, so
     # the old 2px tilt — an artifact of arbitrary lattice endpoints — is gone.
-    anchors = signal('pillar_anchors', ())
-    for (idx, ax), (_, bx) in zip(anchors, anchors[1:]):
-        span = bx - ax
+    # Anchors are REMEMBERED past their pillar's cull. A pillar lives only from
+    # x=420 to x=-66 — a 486px window against ~341px spacing — so 61% of frames
+    # have fewer than two alive at once, and one pillar cannot hold a rope up.
+    # Holding each anchor until its rope has left the screen is what keeps the
+    # row continuous; world x is invariant against bg_scroll, so a remembered
+    # anchor still maps to the right place long after its pillar is gone.
+    live_sx = {}
+    for wx, sx in signal('pillar_anchors', ()):
+        # A pillar's world x can round a pixel either way between frames, which
+        # would file the SAME pillar under two keys — a phantom 1px neighbour
+        # that makes its rope's length twitch. Snap onto the existing key.
+        if wx not in _BUNTING_ANCHORS:
+            near = next((k for k in _BUNTING_ANCHORS if abs(k - wx) <= 2), None)
+            if near is not None:
+                wx = near
+        _BUNTING_ANCHORS[wx] = sx
+        live_sx[wx] = sx
+    for wx in [k for k in _BUNTING_ANCHORS if k - scroll < -(_BUNTING_MAX_SPAN + 60)]:
+        del _BUNTING_ANCHORS[wx]
+    keys = sorted(_BUNTING_ANCHORS)
+    for wa, wb in zip(keys, keys[1:]):
+        span = wb - wa
         # Too far apart to string: phantom-relief stretches (clown gauntlet,
         # cycle finale) leave ~1366px between VISIBLE pillars. Skipping leaves
         # the rope ending at the previous pagoda rather than crossing the void.
-        if not 0 < span <= _BUNTING_MAX_SPAN:
+        if not _BUNTING_MIN_SPAN <= span <= _BUNTING_MAX_SPAN:
             continue
-        # Pillars are tracked well past both screen edges, so ~5% of pairs are
-        # wholly off-view; the lattice this replaced culled for free.
+        # A live pillar hands over the exact integer it blits at, so the rope
+        # end is pixel-locked to it; a remembered one is off-screen left, where
+        # a derived position is indistinguishable.
+        ax = live_sx.get(wa)
+        if ax is None:
+            ax = int(wa - scroll) + PIPE_W // 2
+        bx = ax + span
         if bx < -10 or ax > w + 10:
             continue
-        if not sp._slot_latch(('bunting',), idx, lambda ax=ax, span=span: (
-                bunting_win and _overhead_busy(scroll + ax + span * 0.5, phase))):
+        if not sp._slot_latch(('bunting',), wa, lambda: bunting_win):
             continue
         # Flag pitch and rope dip track the span, so the 72px warren gauntlet
         # doesn't become solid cloth and a 341px street span doesn't read taut.
+        # Both come off the WORLD spacing, which is exact: deriving them from
+        # the on-screen span made the rope breathe a pixel every frame, because
+        # the two pillars' int() truncations tick on different frames.
         n = max(2, min(12, round(span / 30.0)))
-        draw_prayer_flags(surf, int(ax), GROUND_Y - 118,
-                          int(bx), GROUND_Y - 118, n=n,
+        draw_prayer_flags(surf, ax, GROUND_Y - 118, bx, GROUND_Y - 118, n=n,
                           sag=int(max(10.0, min(34.0, span * 0.09))))
     sp._latch_prune(('bunting',))
     # Exactly one hanging layer is possible at any hour: this window is the

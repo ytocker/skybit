@@ -47,10 +47,13 @@ _LEAVE_STAGGER = 0.8      # seconds between departures when the street empties
 # Walk speeds, world px/s. Sign convention: <0 walks WITH the flow (nets faster
 # leftward on screen), >0 walks AGAINST it (upstream — still nets leftward, just
 # slower), 0 = standing (rides exactly world speed, i.e. planted).
-_PED_SPEED = (34.0, 66.0)
+# A stroll, not a commute: against a ~27px figure the old (34, 66) was
+# 1.3-2.4 body-heights a second — a run — and it slid the feet ~105px over the
+# ground per step of the (speed-independent) gait cycle.
+_PED_SPEED = (13.0, 26.0)
 # A stray ambles: the old (72, 140) dart made every dog re-cross the screen
 # several times, multiplying its perceived frequency well past its spawn share.
-_DOG_SPEED = (55.0, 100.0)
+_DOG_SPEED = (34.0, 62.0)
 
 
 class _Ent:
@@ -198,7 +201,7 @@ class SidewalkCrowd:
             # figure must stay pixel-locked to the paving (the planted
             # invariant), so the drift gates on the walk itself.
             if abs(e.walk_vel) > 1.0:
-                e.world_x -= speed * sdt * (0.0614, 0.092, 0.1227, 0.15)[
+                e.world_x -= speed * sdt * (0.031, 0.046, 0.061, 0.075)[
                     min(3, int(e.depth * 4.0))]
             e.gait += _GAIT_RATE[e.kind] * sdt
             if e.walk_vel < -1.0:
@@ -267,7 +270,7 @@ class SidewalkCrowd:
                 for e in self.near:
                     if e.kind != "dog":
                         e.wave = max(e.wave, 0.5)
-                        if e.state == "walk" and abs(e.walk_vel) > 20.0:
+                        if e.state == "walk" and abs(e.walk_vel) > 8.0:
                             e.walk_vel *= 0.5   # slow to see the flyer through
         # Departure choreography: when the street empties (a storm building, the
         # market closing), the surplus figures don't fade — one at a time, on a
@@ -277,7 +280,7 @@ class SidewalkCrowd:
             for e in self.near:
                 if e.state not in ("leaving", "dart", "watch_parade"):
                     e.state = "leaving"
-                    e.walk_vel = -random.uniform(66.0, 92.0)
+                    e.walk_vel = -random.uniform(30.0, 46.0)
                     e.facing = -1
                     e.timer = 1e9
                     self._leave_cd = _LEAVE_STAGGER
