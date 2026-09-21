@@ -2164,40 +2164,22 @@ def _festival_dressing(surf, w, scroll, pal, p):
                 _fest.draw_lantern_arch(s, sx, night, _CUR_T)
             _zbuf.enqueue(fy, TB_STRUCTURE, _arch)
     sp._latch_prune(('arch',))
-    # The plant: the scaffold stands dark and draped through the rain, roughly
-    # one block in three, so the player has seen the fire show's set before it
-    # lights.
-    plant_win = (0.483 <= p < 0.680)
-    for sx, k in sp._world_xs(scroll, w, _wk.BLOCK_PX, x0=402, margin=110):
-        on = sp._slot_latch(('firerig',), k, lambda k=k: (
-            plant_win and _mix32((k * 0xA24BAED4) ^ 0x1F7) % 3 == 0))
-        if on:
-            def _rig(s, sx=sx):
-                from game import festival as _fest
-                _fest.draw_scaffold(s, sx, night, _CUR_T, state='bare')
-            _zbuf.enqueue(fy, TB_STRUCTURE, _rig)
-    sp._latch_prune(('firerig',))
     # The residue: the festival hands the street back with evidence, not a
-    # fade — a cold smoking rig with a fresh scorch fan and swept masks on
-    # some blocks, a thinned-out speckle field with one mask on others.
+    # fade — the troupe's masks, swept aside and left where they fell. Nothing
+    # scorched: nothing on this street burns any more.
     res_win = (0.820 <= p < 0.924)
     for sx, k in sp._world_xs(scroll, w, _wk.BLOCK_PX, x0=402, margin=110):
         on = sp._slot_latch(('resid',), k, lambda k=k: (
             0 if not res_win else
-            {0: 1, 1: 2, 2: 3}.get(_mix32((k * 0xC13FA9A9) ^ 0x9E3) % 8, 0)))
+            {0: 1, 1: 2}.get(_mix32((k * 0xC13FA9A9) ^ 0x9E3) % 8, 0)))
         if on:
             def _res(s, sx=sx, mode=on):
                 from game import festival as _fest
                 if mode == 1:
-                    _fest.draw_scorch_fan(s, sx, night, decay=0.0)
-                    _fest.draw_scaffold(s, sx, night, _CUR_T, state='cold')
                     _fest.draw_dropped_mask(s, sx + 54, night)
                     _fest.draw_dropped_mask(s, sx - 62, night, flipped=True)
-                elif mode == 2:
-                    _fest.draw_scorch_fan(s, sx, night, decay=0.55)
-                    _fest.draw_dropped_mask(s, sx + 10, night)
                 else:
-                    _fest.draw_scorch_fan(s, sx, night, decay=0.9)
+                    _fest.draw_dropped_mask(s, sx + 10, night)
             _zbuf.enqueue(fy, TB_FIXTURE, _res)
     sp._latch_prune(('resid',))
 
@@ -2287,39 +2269,6 @@ def _place_scenarios(surf, w, scroll, pal, t, roster, density, x0=40):
             scene_fn(_emit, bx + jit, pal, t, r, _pick)
     sp._latch_prune(row)
 
-# ── the IRON FLOWER — the fire show, once per festival night ─────────────────
-# The rig rides the dragon's own parade-drift mechanic (+0.55x scroll), so the
-# 2.5 s burst cycle fits three times inside one dwell instead of once: the
-# player gets BURST -> DARK BEAT -> BURST rather than one burst glimpsed on
-# the way past. It draws HERE, in the promenade pass, because the sparks
-# belong behind the pillars, the coins and the bird — the near lane only adds
-# the spark-watch crowd in front.
-_FIRE_BEAT = (0.706, 0.727)
-_FIRE_DUR = 8.0
-
-
-def _festival_fire(surf, scroll, pal, phase, t, density):
-    from game import festival as _fest
-    p = phase % 1.0
-    if not (0.680 <= p < 0.820):
-        return
-    if density <= 0.20 or calm_now():
-        _fest.set_fire_state(None)
-        return
-    h = _wk.happening('festival_fire', _FIRE_BEAT, phase, t, _FIRE_DUR)
-    if not h:
-        _fest.set_fire_state(None)
-        return
-    k, _a = h
-    show_t = k * _FIRE_DUR
-    sx = int((W + 108) - k * (W + 216))
-    night = _nightf(pal)
-    _zbuf.enqueue(GROUND_Y - 1, TB_CAST,
-                  lambda s, sx=sx, show_t=show_t: _fest.draw_fire_show(
-                      s, sx, night, t, show_t))
-    _fest.set_fire_state((sx, show_t))
-
-
 def draw_promenade(surf, scroll, pal, phase, t):
     """Draw the promenade as a living day-arc: fixtures by phase, cast thinned by a
     crowd-density curve, and the whole street filling in from empty at run-start."""
@@ -2342,7 +2291,6 @@ def draw_promenade(surf, scroll, pal, phase, t):
     _dressing(surf, W, scroll, pal, phase)
     _place_scenarios(surf, W, scroll, pal, t, _roster_for(phase), density)
     _happenings(surf, scroll, pal, phase, t)
-    _festival_fire(surf, scroll, pal, phase, t, density)
     # A few souls shelter near the dressing (kiosk awnings / lamp posts) when the
     # open deck has emptied — keeps the street alive at the storm's worst.
     _shelter_figures(surf, W, scroll, pal, t)

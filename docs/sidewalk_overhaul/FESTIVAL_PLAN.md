@@ -1,6 +1,17 @@
 
 # FIRE-TREE NIGHT — the main event of the sidewalk
 
+> **STATUS — the Iron Flower was REMOVED from the game.** This plan is kept as
+> the design record of the festival, but its fire show no longer ships: the
+> 8-second act, the scaffold planted through the afternoon and storm, the
+> spark system, the doused apron, the spark-watch crowd and the dawn scorch
+> field are all gone. Everything else here — the dragon, the lion, the Monkey
+> King troupe, the stilt-walker, the market strips and spines, the lantern
+> arches, the dropped masks — still ships. Sections describing the fire are
+> marked REMOVED below and are history, not current behaviour. See
+> [`iron_flower/README.md`](./iron_flower/README.md) and its figure for what
+> it looked like.
+
 > *One night a year the weekend market puts on its fire: the town beats molten iron into a tree of sparks, walks its dragon down the promenade, and does the entire thing facing upward — because the party is for the bird in the sky.*
 
 Chapter 8 of `DAY_PLAN_WEEKEND.md`, elevated. Every other chapter stands exactly as approved.
@@ -41,8 +52,6 @@ Two concepts I developed and discarded:
 | When | Existing beat | The plant |
 |---|---|---|
 | **163.5 – 178 s** (Ch5, carts arrive) | `_cart_folded` handcarts roll in | **One cart carries a 16 px lump under a red cloth**, roped down. It is the dragon's head. It arrives 148 seconds before it dances, covered, and nobody looks at it. |
-| **178 – 190 s** (Ch5, frames up) | stalls at `openness` 0.35 | Among the stall skeletons, a **different frame goes up**: a squat timber scaffold with a straw-thatch splash board, ~54 px, clearly not a stall. It is the iron-flower wall. |
-| **236 – 273 s** (Ch6/7, storm) | tarps, shelter knots, `suoyi` figures | The scaffold **stands in the rain, dark and empty**, one block in three. A brazier crew shelters under it. The player has now seen the fire show's set three times before it lights. |
 
 ### How it winds down OUT of it
 
@@ -90,7 +99,7 @@ The **mid-deck spine** opens: a second row of stalls at `feet_y ≈ 616` between
 *Upward:* seven steam columns, and a child on the near deck lifted onto a shoulder.
 *Story:* maximum density lands at 285 s exactly as the approved curve demands. It is deliberately reached **before** any show, so the shows are relief rather than escalation.
 
-**t 286.1 – 292.4 | φ 0.727 – 0.743 — ★ SHOW SQUARE 1: THE IRON FLOWER**
+**t 286.1 – 292.4 | φ 0.727 – 0.743 — ~~SHOW SQUARE 1: THE IRON FLOWER~~ (REMOVED)**
 See §4. Stall density drops to **one** (a tea stall at the square's mouth); the block is a widened clear zone with the scaffold on the far deck and a 60-figure-equivalent dark crowd arc across the near deck, **all backs to us, all chins up.**
 Four bursts at 2.6 s intervals, the first landing 1.2 s after the scaffold enters frame.
 *Frame during a burst:* ~90 arcing 1-px sparks between y 595 and y 512, a doused-paving mirror under them, and every figure in the block rim-lit on its top edge for two frames.
@@ -155,7 +164,6 @@ The last festival-specific object the player sees is a **1-px scorch speckle fie
 | 0.685–0.695 | 269.5–273.5 | 4.0 | The flood |
 | 0.695–0.711 | 273.5–279.8 | 6.3 | Strip A — the roll call |
 | 0.711–0.727 | 279.8–286.1 | 6.3 | ★ Spine A — crest #1 |
-| 0.727–0.743 | 286.1–292.4 | 6.3 | ★ Iron flower |
 | 0.743–0.756 | 292.4–297.5 | 5.1 | Strip B + crossing + stilts |
 | 0.756–0.771 | 297.5–303.4 | 5.9 | ★ Monkey King's troupe |
 | 0.762–0.774¹ | 299.8–305.8 | 6.0 | ★ The lion |
@@ -202,7 +210,6 @@ The day plan's signature is *"3 lit stalls, 4 steam plumes."* A strip meets it a
 |---|---|---|
 | **Strip A** (6) | tea · steamer · grill · kiosk · cauldron · wok | — |
 | **Spine A** (8 + 5) | steamer · wok · tea · grill · cauldron · steamer · kiosk · wok | grill · tea · cauldron · kiosk · steamer |
-| **Iron flower** (1) | tea (at the square's mouth) | — |
 | **Strip B** (5) | cauldron · tea · grill · steamer · wok | — |
 | **Spine B** (8 + 4) | **wok·NOODLE** · tea · steamer · **kiosk·SUGAR** · grill · cauldron · **rack·TANGHULU** · steamer | kiosk · wok · tea · grill |
 | **Dragon route** (2) | tea · steamer *(both paused)* | — |
@@ -269,25 +276,15 @@ The existing `perf_lion_dance` is intact and unchanged: two dancers under one fl
 
 ---
 
-### ★ THE FIRE SHOW — 打铁花 THE IRON FLOWER · once, φ 0.727
+### ~~★ THE FIRE SHOW — 打铁花 THE IRON FLOWER~~ · **REMOVED**
 
-**Why this form.** The brief's hard constraint is the glow cap: nothing above 150 luma at night except the 230-luma coin. That rules out fire breathing (a big bright blob), fire poi (bright trails), and torch juggling (three bright points) — all of which need *raw brightness* to read as fire. **Datiehua needs none.** Its entire visual signature is **hundreds of individually dim sparks in ballistic motion** — molten iron struck against a wall, oxidising in air, blooming like a chrysanthemum and falling like a meteor shower. It reads hot through **count, motion, arc and afterimage**, which is exactly the axis the cap doesn't constrain. It is also a genuine 1,000-year-old Northern-Song intangible-heritage tradition invented by blacksmiths who couldn't afford fireworks — a poor town's fireworks, which is perfectly in character for this street.
+The molten-iron show that gave this plan its name no longer ships. It was cut
+whole: the act, the scaffold planted from φ0.483, the ballistic spark system
+and its y=512 ceiling, the rim-light pass, the doused apron, the two-person
+crew, the spark-watch crowd and the dawn scorch field. The full original spec
+is in this file's git history; the rendered record of all four of its states
+is [`iron_flower/states.png`](./iron_flower/states.png).
 
-**The apparatus.** A squat timber scaffold with a straw-thatch splash board (the "tree" the flowers are beaten against), ~54 px, far deck. Two crew: the **thrower** (long 22-px-handled willow scoop, over-shoulder throw on a 1.3 s wind-up) and the **striker** (willow bat, 1-frame contact at the arc's apex). Both in the historically correct soaked straw hat and sheepskin — a silhouette shared with nothing else in the game.
-
-**The burst, spec'd to the cap:**
-- 70–120 sparks per burst, each **1 px**, ballistic with gravity, 3-frame fading trail.
-- Spark colour `(255,190,110)` → luma 200 → scaled by 150/200 to **`(191,142,82)`**, then drawn at alpha 120–200 over dark ground → **effective 90–130 luma.** The coin at 230 stays **≥ 77% brighter** than the hottest spark.
-- Exactly **one** 2-px core pixel at the cap (150) per burst, for ≤ 4 frames, at the moment of contact.
-- **Apex ceiling y = 512.** Sparks arc up through the lantern garland rows (497 / 511) and fall past them. Below the coin corridor; above nothing that matters.
-- **Ground bounce:** sparks that land skitter 3–8 px and die over 0.4 s.
-- **Rim-light pass:** for 2 frames after contact, every figure and prop in the block gets a 1-px top-edge highlight at +18 value, capped 140. This is the day plan's lightning-silhouette machinery **inverted** — the storm flattens the street to a silhouette, the iron flower rims it in warm light. Same one blit, opposite meaning, and it ties the festival to the storm that paid for it.
-- **The doused apron:** datiehua sites are watered down for safety. So the paving in a 180 px apron around the scaffold is **locally, permanently wet** for this block — glossy, reflective, and every burst mirrors in it as a 1-px-wide, 6–10 px dither column at alpha 45. This gets the plan the spark-reflection image *without* retuning the global `WEATHER_WET_DRY_RATE` and *without* stealing the day plan's precious six-second lantern-doubling window.
-- **Smoke:** after each burst a grey veil rises to y ≈ 540 at alpha 30, via the existing `_wisp`.
-
-**Cadence:** 4 bursts at 2.6 s intervals across the 6.3 s square (the player sees 2–3 of them fully). Crowd 8-deep on the near deck, all backs to us, all chins up 2 px. **Crowd ripple:** on each burst every figure in the block does a 2-frame head-lift, staggered 0.06 s left→right, so the reaction visibly travels down the row.
-
-**Once per cycle.** A second iron flower would cost it everything.
 
 ---
 
@@ -330,7 +327,6 @@ Tempting, thematically perfect, and **cut**. Sky lanterns would rise into the pi
 | **Queue** | 4 deep, ±3 px jitter, front figure leaning in; **2 per phrase** (up from the day plan's 1) | **Theatre stalls only** — noodle-puller, sugar-painter. People queue for the performance |
 | **Table sit** | two stools flanking a crate, both leaning in | Cross-alley gaps, ≤1 per block |
 | **Browse pause** | near-lane stroller halts 1.5–3 s within 40 px of a stall | Strips and spines |
-| 🆕 **Spark-watch** | backs to us, heads +2 px up, all facing the scaffold, motionless between bursts; 2-frame head-lift ripple on each burst, staggered 0.06 s | Iron-flower square only |
 | 🆕 **Parade-follow** | 6–9 figures walking behind the dragon's tail **at the dragon's speed**, not the scroll's | Dragon route only |
 
 **Densities.** Near-lane `SidewalkCrowd` `_BASE_N`: 6 (day) → 9 (day plan's market) → **11 on the two spine blocks**. Velocities biased slow and toward standing.
@@ -349,11 +345,7 @@ Tempting, thematically perfect, and **cut**. Sky lanterns would rise into the pi
 
 | # | Piece | Beat |
 |---|---|---|
-| A1 | **Iron-flower scaffold** — timber frame + straw-thatch splash board, ~54 px; three states: bare (Ch5/6/7 plant), working (φ 0.727), scorched-and-smoking (wind-down) | Fire square + 3 plants |
-| A2 | **Iron-flower crew ×2** — thrower (22 px long-handled willow scoop, 1.3 s over-shoulder throw) + striker (willow bat, 1-frame contact); soaked straw hat + sheepskin silhouette | Fire square |
-| A3 | **Spark-burst system** — 70–120 ballistic 1-px sparks, 3-frame trails, `(191,142,82)` @ α120–200, apex ceiling y=512, ground bounce + skitter, one 150-luma core pixel per burst | Fire square |
 | A4 | **Burst rim-light pass** — 2 frames, 1-px top-edge +18 value, cap 140, block-wide (inverse of the existing lightning silhouette) | Fire square |
-| A5 | **Doused-apron wet paving** — 180 px locally-saturated `wetness` around the scaffold + per-burst 1-px reflection dither columns @ α45 | Fire square |
 | A6 | **Dragon pearl + bearer** — pole overhead, 10 px sphere, figure-8 @ 0.8 Hz, capped amber halo r8 | Dragon |
 | A7 | **Drum-and-cymbal cart** — existing seated drummer @1.5× on a 2-wheel chassis (reuse `draw_cart_folded` wheels) + 2 cymbal figures with 1-frame capped ivory disc flash | Dragon |
 | A8 | **Draped dragon-head handcart** — 16 px red-cloth lump roped to `draw_cart_folded` | Ch5 plant, 163–178 s |
@@ -393,7 +385,6 @@ Tempting, thematically perfect, and **cut**. Sky lanterns would rise into the pi
 | R5 | **`p_show` in window** | 0.65 roll | **suppressed**; fixed 3-square bill + travelling stilts | A random calligrapher between the fire and the dragon dilutes the bill |
 | R6 | **Show cooldown** | 40 s between starts | **lifted inside the window** | Three shows in 35 s is the point |
 | R7 | **Near-lane `_BASE_N`** | 9 (market) | **11** on the two spine blocks | Crest density |
-| R8 | **FX vertical ceiling** ⚠️ | cast/props 560–640 | **spark FX only may reach y = 512** | The one mandate exception in the plan. Below the coin corridor, under the grandfathered fairy-light row (511). **Needs explicit sign-off.** |
 | R9 | **Ch5/6/7 plants** | — | dragon-head cart (163–178 s); scaffold among the stall frames (178–190 s); dark scaffold 1-in-3 blocks through the storm | Append-only; no existing beat's structure changes |
 | R10 | **Ch9 residue** | — | scorch field, mask litter, smoking scaffold, carriers walking home | Append-only; the 5-step close-down, winter overlay, footprints, snowball and sweeper are untouched |
 

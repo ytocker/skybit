@@ -37,7 +37,7 @@ CHECKPOINTS = [
     (178.0, "CH5  lamps & market setup (carts)", {}),
     (205.0, "CH6  first umbrellas (drizzle)", {}),
     (247.0, "CH7  storm peak — tarps + suoyi", {}),
-    (282.0, "CH8a FIRE-TREE NIGHT — crest + iron flower", {}),
+    (282.0, "CH8a NIGHT MARKET — first crest", {}),
     (296.0, "CH8b Monkey King troupe (second crest)", {}),
     (303.0, "CH8c THE LION — self-contained troupe", {}),
     (316.0, "CH8d THE DRAGON — parade, first flakes", {}),

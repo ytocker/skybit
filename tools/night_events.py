@@ -40,21 +40,19 @@ CYCLE = 393.5
 EVENTS = [
     ("N1", "Lanterns Up",        "the market floods the dark street",
      None,               0.680, 0.691),
-    ("N2", "The Iron Flower",    "molten iron thrown at the splash wall",
-     "festival_fire",    0.706, None),
-    ("N3", "The Stilt-Walker",   "one tall figure crossing the crowd",
+    ("N2", "The Stilt-Walker",   "one tall figure crossing the crowd",
      "festival_stilts",  0.730, None),
-    ("N4", "Monkey King's Troupe", "the second crest of the market",
+    ("N3", "Monkey King's Troupe", "the second crest of the market",
      "festival_troupe",  0.744, None),
-    ("N5", "The Lion",           "a shorter, self-contained act",
+    ("N4", "The Lion",           "a shorter, self-contained act",
      "festival_lion",    0.762, None),
-    ("N6", "The Dragon",         "the crown — the market pauses for it",
+    ("N5", "The Dragon",         "the crown — the market pauses for it",
      "festival_dragon",  0.788, None),
-    ("N7", "The Dragon Goes Home", "carried off, the afterglow",
+    ("N6", "The Dragon Goes Home", "carried off, the afterglow",
      "dragon_home",      0.822, None),
-    ("N8", "Snowball Fight",     "small hours, first snow on the ground",
+    ("N7", "Snowball Fight",     "small hours, first snow on the ground",
      "snowball",         0.845, None),
-    ("N9", "Small Hours",        "near-empty street, braziers warm",
+    ("N8", "Small Hours",        "near-empty street, braziers warm",
      None,               0.880, 0.892),
 ]
 # how far into a beat to capture it (0..1)
@@ -133,7 +131,7 @@ def _capture(beat, win_start, fixed_phase):
     return surf, t, _wk.happening_active(beat)
 
 
-_DURS = {"festival_fire": 8.0, "festival_stilts": 6.0, "festival_troupe": 7.0,
+_DURS = {"festival_stilts": 6.0, "festival_troupe": 7.0,
          "festival_lion": 6.0, "festival_dragon": 10.5, "dragon_home": 6.0,
          "snowball": 4.5}
 
@@ -143,9 +141,9 @@ def _beat_dur(name):
 
 
 def main():
-    scale = 0.62
+    scale = 0.48
     fw, fh = int(W * scale), int(H * scale)
-    cols, rows = 3, 3
+    cols, rows = 4, 2
     gap, head, foot = 10, 54, 40
     sheet = pygame.Surface((cols * fw + (cols + 1) * gap,
                             head + rows * (fh + foot + gap) + gap))

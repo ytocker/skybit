@@ -1460,22 +1460,6 @@ def _festival_bill(surf, pal, phase, t, density, scroll):
     from game import festival as _fest
     ny = NEAR_GROUND_Y
     night = _nightf(pal)
-    # ★ THE IRON FLOWER — the rig itself burns in the promenade pass, behind
-    # the pillars; the near deck adds its audience: spark-watchers, backs to
-    # us, chins up, rippling on each burst. They ride the rig's drift so the
-    # square crosses the frame as one travelling show.
-    st = _fest.fire_state()
-    if st is not None:
-        fx_x, show_t = st
-        burst_age = show_t - 0.75
-        if burst_age >= 0:
-            burst_age = (burst_age + _fest.CONTACT_T) % _fest.BURST_PERIOD - _fest.CONTACT_T
-        for wi, dx in enumerate((-84, -58, -33, 28, 54, 82)):
-            wx = fx_x + dx
-            if -20 < wx < W + 20:
-                _zbuf.enqueue(ny, TB_CAST,
-                              lambda s, wx=wx, wi=wi, ba=burst_age:
-                              _fest.draw_spark_watcher(s, wx, night, t, wi, ba))
     # ★ THE MONKEY KING'S TROUPE — three masked acrobats cycling staff spin ->
     # shoulder tower -> somersault inside the gathered ring, planted on the
     # near deck so Pip flies past a show square.
